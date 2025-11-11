@@ -62,7 +62,7 @@ targets:
     dependencies:
       - target: CorePDF
       - target: CoreImageKit
-      - target: CoreVideo
+      - target: VideoProcessor
       - target: CoreZip
       - target: JobEngine
       - target: Payments
@@ -91,13 +91,13 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.coreimagekit
       GENERATE_INFOPLIST_FILE: YES
 
-  CoreVideo:
+  VideoProcessor:
     type: framework
     platform: iOS
     sources:
-      - Modules/CoreVideo
+      - Modules/VideoProcessor
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.corevideo
+      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.videoprocessor
       GENERATE_INFOPLIST_FILE: YES
 
   CoreZip:
@@ -117,7 +117,7 @@ targets:
     dependencies:
       - target: CorePDF
       - target: CoreImageKit
-      - target: CoreVideo
+      - target: VideoProcessor
       - target: CoreZip
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.jobengine

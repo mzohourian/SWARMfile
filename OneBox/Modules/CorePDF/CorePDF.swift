@@ -424,12 +424,12 @@ public actor PDFProcessor {
 }
 
 // MARK: - Supporting Types
-public enum PDFOrientation {
+public enum PDFOrientation: String, Codable {
     case portrait
     case landscape
 }
 
-public enum CompressionQuality {
+public enum CompressionQuality: String, Codable {
     case maximum
     case high
     case medium
@@ -445,7 +445,7 @@ public enum CompressionQuality {
     }
 }
 
-public enum WatermarkPosition {
+public enum WatermarkPosition: String, Codable {
     case topLeft, topCenter, topRight
     case middleLeft, center, middleRight
     case bottomLeft, bottomCenter, bottomRight

@@ -351,7 +351,7 @@ public actor VideoProcessor {
 }
 
 // MARK: - Supporting Types
-public enum VideoCompressionPreset {
+public enum VideoCompressionPreset: String, Codable {
     case highQuality
     case mediumQuality
     case lowQuality
@@ -376,7 +376,7 @@ public enum VideoCompressionPreset {
     }
 }
 
-public enum VideoCodec {
+public enum VideoCodec: String, Codable {
     case h264
     case hevc
 

@@ -290,7 +290,7 @@ public actor ImageProcessor {
 }
 
 // MARK: - Supporting Types
-public enum ImageFormat {
+public enum ImageFormat: String, Codable {
     case jpeg
     case png
     case heic

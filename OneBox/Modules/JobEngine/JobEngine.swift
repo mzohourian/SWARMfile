@@ -12,6 +12,7 @@ import CorePDF
 import CoreImageKit
 import VideoProcessor
 import CoreZip
+import UIKit
 
 // MARK: - Job Model
 public struct Job: Identifiable, Codable {
@@ -322,46 +323,132 @@ actor JobProcessor {
         }
     }
 
-    // Placeholder implementations - will be implemented in specific modules
+    // MARK: - Job Processing Implementations
     private func processImagesToPDF(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
-        // Implementation in CorePDF module
-        throw JobError.notImplemented
+        let processor = PDFProcessor()
+        let outputURL = try await processor.createPDF(
+            from: job.inputs,
+            pageSize: job.settings.pageSize.cgSize,
+            orientation: job.settings.orientation,
+            margins: job.settings.margins,
+            backgroundColor: UIColor(hex: job.settings.backgroundColor) ?? .white,
+            stripMetadata: job.settings.stripMetadata,
+            progressHandler: progressHandler
+        )
+        return [outputURL]
     }
 
     private func processPDFMerge(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
-        throw JobError.notImplemented
+        let processor = PDFProcessor()
+        let outputURL = try await processor.mergePDFs(job.inputs, progressHandler: progressHandler)
+        return [outputURL]
     }
 
     private func processPDFSplit(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
-        throw JobError.notImplemented
+        let processor = PDFProcessor()
+        guard let pdfURL = job.inputs.first else {
+            throw JobError.invalidInput
+        }
+        // Split into individual pages by default
+        let ranges = [1...1] // Simplified - split each page
+        let outputURLs = try await processor.splitPDF(pdfURL, ranges: ranges, progressHandler: progressHandler)
+        return outputURLs
     }
 
     private func processPDFCompress(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
-        throw JobError.notImplemented
+        let processor = PDFProcessor()
+        guard let pdfURL = job.inputs.first else {
+            throw JobError.invalidInput
+        }
+
+        if let targetSize = job.settings.targetSizeMB {
+            let outputURL = try await processor.compressPDFToSize(
+                pdfURL,
+                targetSizeMB: targetSize,
+                progressHandler: progressHandler
+            )
+            return [outputURL]
+        } else {
+            let outputURL = try await processor.compressPDF(
+                pdfURL,
+                quality: job.settings.compressionQuality,
+                targetSizeMB: nil,
+                progressHandler: progressHandler
+            )
+            return [outputURL]
+        }
     }
 
     private func processPDFWatermark(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
-        throw JobError.notImplemented
+        let processor = PDFProcessor()
+        guard let pdfURL = job.inputs.first else {
+            throw JobError.invalidInput
+        }
+        let outputURL = try await processor.watermarkPDF(
+            pdfURL,
+            text: job.settings.watermarkText,
+            image: nil,
+            position: job.settings.watermarkPosition,
+            opacity: job.settings.watermarkOpacity,
+            progressHandler: progressHandler
+        )
+        return [outputURL]
     }
 
     private func processPDFSign(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
+        // PDF signing requires digital certificates - not yet implemented
         throw JobError.notImplemented
     }
 
     private func processImageResize(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
-        throw JobError.notImplemented
+        let processor = ImageProcessor()
+        let outputURLs = try await processor.processImages(
+            job.inputs,
+            format: job.settings.imageFormat,
+            quality: job.settings.imageQuality,
+            maxDimension: job.settings.maxDimension,
+            stripEXIF: job.settings.stripMetadata,
+            progressHandler: progressHandler
+        )
+        return outputURLs
     }
 
     private func processVideoCompress(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
-        throw JobError.notImplemented
+        let processor = VideoProcessor()
+        guard let videoURL = job.inputs.first else {
+            throw JobError.invalidInput
+        }
+        let outputURL = try await processor.compressVideo(
+            videoURL,
+            preset: job.settings.videoPreset,
+            targetSizeMB: job.settings.targetSizeMB,
+            keepAudio: job.settings.keepAudio,
+            codec: .h264,
+            progressHandler: progressHandler
+        )
+        return [outputURL]
     }
 
     private func processZip(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
-        throw JobError.notImplemented
+        let processor = ZipProcessor()
+        let outputURL = try await processor.createZip(
+            from: job.inputs,
+            outputName: "archive",
+            progressHandler: progressHandler
+        )
+        return [outputURL]
     }
 
     private func processUnzip(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
-        throw JobError.notImplemented
+        let processor = ZipProcessor()
+        guard let zipURL = job.inputs.first else {
+            throw JobError.invalidInput
+        }
+        let extractedDir = try await processor.extractZip(zipURL, progressHandler: progressHandler)
+        // Return all extracted files
+        let fileManager = FileManager.default
+        let files = try fileManager.contentsOfDirectory(at: extractedDir, includingPropertiesForKeys: nil)
+        return files
     }
 }
 
@@ -386,5 +473,22 @@ public enum JobError: LocalizedError {
         case .cancelled:
             return "Operation cancelled"
         }
+    }
+}
+
+// MARK: - UIColor Extension
+extension UIColor {
+    convenience init?(hex: String) {
+        var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
+
+        var rgb: UInt64 = 0
+        guard Scanner(string: hexSanitized).scanHexInt64(&rgb) else { return nil }
+
+        let red = CGFloat((rgb & 0xFF0000) >> 16) / 255.0
+        let green = CGFloat((rgb & 0x00FF00) >> 8) / 255.0
+        let blue = CGFloat(rgb & 0x0000FF) / 255.0
+
+        self.init(red: red, green: green, blue: blue, alpha: 1.0)
     }
 }

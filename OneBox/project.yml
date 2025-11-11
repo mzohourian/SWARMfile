@@ -16,9 +16,6 @@ settings:
   SWIFT_VERSION: "5.9"
   IPHONEOS_DEPLOYMENT_TARGET: "16.0"
 
-packages:
-  # Add any SPM dependencies here if needed
-
 targets:
   OneBox:
     type: application

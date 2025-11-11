@@ -8,6 +8,10 @@
 import Foundation
 import Combine
 import BackgroundTasks
+import CorePDF
+import CoreImageKit
+import VideoProcessor
+import CoreZip
 
 // MARK: - Job Model
 public struct Job: Identifiable, Codable {
@@ -104,7 +108,7 @@ public struct JobSettings: Codable {
     public var resizePercentage: Double?
 
     // Video Settings
-    public var videoPreset: VideoPreset = .mediumQuality
+    public var videoPreset: VideoCompressionPreset = .mediumQuality
     public var keepAudio: Bool = true
     public var targetBitrate: Int?
 

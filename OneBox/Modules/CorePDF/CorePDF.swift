@@ -236,9 +236,9 @@ public actor PDFProcessor {
     ) async throws -> URL {
 
         let targetBytes = Int(targetSizeMB * 1_000_000)
-        var qualityLevels: [Double] = [0.9, 0.7, 0.5, 0.3, 0.2, 0.1]
+        let qualityLevels: [Double] = [0.9, 0.7, 0.5, 0.3, 0.2, 0.1]
 
-        for (index, quality) in qualityLevels.enumerated() {
+        for (index, _) in qualityLevels.enumerated() {
             let testURL = try await compressPDFWithQuality(
                 pdf,
                 quality: CompressionQuality.medium,

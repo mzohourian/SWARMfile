@@ -118,7 +118,7 @@ public actor ZipProcessor {
         try await extractSimpleZip(from: archiveURL, to: destinationDir, progressHandler: progressHandler)
     }
 
-    // MARK: - Simple ZIP Implementation (Fallback)
+    // MARK: - Simple ZIP Implementation (iOS-Compatible)
     private func createSimpleZip(
         files: [URL],
         sourceDir: URL,
@@ -126,24 +126,10 @@ public actor ZipProcessor {
         progressHandler: @escaping (Double) -> Void
     ) async throws {
 
-        // Use system zip command as fallback
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
-        process.arguments = ["-r", "-q", output.path, "."]
-        process.currentDirectoryURL = sourceDir
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        if process.terminationStatus != 0 {
-            throw ZipError.compressionFailed("ZIP creation failed")
-        }
-
-        progressHandler(1.0)
+        // Note: Full ZIP implementation requires external library (ZIPFoundation)
+        // For now, throw a helpful error
+        // TODO: Integrate ZIPFoundation or use AppleArchive framework properly
+        throw ZipError.compressionFailed("ZIP creation is not yet fully implemented. This feature will be available in a future update.")
     }
 
     private func extractSimpleZip(
@@ -152,79 +138,27 @@ public actor ZipProcessor {
         progressHandler: @escaping (Double) -> Void
     ) async throws {
 
-        // Use system unzip command as fallback
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-        process.arguments = ["-q", "-o", archiveURL.path, "-d", destinationDir.path]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        if process.terminationStatus != 0 {
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let errorOutput = String(data: data, encoding: .utf8) ?? "Unknown error"
-
-            if errorOutput.contains("encrypted") || errorOutput.contains("password") {
-                throw ZipError.encryptedArchive
-            }
-
-            throw ZipError.extractionFailed(errorOutput)
-        }
-
-        progressHandler(1.0)
+        // Note: Full ZIP extraction requires external library (ZIPFoundation)
+        // For now, throw a helpful error
+        // TODO: Integrate ZIPFoundation or use AppleArchive framework properly
+        throw ZipError.extractionFailed("ZIP extraction is not yet fully implemented. This feature will be available in a future update.")
     }
 
     // MARK: - Encryption Detection
     private func isEncrypted(_ zipURL: URL) throws -> Bool {
-        // Simple heuristic: try to list contents
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-        process.arguments = ["-l", zipURL.path]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-
-        return output.contains("encrypted") || output.contains("password")
+        // Cannot detect encryption without proper ZIP library
+        return false
     }
 
     // MARK: - Archive Info
     public func getArchiveInfo(_ zipURL: URL) async throws -> ArchiveInfo {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-        process.arguments = ["-l", zipURL.path]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-
-        // Parse output to count files
-        let lines = output.components(separatedBy: .newlines)
-        let fileCount = lines.filter { $0.contains(":") && !$0.contains("Archive:") }.count
-
         let attributes = try FileManager.default.attributesOfItem(atPath: zipURL.path)
         let fileSize = attributes[.size] as? Int64 ?? 0
 
         return ArchiveInfo(
-            fileCount: fileCount,
+            fileCount: 0,  // Cannot determine without proper ZIP library
             compressedSize: fileSize,
-            isEncrypted: try isEncrypted(zipURL)
+            isEncrypted: false
         )
     }
 

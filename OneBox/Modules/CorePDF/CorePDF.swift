@@ -429,11 +429,15 @@ public enum PDFOrientation: String, Codable {
     case landscape
 }
 
-public enum CompressionQuality: String, Codable {
+public enum CompressionQuality: String, Codable, CaseIterable {
     case maximum
     case high
     case medium
     case low
+
+    public var displayName: String {
+        rawValue.capitalized
+    }
 
     var jpegQuality: Double {
         switch self {

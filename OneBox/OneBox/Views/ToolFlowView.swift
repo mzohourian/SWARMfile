@@ -180,7 +180,7 @@ struct InputSelectionView: View {
         ) { result in
             handleFileImport(result)
         }
-        .onChange(of: selectedPhotos) { _, newPhotos in
+        .onChange(of: selectedPhotos) { newPhotos in
             loadPhotos(newPhotos)
         }
     }
@@ -513,7 +513,7 @@ struct ConfigurationView: View {
     private var videoSettings: some View {
         VStack(spacing: 16) {
             Picker("Preset", selection: $settings.videoPreset) {
-                ForEach(VideoPreset.allCases, id: \.self) { preset in
+                ForEach(VideoCompressionPreset.allCases, id: \.self) { preset in
                     Text(preset.displayName).tag(preset)
                 }
             }

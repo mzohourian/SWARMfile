@@ -351,7 +351,7 @@ public actor VideoProcessor {
 }
 
 // MARK: - Supporting Types
-public enum VideoCompressionPreset: String, Codable {
+public enum VideoCompressionPreset: String, Codable, CaseIterable {
     case highQuality
     case mediumQuality
     case lowQuality
@@ -366,7 +366,7 @@ public enum VideoCompressionPreset: String, Codable {
         }
     }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .highQuality: return "High Quality (1080p)"
         case .mediumQuality: return "Medium Quality (720p)"

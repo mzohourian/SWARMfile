@@ -9,7 +9,7 @@ let package = Package(
     products: [
         .library(name: "CorePDF", targets: ["CorePDF"]),
         .library(name: "CoreImageKit", targets: ["CoreImageKit"]),
-        .library(name: "CoreVideo", targets: ["CoreVideo"]),
+        .library(name: "VideoProcessor", targets: ["VideoProcessor"]),
         .library(name: "CoreZip", targets: ["CoreZip"]),
         .library(name: "JobEngine", targets: ["JobEngine"]),
         .library(name: "Payments", targets: ["Payments"]),
@@ -30,9 +30,9 @@ let package = Package(
             path: "Modules/CoreImageKit"
         ),
         .target(
-            name: "CoreVideo",
+            name: "VideoProcessor",
             dependencies: [],
-            path: "Modules/CoreVideo"
+            path: "Modules/VideoProcessor"
         ),
         .target(
             name: "CoreZip",
@@ -43,7 +43,7 @@ let package = Package(
         // Job Engine
         .target(
             name: "JobEngine",
-            dependencies: ["CorePDF", "CoreImageKit", "CoreVideo", "CoreZip"],
+            dependencies: ["CorePDF", "CoreImageKit", "VideoProcessor", "CoreZip"],
             path: "Modules/JobEngine"
         ),
 
@@ -78,9 +78,9 @@ let package = Package(
             path: "Tests/CoreImageKitTests"
         ),
         .testTarget(
-            name: "CoreVideoTests",
-            dependencies: ["CoreVideo"],
-            path: "Tests/CoreVideoTests"
+            name: "VideoProcessorTests",
+            dependencies: ["VideoProcessor"],
+            path: "Tests/VideoProcessorTests"
         ),
         .testTarget(
             name: "CoreZipTests",

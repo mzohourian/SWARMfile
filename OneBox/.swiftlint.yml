@@ -1,0 +1,88 @@
+# SwiftLint Configuration for OneBox
+
+disabled_rules:
+  - trailing_whitespace
+  - todo
+
+opt_in_rules:
+  - empty_count
+  - explicit_init
+  - closure_spacing
+  - overridden_super_call
+  - redundant_nil_coalescing
+  - private_outlet
+  - nimble_operator
+  - attributes
+  - operator_usage_whitespace
+  - closure_end_indentation
+  - first_where
+  - object_literal
+  - number_separator
+  - prohibited_super_call
+  - fatal_error_message
+
+excluded:
+  - Carthage
+  - Pods
+  - .build
+  - DerivedData
+  - fastlane
+  - .github
+
+# Metrics
+line_length:
+  warning: 120
+  error: 200
+  ignores_urls: true
+  ignores_function_declarations: true
+  ignores_comments: true
+
+type_body_length:
+  warning: 300
+  error: 500
+
+file_length:
+  warning: 500
+  error: 1000
+  ignore_comment_only_lines: true
+
+function_body_length:
+  warning: 50
+  error: 100
+
+type_name:
+  min_length: 3
+  max_length: 40
+  excluded:
+    - ID
+    - URL
+
+identifier_name:
+  min_length: 2
+  max_length: 40
+  excluded:
+    - id
+    - URL
+    - x
+    - y
+    - db
+
+cyclomatic_complexity:
+  warning: 10
+  error: 20
+
+# Custom Rules
+custom_rules:
+  no_print:
+    name: "Print Usage"
+    regex: "print\\("
+    message: "Use proper logging instead of print()"
+    severity: warning
+
+  no_direct_standard_out_logs:
+    name: "Logging Usage"
+    regex: "(\\bprint|NSLog)\\s*\\("
+    message: "Use Logger instead of print/NSLog"
+    severity: warning
+
+reporter: "xcode"

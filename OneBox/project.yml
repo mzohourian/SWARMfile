@@ -80,6 +80,7 @@ targets:
       - Modules/CorePDF
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.corepdf
+      GENERATE_INFOPLIST_FILE: YES
 
   CoreImageKit:
     type: framework
@@ -88,6 +89,7 @@ targets:
       - Modules/CoreImageKit
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.coreimagekit
+      GENERATE_INFOPLIST_FILE: YES
 
   CoreVideo:
     type: framework
@@ -96,6 +98,7 @@ targets:
       - Modules/CoreVideo
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.corevideo
+      GENERATE_INFOPLIST_FILE: YES
 
   CoreZip:
     type: framework
@@ -104,6 +107,7 @@ targets:
       - Modules/CoreZip
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.corezip
+      GENERATE_INFOPLIST_FILE: YES
 
   JobEngine:
     type: framework
@@ -117,6 +121,7 @@ targets:
       - target: CoreZip
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.jobengine
+      GENERATE_INFOPLIST_FILE: YES
 
   Payments:
     type: framework
@@ -125,6 +130,7 @@ targets:
       - Modules/Payments
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.payments
+      GENERATE_INFOPLIST_FILE: YES
 
   Ads:
     type: framework
@@ -133,6 +139,7 @@ targets:
       - Modules/Ads
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.ads
+      GENERATE_INFOPLIST_FILE: YES
 
   UIComponents:
     type: framework
@@ -141,6 +148,7 @@ targets:
       - Modules/UIComponents
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.uicomponents
+      GENERATE_INFOPLIST_FILE: YES
 
   # Test Targets
   OneBoxTests:
@@ -155,6 +163,7 @@ targets:
       - target: Payments
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.tests
+      GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   OneBox:

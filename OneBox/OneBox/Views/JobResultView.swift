@@ -16,7 +16,6 @@ struct JobResultView: View {
     @State private var showShareSheet = false
     @State private var showPreview = false
     @State private var previewURL: URL?
-    @State private var saveSuccess = false
 
     var body: some View {
         NavigationStack {
@@ -62,11 +61,6 @@ struct JobResultView: View {
                 if let url = previewURL {
                     QuickLookPreview(url: url)
                 }
-            }
-            .alert("Saved", isPresented: $saveSuccess) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("File saved to your Photos library")
             }
         }
     }
@@ -175,12 +169,15 @@ struct JobResultView: View {
 
     private var actionsSection: some View {
         VStack(spacing: 12) {
-            PrimaryButton("Save to Files", icon: "square.and.arrow.down") {
-                saveToFiles()
+            PrimaryButton("Share & Save", icon: "square.and.arrow.up") {
+                showShareSheet = true
             }
 
-            SecondaryButton("Share", icon: "square.and.arrow.up") {
-                showShareSheet = true
+            SecondaryButton("Preview", icon: "eye") {
+                if let url = job.outputURLs.first {
+                    previewURL = url
+                    showPreview = true
+                }
             }
 
             Button("Process Another File") {
@@ -236,13 +233,6 @@ struct JobResultView: View {
         }
 
         return nil
-    }
-
-    private func saveToFiles() {
-        // Implement save to Files app
-        // This would typically use a UIDocumentPickerViewController
-        // For now, just show success
-        saveSuccess = true
     }
 }
 

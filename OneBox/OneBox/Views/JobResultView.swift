@@ -217,13 +217,13 @@ struct JobResultView: View {
             return nil
         }
 
-        let inputSize = job.inputs.reduce(0) { sum, url in
+        let inputSize = job.inputs.reduce(Int64(0)) { sum, url in
             let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
             let size = attrs?[.size] as? Int64 ?? 0
             return sum + size
         }
 
-        let outputSize = job.outputURLs.reduce(0) { sum, url in
+        let outputSize = job.outputURLs.reduce(Int64(0)) { sum, url in
             let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
             let size = attrs?[.size] as? Int64 ?? 0
             return sum + size

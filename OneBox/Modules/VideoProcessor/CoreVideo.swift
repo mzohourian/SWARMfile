@@ -15,7 +15,7 @@ public actor VideoProcessor {
     // MARK: - Compress Video
     public func compressVideo(
         _ videoURL: URL,
-        preset: VideoPreset? = nil,
+        preset: VideoCompressionPreset? = nil,
         targetSizeMB: Double? = nil,
         keepAudio: Bool = true,
         codec: VideoCodec = .h264,
@@ -52,7 +52,7 @@ public actor VideoProcessor {
     // MARK: - Preset-Based Compression
     private func compressWithPreset(
         asset: AVURLAsset,
-        preset: VideoPreset,
+        preset: VideoCompressionPreset,
         keepAudio: Bool,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
@@ -67,7 +67,7 @@ public actor VideoProcessor {
         }
 
         exportSession.outputURL = outputURL
-        exportSession.outputFileType = .mp4
+        exportSession.outputFileType = AVFileType.mp4
         exportSession.shouldOptimizeForNetworkUse = true
 
         if !keepAudio {
@@ -321,7 +321,7 @@ public actor VideoProcessor {
     // MARK: - Estimate Output Size
     public func estimateOutputSize(
         for videoURL: URL,
-        preset: VideoPreset
+        preset: VideoCompressionPreset
     ) async throws -> Double {
         let info = try await getVideoInfo(videoURL)
 
@@ -351,7 +351,7 @@ public actor VideoProcessor {
 }
 
 // MARK: - Supporting Types
-public enum VideoPreset {
+public enum VideoCompressionPreset {
     case highQuality
     case mediumQuality
     case lowQuality

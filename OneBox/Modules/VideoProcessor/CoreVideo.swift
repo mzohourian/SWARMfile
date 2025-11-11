@@ -75,8 +75,8 @@ public actor VideoProcessor {
         }
 
         // Monitor progress
-        let progressTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-            Task {
+        let progressTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [exportSession] _ in
+            Task { @MainActor in
                 progressHandler(Double(exportSession.progress))
             }
         }
@@ -228,20 +228,22 @@ public actor VideoProcessor {
 
         writer.startSession(atSourceTime: .zero)
 
+        // Load duration for progress tracking
+        let assetDuration = try await asset.load(.duration)
+
         // Process video
         await withCheckedContinuation { continuation in
             var videoFinished = false
             var audioFinished = audioBitrate == 0
 
-            videoWriterInput.requestMediaDataWhenReady(on: DispatchQueue(label: "video.queue")) {
+            videoWriterInput.requestMediaDataWhenReady(on: DispatchQueue(label: "video.queue")) { [videoWriterInput, videoReaderOutput, assetDuration] in
                 while videoWriterInput.isReadyForMoreMediaData {
                     if let sampleBuffer = videoReaderOutput.copyNextSampleBuffer() {
                         videoWriterInput.append(sampleBuffer)
 
                         // Report progress
                         let currentTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                        let duration = asset.duration
-                        let progress = CMTimeGetSeconds(currentTime) / CMTimeGetSeconds(duration)
+                        let progress = CMTimeGetSeconds(currentTime) / CMTimeGetSeconds(assetDuration)
                         progressHandler(progress * 0.95) // Reserve 5% for finalization
                     } else {
                         videoWriterInput.markAsFinished()
@@ -257,7 +259,7 @@ public actor VideoProcessor {
             // Process audio
             if let audioInput = audioWriterInput,
                let audioOutput = reader.outputs.first(where: { $0.mediaType == .audio }) as? AVAssetReaderTrackOutput {
-                audioInput.requestMediaDataWhenReady(on: DispatchQueue(label: "audio.queue")) {
+                audioInput.requestMediaDataWhenReady(on: DispatchQueue(label: "audio.queue")) { [audioInput, audioOutput] in
                     while audioInput.isReadyForMoreMediaData {
                         if let sampleBuffer = audioOutput.copyNextSampleBuffer() {
                             audioInput.append(sampleBuffer)

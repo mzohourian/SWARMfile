@@ -328,7 +328,7 @@ actor JobProcessor {
         let processor = PDFProcessor()
         let outputURL = try await processor.createPDF(
             from: job.inputs,
-            pageSize: job.settings.pageSize.cgSize,
+            pageSize: job.settings.pageSize.size,
             orientation: job.settings.orientation,
             margins: job.settings.margins,
             backgroundColor: UIColor(hex: job.settings.backgroundColor) ?? .white,
@@ -372,7 +372,6 @@ actor JobProcessor {
             let outputURL = try await processor.compressPDF(
                 pdfURL,
                 quality: job.settings.compressionQuality,
-                targetSizeMB: nil,
                 progressHandler: progressHandler
             )
             return [outputURL]
@@ -387,7 +386,6 @@ actor JobProcessor {
         let outputURL = try await processor.watermarkPDF(
             pdfURL,
             text: job.settings.watermarkText,
-            image: nil,
             position: job.settings.watermarkPosition,
             opacity: job.settings.watermarkOpacity,
             progressHandler: progressHandler

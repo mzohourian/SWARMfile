@@ -132,9 +132,9 @@ public class PaymentsManager: ObservableObject {
 
     // MARK: - Transaction Listener
     private func listenForTransactions() -> Task<Void, Never> {
-        return Task.detached {
+        return Task.detached { @MainActor in
             for await result in Transaction.updates {
-                guard let transaction = try? self.checkVerified(result) else {
+                guard let transaction = try? await self.checkVerified(result) else {
                     continue
                 }
 
@@ -222,10 +222,10 @@ public class PaymentsManager: ObservableObject {
 
     public func savingsPercentage(yearly: Product, monthly: Product) -> Int {
         let yearlyPrice = yearly.price
-        let monthlyYearlyEquivalent = monthly.price * 12
+        let monthlyYearlyEquivalent = monthly.price * Decimal(12)
 
         let savings = (monthlyYearlyEquivalent - yearlyPrice) / monthlyYearlyEquivalent
-        return Int(savings * 100)
+        return Int(truncating: (savings * Decimal(100)) as NSDecimalNumber)
     }
 }
 

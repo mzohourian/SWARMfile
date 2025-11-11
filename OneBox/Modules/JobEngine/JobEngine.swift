@@ -361,21 +361,13 @@ actor JobProcessor {
             throw JobError.invalidInput
         }
 
-        if let targetSize = job.settings.targetSizeMB {
-            let outputURL = try await processor.compressPDFToSize(
-                pdfURL,
-                targetSizeMB: targetSize,
-                progressHandler: progressHandler
-            )
-            return [outputURL]
-        } else {
-            let outputURL = try await processor.compressPDF(
-                pdfURL,
-                quality: job.settings.compressionQuality,
-                progressHandler: progressHandler
-            )
-            return [outputURL]
-        }
+        let outputURL = try await processor.compressPDF(
+            pdfURL,
+            quality: job.settings.compressionQuality,
+            targetSizeMB: job.settings.targetSizeMB,
+            progressHandler: progressHandler
+        )
+        return [outputURL]
     }
 
     private func processPDFWatermark(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {

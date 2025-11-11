@@ -14,6 +14,8 @@ import UniformTypeIdentifiers
 // MARK: - PDF Processor
 public actor PDFProcessor {
 
+    public init() {}
+
     // MARK: - Images to PDF
     public func createPDF(
         from images: [URL],

@@ -14,6 +14,8 @@ import UniformTypeIdentifiers
 // MARK: - Image Processor
 public actor ImageProcessor {
 
+    public init() {}
+
     private let context = CIContext(options: [
         .useSoftwareRenderer: false,
         .priorityRequestLow: false

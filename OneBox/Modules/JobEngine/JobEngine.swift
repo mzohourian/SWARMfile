@@ -421,7 +421,7 @@ actor JobProcessor {
             preset: job.settings.videoPreset,
             targetSizeMB: job.settings.targetSizeMB,
             keepAudio: job.settings.keepAudio,
-            codec: .h264,
+            codec: VideoCodec.h264,
             progressHandler: progressHandler
         )
         return [outputURL]

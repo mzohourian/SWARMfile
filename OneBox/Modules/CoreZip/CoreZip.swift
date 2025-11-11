@@ -12,6 +12,8 @@ import AppleArchive
 // MARK: - ZIP Processor
 public actor ZipProcessor {
 
+    public init() {}
+
     // MARK: - Create ZIP
     public func createZip(
         from fileURLs: [URL],

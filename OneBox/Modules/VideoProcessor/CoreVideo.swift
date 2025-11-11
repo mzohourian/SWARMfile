@@ -12,6 +12,8 @@ import UIKit
 // MARK: - Video Processor
 public actor VideoProcessor {
 
+    public init() {}
+
     // MARK: - Compress Video
     public func compressVideo(
         _ videoURL: URL,

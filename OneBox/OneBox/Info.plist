@@ -49,6 +49,12 @@
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
 
+    <!-- File Sharing Support -->
+    <key>UIFileSharingEnabled</key>
+    <true/>
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <true/>
+
     <!-- Privacy Permissions -->
     <key>NSPhotoLibraryUsageDescription</key>
     <string>OneBox needs access to your photos to convert them to PDF and process images. All processing happens on your device.</string>

@@ -53,9 +53,7 @@ struct JobResultView: View {
                 }
             }
             .sheet(isPresented: $showShareSheet) {
-                if let url = job.outputURLs.first {
-                    ShareSheet(items: [url])
-                }
+                ShareSheet(items: job.outputURLs)
             }
             .sheet(isPresented: $showPreview) {
                 if let url = previewURL {
@@ -241,7 +239,40 @@ struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+        let activityVC = UIActivityViewController(activityItems: items, applicationActivities: nil)
+
+        // Ensure files can be saved
+        if let urls = items as? [URL] {
+            // Copy temp files to a more accessible location
+            let accessibleURLs = urls.compactMap { url -> URL? in
+                // If file is in temp directory, copy to Documents/Exports
+                let fileManager = FileManager.default
+                guard let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+                    return url
+                }
+
+                let exportsURL = documentsURL.appendingPathComponent("Exports", isDirectory: true)
+                try? fileManager.createDirectory(at: exportsURL, withIntermediateDirectories: true)
+
+                let destinationURL = exportsURL.appendingPathComponent(url.lastPathComponent)
+
+                // Remove old file if exists
+                try? fileManager.removeItem(at: destinationURL)
+
+                // Copy file
+                do {
+                    try fileManager.copyItem(at: url, to: destinationURL)
+                    return destinationURL
+                } catch {
+                    print("Failed to copy file: \(error)")
+                    return url
+                }
+            }
+
+            return UIActivityViewController(activityItems: accessibleURLs, applicationActivities: nil)
+        }
+
+        return activityVC
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}

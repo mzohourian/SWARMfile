@@ -206,7 +206,6 @@ public actor PDFProcessor {
         let pageCount = pdf.pageCount
 
         UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
-        defer { UIGraphicsEndPDFContext() }
 
         for pageIndex in 0..<pageCount {
             guard let page = pdf.page(at: pageIndex) else { continue }
@@ -214,19 +213,20 @@ public actor PDFProcessor {
             let pageBounds = page.bounds(for: .mediaBox)
             UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
 
-            guard let context = UIGraphicsGetCurrentContext() else { continue }
+            guard let pdfContext = UIGraphicsGetCurrentContext() else { continue }
 
-            // Render page to image
+            // Render page to image first
             let renderer = UIGraphicsImageRenderer(size: pageBounds.size)
             let pageImage = renderer.image { rendererContext in
                 UIColor.white.setFill()
-                rendererContext.fill(pageBounds)
-                context.translateBy(x: 0, y: pageBounds.size.height)
-                context.scaleBy(x: 1.0, y: -1.0)
-                page.draw(with: .mediaBox, to: context)
+                rendererContext.fill(CGRect(origin: .zero, size: pageBounds.size))
+
+                rendererContext.cgContext.translateBy(x: 0, y: pageBounds.size.height)
+                rendererContext.cgContext.scaleBy(x: 1.0, y: -1.0)
+                page.draw(with: .mediaBox, to: rendererContext.cgContext)
             }
 
-            // Compress and draw
+            // Compress and draw to PDF context
             if let compressedData = pageImage.jpegData(compressionQuality: quality.jpegQuality),
                let compressedImage = UIImage(data: compressedData) {
                 compressedImage.draw(in: pageBounds)
@@ -235,6 +235,14 @@ public actor PDFProcessor {
             }
 
             progressHandler(Double(pageIndex + 1) / Double(pageCount))
+        }
+
+        UIGraphicsEndPDFContext()
+
+        // Verify the PDF was created successfully
+        guard FileManager.default.fileExists(atPath: outputURL.path),
+              let _ = PDFDocument(url: outputURL) else {
+            throw PDFError.creationFailed
         }
 
         return outputURL

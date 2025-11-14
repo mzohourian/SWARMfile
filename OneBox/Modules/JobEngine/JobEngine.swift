@@ -13,6 +13,7 @@ import CoreImageKit
 import VideoProcessor
 import CoreZip
 import UIKit
+import PDFKit
 
 // MARK: - Job Model
 public struct Job: Identifiable, Codable {
@@ -349,8 +350,16 @@ actor JobProcessor {
         guard let pdfURL = job.inputs.first else {
             throw JobError.invalidInput
         }
-        // Split into individual pages by default
-        let ranges = [1...1] // Simplified - split each page
+
+        // Get total page count from PDF
+        guard let pdf = PDFDocument(url: pdfURL) else {
+            throw JobError.invalidInput
+        }
+
+        // Split into individual pages (one page per PDF)
+        let pageCount = pdf.pageCount
+        let ranges = (0..<pageCount).map { $0...$0 }
+
         let outputURLs = try await processor.splitPDF(pdfURL, ranges: ranges, progressHandler: progressHandler)
         return outputURLs
     }

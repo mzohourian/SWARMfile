@@ -37,11 +37,10 @@ public actor PDFProcessor {
             kCGPDFContextCreator as String: "OneBox"
         ])
 
-        defer { UIGraphicsEndPDFContext() }
-
         for (index, imageURL) in images.enumerated() {
             guard let imageData = try? Data(contentsOf: imageURL),
                   let image = UIImage(data: imageData) else {
+                UIGraphicsEndPDFContext()
                 throw PDFError.invalidImage(imageURL.lastPathComponent)
             }
 
@@ -61,6 +60,7 @@ public actor PDFProcessor {
             UIGraphicsBeginPDFPageWithInfo(pageRect, nil)
 
             guard let context = UIGraphicsGetCurrentContext() else {
+                UIGraphicsEndPDFContext()
                 throw PDFError.contextCreationFailed
             }
 
@@ -76,6 +76,15 @@ public actor PDFProcessor {
             image.draw(in: imageRect)
 
             progressHandler(Double(index + 1) / Double(images.count))
+        }
+
+        // Close PDF context
+        UIGraphicsEndPDFContext()
+
+        // Verify the PDF was created successfully
+        guard FileManager.default.fileExists(atPath: outputURL.path),
+              let _ = PDFDocument(url: outputURL) else {
+            throw PDFError.creationFailed
         }
 
         return outputURL
@@ -465,6 +474,7 @@ public enum PDFError: LocalizedError {
     case noPDFsToMerge
     case contextCreationFailed
     case writeFailed
+    case creationFailed
     case targetSizeUnachievable
 
     public var errorDescription: String? {
@@ -479,6 +489,8 @@ public enum PDFError: LocalizedError {
             return "Failed to create graphics context"
         case .writeFailed:
             return "Failed to write PDF file"
+        case .creationFailed:
+            return "Failed to create valid PDF file"
         case .targetSizeUnachievable:
             return "Could not compress to target size. Try a larger size or lower quality."
         }

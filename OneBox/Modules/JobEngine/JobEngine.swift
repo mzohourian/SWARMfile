@@ -395,8 +395,13 @@ actor JobProcessor {
     }
 
     private func processPDFSign(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
-        // PDF signing requires digital certificates - not yet implemented
-        throw JobError.notImplemented
+        // PDF signing requires digital certificates and PKI infrastructure
+        // This feature requires:
+        // - Digital certificate (p12/pfx file)
+        // - Private key for signing
+        // - Certificate authority validation
+        // Coming in a future update
+        throw JobError.featureComingSoon("PDF signing requires digital certificates. This feature will be available in a future update.")
     }
 
     private func processImageResize(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
@@ -458,6 +463,7 @@ public enum JobError: LocalizedError {
     case processingFailed(String)
     case insufficientSpace
     case cancelled
+    case featureComingSoon(String)
 
     public var errorDescription: String? {
         switch self {
@@ -471,6 +477,8 @@ public enum JobError: LocalizedError {
             return "Not enough storage space"
         case .cancelled:
             return "Operation cancelled"
+        case .featureComingSoon(let message):
+            return message
         }
     }
 }

@@ -359,6 +359,27 @@ struct ConfigurationView: View {
 
     @State private var showAdvanced = false
 
+    private var isConfigurationValid: Bool {
+        switch tool {
+        case .pdfWatermark:
+            return settings.watermarkText != nil && !settings.watermarkText!.isEmpty
+        default:
+            return true
+        }
+    }
+
+    private var validationMessage: String? {
+        switch tool {
+        case .pdfWatermark:
+            if settings.watermarkText == nil || settings.watermarkText!.isEmpty {
+                return "Please enter watermark text"
+            }
+        default:
+            break
+        }
+        return nil
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
@@ -385,9 +406,24 @@ struct ConfigurationView: View {
                     advancedSettings
                 }
 
+                // Validation message
+                if let message = validationMessage {
+                    Text(message)
+                        .font(.subheadline)
+                        .foregroundColor(.orange)
+                        .padding()
+                        .background(Color.orange.opacity(0.1))
+                        .cornerRadius(8)
+                }
+
                 Spacer()
 
-                PrimaryButton("Process Files", icon: "bolt.fill", action: onProcess)
+                PrimaryButton(
+                    "Process Files",
+                    icon: "bolt.fill",
+                    isDisabled: !isConfigurationValid,
+                    action: onProcess
+                )
             }
             .padding()
         }
@@ -401,6 +437,8 @@ struct ConfigurationView: View {
                 pdfSettings
             case .pdfCompress:
                 compressionSettings
+            case .pdfWatermark:
+                watermarkSettings
             case .imageResize:
                 imageSettings
             case .videoCompress:
@@ -519,6 +557,43 @@ struct ConfigurationView: View {
             }
 
             Toggle("Keep Audio", isOn: $settings.keepAudio)
+        }
+    }
+
+    private var watermarkSettings: some View {
+        VStack(spacing: 16) {
+            // Watermark Text
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Watermark Text")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                TextField("Enter watermark text", text: Binding(
+                    get: { settings.watermarkText ?? "" },
+                    set: { settings.watermarkText = $0.isEmpty ? nil : $0 }
+                ))
+                .textFieldStyle(.roundedBorder)
+            }
+
+            // Position
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Position")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Picker("Position", selection: $settings.watermarkPosition) {
+                    ForEach(WatermarkPosition.allCases, id: \.self) { position in
+                        Text(position.displayName).tag(position)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            // Opacity
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Opacity: \(Int(settings.watermarkOpacity * 100))%")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Slider(value: $settings.watermarkOpacity, in: 0.1...1.0, step: 0.1)
+            }
         }
     }
 

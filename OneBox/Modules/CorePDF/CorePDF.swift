@@ -468,11 +468,26 @@ public enum CompressionQuality: String, Codable, CaseIterable {
     }
 }
 
-public enum WatermarkPosition: String, Codable {
+public enum WatermarkPosition: String, Codable, CaseIterable {
     case topLeft, topCenter, topRight
     case middleLeft, center, middleRight
     case bottomLeft, bottomCenter, bottomRight
     case tiled
+
+    public var displayName: String {
+        switch self {
+        case .topLeft: return "Top Left"
+        case .topCenter: return "Top Center"
+        case .topRight: return "Top Right"
+        case .middleLeft: return "Middle Left"
+        case .center: return "Center"
+        case .middleRight: return "Middle Right"
+        case .bottomLeft: return "Bottom Left"
+        case .bottomCenter: return "Bottom Center"
+        case .bottomRight: return "Bottom Right"
+        case .tiled: return "Tiled"
+        }
+    }
 }
 
 // MARK: - PDF Error

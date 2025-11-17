@@ -255,36 +255,119 @@ public actor PDFProcessor {
     ) async throws -> URL {
 
         let targetBytes = Int(targetSizeMB * 1_000_000)
-        let qualityLevels: [CompressionQuality] = [.low, .medium, .high, .maximum]
 
-        for (index, quality) in qualityLevels.enumerated() {
-            let testURL = try await compressPDFWithQuality(
+        // Use binary search to find the right quality level
+        var minQuality = 0.05  // Maximum compression
+        var maxQuality = 0.95  // Minimum compression
+        var bestURL: URL?
+        var bestSize: Int = Int.max
+        let maxAttempts = 8
+
+        for attempt in 0..<maxAttempts {
+            let currentQuality = (minQuality + maxQuality) / 2.0
+
+            let testURL = try await compressPDFWithCustomQuality(
                 pdf,
-                quality: quality,
+                jpegQuality: currentQuality,
                 progressHandler: { progress in
-                    progressHandler(progress * 0.9 + Double(index) * 0.1 / Double(qualityLevels.count))
+                    let attemptProgress = Double(attempt) / Double(maxAttempts)
+                    progressHandler(attemptProgress + (progress / Double(maxAttempts)))
                 }
             )
 
             if let attributes = try? FileManager.default.attributesOfItem(atPath: testURL.path),
                let fileSize = attributes[.size] as? Int {
-                if fileSize <= targetBytes {
-                    progressHandler(1.0)
-                    return testURL
-                }
 
-                // If this is the last attempt and still too large, return it anyway
-                if index == qualityLevels.count - 1 {
-                    progressHandler(1.0)
-                    return testURL
+                if fileSize <= targetBytes {
+                    // This compression level works, save it
+                    if bestURL != nil {
+                        try? FileManager.default.removeItem(at: bestURL!)
+                    }
+                    bestURL = testURL
+                    bestSize = fileSize
+
+                    // Try less compression (higher quality) to get closer to target
+                    minQuality = currentQuality
+
+                    // If we're very close to target (within 10%), accept it
+                    let percentOfTarget = Double(fileSize) / Double(targetBytes)
+                    if percentOfTarget > 0.9 && percentOfTarget <= 1.0 {
+                        progressHandler(1.0)
+                        return testURL
+                    }
+                } else {
+                    // File too large, need more compression (lower quality)
+                    maxQuality = currentQuality
+                    try? FileManager.default.removeItem(at: testURL)
                 }
             }
+        }
 
-            // Clean up test file if we're trying again
-            try? FileManager.default.removeItem(at: testURL)
+        // Return best result if we have one that's under target
+        if let finalURL = bestURL, bestSize <= targetBytes {
+            progressHandler(1.0)
+            return finalURL
+        }
+
+        // Clean up
+        if let url = bestURL {
+            try? FileManager.default.removeItem(at: url)
         }
 
         throw PDFError.targetSizeUnachievable
+    }
+
+    // Helper method to compress with custom quality
+    private func compressPDFWithCustomQuality(
+        _ pdf: PDFDocument,
+        jpegQuality: Double,
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> URL {
+
+        let outputURL = temporaryOutputURL(prefix: "compressed")
+        let pageCount = pdf.pageCount
+
+        UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
+
+        for pageIndex in 0..<pageCount {
+            guard let page = pdf.page(at: pageIndex) else { continue }
+
+            let pageBounds = page.bounds(for: .mediaBox)
+            UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
+
+            guard let pdfContext = UIGraphicsGetCurrentContext() else { continue }
+
+            // Render page to image first
+            let renderer = UIGraphicsImageRenderer(size: pageBounds.size)
+            let pageImage = renderer.image { rendererContext in
+                UIColor.white.setFill()
+                rendererContext.fill(CGRect(origin: .zero, size: pageBounds.size))
+
+                rendererContext.cgContext.translateBy(x: 0, y: pageBounds.size.height)
+                rendererContext.cgContext.scaleBy(x: 1.0, y: -1.0)
+                page.draw(with: .mediaBox, to: rendererContext.cgContext)
+            }
+
+            // Compress and draw to PDF context
+            if let compressedData = pageImage.jpegData(compressionQuality: jpegQuality),
+               let compressedImage = UIImage(data: compressedData) {
+                compressedImage.draw(in: pageBounds)
+            } else {
+                pageImage.draw(in: pageBounds)
+            }
+
+            progressHandler(Double(pageIndex + 1) / Double(pageCount))
+        }
+
+        UIGraphicsEndPDFContext()
+
+        // Verify the PDF was created successfully
+        guard FileManager.default.fileExists(atPath: outputURL.path),
+              let _ = PDFDocument(url: outputURL) else {
+            throw PDFError.creationFailed
+        }
+
+        return outputURL
     }
 
     // MARK: - Watermark PDF

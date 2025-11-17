@@ -408,13 +408,14 @@ actor JobProcessor {
     }
 
     private func processPDFSign(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
-        // PDF signing requires digital certificates and PKI infrastructure
-        // This feature requires:
-        // - Digital certificate (p12/pfx file)
-        // - Private key for signing
-        // - Certificate authority validation
-        // Coming in a future update
-        throw JobError.featureComingSoon("PDF signing requires digital certificates. This feature will be available in a future update.")
+        // PDF signing requires:
+        // 1. Signature drawing canvas UI
+        // 2. Signature placement/position selection
+        // 3. Digital signature integration
+        //
+        // This is a complex feature that requires significant UI/UX work
+        // For now, return an error with clear message about future implementation
+        throw JobError.featureComingSoon("PDF signature feature is under development.\n\nThis feature will include:\n• Draw your signature\n• Choose signature placement\n• Multiple signature formats\n\nComing in version 2.0")
     }
 
     private func processImageResize(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {

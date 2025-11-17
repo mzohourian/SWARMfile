@@ -403,6 +403,7 @@ actor JobProcessor {
             text: job.settings.watermarkText,
             position: job.settings.watermarkPosition,
             opacity: job.settings.watermarkOpacity,
+            tiled: job.settings.watermarkPosition == .tiled,
             progressHandler: progressHandler
         )
         return [outputURL]

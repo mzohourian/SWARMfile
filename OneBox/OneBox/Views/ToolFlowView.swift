@@ -866,8 +866,9 @@ struct PDFCompressionSettings: View {
            let fileSize = attributes[.size] as? Int64 {
             originalSizeMB = Double(fileSize) / 1_000_000.0
 
-            // Estimate minimum achievable size (roughly 10-20% of original with max compression)
-            minAchievableMB = max(0.1, originalSizeMB * 0.15)
+            // Estimate minimum achievable size with enhanced compression (resolution downsampling + JPEG quality)
+            // With 0.5x resolution scale + aggressive JPEG compression, can achieve ~5-8% of original
+            minAchievableMB = max(0.1, originalSizeMB * 0.07)
 
             // Estimate maximum useful size (90% of original - not worth compressing beyond this)
             maxAchievableMB = max(minAchievableMB + 0.5, originalSizeMB * 0.9)

@@ -256,6 +256,30 @@ public actor PDFProcessor {
 
         let targetBytes = Int(targetSizeMB * 1_000_000)
 
+        // Calculate original PDF size to determine compression ratio needed
+        let tempOriginalURL = temporaryOutputURL(prefix: "original_check")
+        _ = pdf.write(to: tempOriginalURL)
+        let originalSize = (try? FileManager.default.attributesOfItem(atPath: tempOriginalURL.path)[.size] as? Int) ?? targetBytes * 10
+        try? FileManager.default.removeItem(at: tempOriginalURL)
+
+        // Determine resolution scale based on target compression ratio
+        let compressionRatio = Double(targetBytes) / Double(originalSize)
+        let resolutionScale: Double
+
+        if compressionRatio < 0.15 {
+            // Very aggressive compression needed (<15% of original) - use lowest resolution
+            resolutionScale = 0.5
+        } else if compressionRatio < 0.30 {
+            // Aggressive compression (15-30%) - use reduced resolution
+            resolutionScale = 0.65
+        } else if compressionRatio < 0.50 {
+            // Moderate compression (30-50%) - use slightly reduced resolution
+            resolutionScale = 0.8
+        } else {
+            // Minimal compression (>50%) - use full resolution
+            resolutionScale = 1.0
+        }
+
         // Use binary search to find the right quality level
         var minQuality = 0.05  // Maximum compression (don't go lower to avoid corruption)
         var maxQuality = 0.95  // Minimum compression
@@ -271,6 +295,7 @@ public actor PDFProcessor {
                 let testURL = try await compressPDFWithCustomQuality(
                     pdf,
                     jpegQuality: currentQuality,
+                    resolutionScale: resolutionScale,
                     progressHandler: { progress in
                         let attemptProgress = Double(attempt) / Double(maxAttempts)
                         progressHandler(attemptProgress + (progress / Double(maxAttempts)))
@@ -335,6 +360,7 @@ public actor PDFProcessor {
     private func compressPDFWithCustomQuality(
         _ pdf: PDFDocument,
         jpegQuality: Double,
+        resolutionScale: Double = 1.0,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
 
@@ -351,18 +377,25 @@ public actor PDFProcessor {
 
             guard let pdfContext = UIGraphicsGetCurrentContext() else { continue }
 
-            // Render page to image first
-            let renderer = UIGraphicsImageRenderer(size: pageBounds.size)
+            // Calculate scaled size for rendering (downsample for compression)
+            let scaledSize = CGSize(
+                width: pageBounds.width * resolutionScale,
+                height: pageBounds.height * resolutionScale
+            )
+
+            // Render page to image at scaled resolution
+            let renderer = UIGraphicsImageRenderer(size: scaledSize)
             let pageImage = renderer.image { rendererContext in
                 UIColor.white.setFill()
-                rendererContext.fill(CGRect(origin: .zero, size: pageBounds.size))
+                rendererContext.fill(CGRect(origin: .zero, size: scaledSize))
 
+                rendererContext.cgContext.scaleBy(x: resolutionScale, y: resolutionScale)
                 rendererContext.cgContext.translateBy(x: 0, y: pageBounds.size.height)
                 rendererContext.cgContext.scaleBy(x: 1.0, y: -1.0)
                 page.draw(with: .mediaBox, to: rendererContext.cgContext)
             }
 
-            // Compress and draw to PDF context
+            // Compress and draw to PDF context (at original page size)
             if let compressedData = pageImage.jpegData(compressionQuality: jpegQuality),
                let compressedImage = UIImage(data: compressedData) {
                 compressedImage.draw(in: pageBounds)

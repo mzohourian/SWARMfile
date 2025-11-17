@@ -10,6 +10,7 @@ import PhotosUI
 import UniformTypeIdentifiers
 import JobEngine
 import UIComponents
+import PDFKit
 
 struct ToolFlowView: View {
     let tool: ToolType
@@ -437,6 +438,8 @@ struct ConfigurationView: View {
                 pdfSettings
             case .pdfCompress:
                 compressionSettings
+            case .pdfSplit:
+                pdfSplitSettings
             case .pdfWatermark:
                 watermarkSettings
             case .imageResize:
@@ -560,6 +563,10 @@ struct ConfigurationView: View {
         }
     }
 
+    private var pdfSplitSettings: some View {
+        PDFSplitRangeSelector(settings: $settings)
+    }
+
     private var watermarkSettings: some View {
         VStack(spacing: 16) {
             // Watermark Text
@@ -649,6 +656,103 @@ struct ProcessingView: View {
             Spacer()
         }
         .padding()
+    }
+}
+
+// MARK: - PDF Split Range Selector
+struct PDFSplitRangeSelector: View {
+    @Binding var settings: JobSettings
+    @State private var startPage: String = "1"
+    @State private var endPage: String = "1"
+    @State private var pageRanges: [[Int]] = []
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Select Page Ranges")
+                .font(.headline)
+
+            Text("Add page ranges to create separate PDF files")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            // Add range controls
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("From")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    TextField("1", text: $startPage)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.numberPad)
+                        .frame(width: 80)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("To")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    TextField("1", text: $endPage)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.numberPad)
+                        .frame(width: 80)
+                }
+
+                Button(action: addRange) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.accentColor)
+                }
+            }
+
+            // Display added ranges
+            if !pageRanges.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Ranges:")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+
+                    ForEach(Array(pageRanges.enumerated()), id: \.offset) { index, range in
+                        HStack {
+                            if let first = range.first, let last = range.last {
+                                Text("Pages \(first)-\(last)")
+                                    .font(.subheadline)
+                            }
+                            Spacer()
+                            Button(action: { removeRange(at: index) }) {
+                                Image(systemName: "trash")
+                                    .foregroundColor(.red)
+                            }
+                        }
+                        .padding(8)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .cornerRadius(8)
+                    }
+                }
+            }
+        }
+        .onAppear {
+            pageRanges = settings.splitRanges
+        }
+        .onChange(of: pageRanges) { newValue in
+            settings.splitRanges = newValue
+        }
+    }
+
+    private func addRange() {
+        guard let start = Int(startPage), let end = Int(endPage), start <= end, start > 0 else {
+            return
+        }
+
+        let range = Array(start...end)
+        pageRanges.append(range)
+
+        // Reset fields
+        startPage = "\(end + 1)"
+        endPage = "\(end + 1)"
+    }
+
+    private func removeRange(at index: Int) {
+        pageRanges.remove(at: index)
     }
 }
 

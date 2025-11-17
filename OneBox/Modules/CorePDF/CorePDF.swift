@@ -257,11 +257,11 @@ public actor PDFProcessor {
         let targetBytes = Int(targetSizeMB * 1_000_000)
 
         // Use binary search to find the right quality level
-        var minQuality = 0.05  // Maximum compression
+        var minQuality = 0.01  // Maximum compression
         var maxQuality = 0.95  // Minimum compression
         var bestURL: URL?
         var bestSize: Int = Int.max
-        let maxAttempts = 8
+        let maxAttempts = 10
 
         for attempt in 0..<maxAttempts {
             let currentQuality = (minQuality + maxQuality) / 2.0
@@ -289,9 +289,9 @@ public actor PDFProcessor {
                     // Try less compression (higher quality) to get closer to target
                     minQuality = currentQuality
 
-                    // If we're very close to target (within 10%), accept it
+                    // If we're very close to target (within 5%), accept it
                     let percentOfTarget = Double(fileSize) / Double(targetBytes)
-                    if percentOfTarget > 0.9 && percentOfTarget <= 1.0 {
+                    if percentOfTarget > 0.95 && percentOfTarget <= 1.0 {
                         progressHandler(1.0)
                         return testURL
                     }
@@ -301,6 +301,11 @@ public actor PDFProcessor {
                     try? FileManager.default.removeItem(at: testURL)
                 }
             }
+
+            // If quality range is very narrow, we've converged
+            if maxQuality - minQuality < 0.01 {
+                break
+            }
         }
 
         // Return best result if we have one that's under target
@@ -309,9 +314,11 @@ public actor PDFProcessor {
             return finalURL
         }
 
-        // Clean up
-        if let url = bestURL {
-            try? FileManager.default.removeItem(at: url)
+        // If we couldn't achieve target, return the smallest we got
+        // Better to give user smallest possible than throw error
+        if let finalURL = bestURL {
+            progressHandler(1.0)
+            return finalURL
         }
 
         throw PDFError.targetSizeUnachievable
@@ -435,13 +442,18 @@ public actor PDFProcessor {
         let textSize = (text as NSString).size(withAttributes: attributes)
 
         if tiled {
-            let rows = Int(bounds.height / (textSize.height * 3))
-            let cols = Int(bounds.width / (textSize.width * 1.5))
+            // Calculate spacing for tiled watermarks
+            let horizontalSpacing = textSize.width * 2.0
+            let verticalSpacing = textSize.height * 4.0
+
+            // Calculate how many fit, ensuring at least 1
+            let cols = max(1, Int(ceil(bounds.width / horizontalSpacing)))
+            let rows = max(1, Int(ceil(bounds.height / verticalSpacing)))
 
             for row in 0..<rows {
                 for col in 0..<cols {
-                    let x = CGFloat(col) * textSize.width * 1.5
-                    let y = CGFloat(row) * textSize.height * 3
+                    let x = bounds.minX + CGFloat(col) * horizontalSpacing + textSize.width * 0.5
+                    let y = bounds.minY + CGFloat(row) * verticalSpacing + textSize.height * 0.5
                     (text as NSString).draw(at: CGPoint(x: x, y: y), withAttributes: attributes)
                 }
             }

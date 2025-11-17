@@ -120,6 +120,9 @@ public struct JobSettings: Codable {
     public var watermarkOpacity: Double = 0.5
     public var watermarkSize: Double = 0.2
 
+    // PDF Split Settings
+    public var splitRanges: [[Int]] = []  // Array of page ranges [[1,2,3], [4], [5]]
+
     public init() {}
 }
 
@@ -356,9 +359,19 @@ actor JobProcessor {
             throw JobError.invalidInput
         }
 
-        // Split into individual pages (one page per PDF)
-        let pageCount = pdf.pageCount
-        let ranges = (0..<pageCount).map { $0...$0 }
+        // Use custom ranges if provided, otherwise split into individual pages
+        let ranges: [ClosedRange<Int>]
+        if !job.settings.splitRanges.isEmpty {
+            // Convert array of page numbers to closed ranges
+            ranges = job.settings.splitRanges.compactMap { pageArray -> ClosedRange<Int>? in
+                guard let first = pageArray.first, let last = pageArray.last else { return nil }
+                return first...last
+            }
+        } else {
+            // Default: split into individual pages
+            let pageCount = pdf.pageCount
+            ranges = (0..<pageCount).map { $0...$0 }
+        }
 
         let outputURLs = try await processor.splitPDF(pdfURL, ranges: ranges, progressHandler: progressHandler)
         return outputURLs

@@ -485,35 +485,7 @@ struct ConfigurationView: View {
     }
 
     private var compressionSettings: some View {
-        VStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Quality")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Picker("Quality", selection: $settings.compressionQuality) {
-                    ForEach(CompressionQuality.allCases, id: \.self) { quality in
-                        Text(quality.displayName).tag(quality)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
-
-            if let targetSize = settings.targetSizeMB {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Target Size: \(Int(targetSize)) MB")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    Slider(value: Binding(
-                        get: { targetSize },
-                        set: { settings.targetSizeMB = $0 }
-                    ), in: 1...50, step: 1)
-                }
-            } else {
-                Button("Set Target Size") {
-                    settings.targetSizeMB = 5.0
-                }
-            }
-        }
+        PDFCompressionSettings(settings: $settings, pdfURL: selectedURLs.first)
     }
 
     private var imageSettings: some View {
@@ -805,6 +777,114 @@ struct PDFSplitRangeSelector: View {
 
     private func removeRange(at index: Int) {
         pageRanges.remove(at: index)
+    }
+}
+
+// MARK: - PDF Compression Settings
+struct PDFCompressionSettings: View {
+    @Binding var settings: JobSettings
+    let pdfURL: URL?
+
+    @State private var originalSizeMB: Double = 0
+    @State private var minAchievableMB: Double = 0.5
+    @State private var maxAchievableMB: Double = 50
+
+    var body: some View {
+        VStack(spacing: 16) {
+            // Show original size
+            if originalSizeMB > 0 {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Original Size: \(String(format: "%.1f", originalSizeMB)) MB")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+
+                    Text("Achievable range: \(String(format: "%.1f", minAchievableMB)) - \(String(format: "%.1f", maxAchievableMB)) MB")
+                        .font(.caption)
+                        .foregroundColor(.accentColor)
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(8)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Quality")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Picker("Quality", selection: $settings.compressionQuality) {
+                    ForEach(CompressionQuality.allCases, id: \.self) { quality in
+                        Text(quality.displayName).tag(quality)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            if let targetSize = settings.targetSizeMB {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Target Size: \(String(format: "%.1f", targetSize)) MB")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+
+                    Slider(value: Binding(
+                        get: { targetSize },
+                        set: { settings.targetSizeMB = $0 }
+                    ), in: minAchievableMB...maxAchievableMB, step: 0.5)
+
+                    HStack {
+                        Text("\(String(format: "%.1f", minAchievableMB)) MB")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(String(format: "%.1f", maxAchievableMB)) MB")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Button("Clear Target Size") {
+                    settings.targetSizeMB = nil
+                }
+                .font(.subheadline)
+                .foregroundColor(.red)
+            } else {
+                Button("Set Target Size") {
+                    settings.targetSizeMB = minAchievableMB + 1.0
+                }
+            }
+        }
+        .onAppear {
+            loadPDFInfo()
+        }
+    }
+
+    private func loadPDFInfo() {
+        guard let url = pdfURL else { return }
+
+        // Get original file size
+        if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+           let fileSize = attributes[.size] as? Int64 {
+            originalSizeMB = Double(fileSize) / 1_000_000.0
+
+            // Estimate minimum achievable size (roughly 10-20% of original with max compression)
+            minAchievableMB = max(0.1, originalSizeMB * 0.15)
+
+            // Estimate maximum useful size (90% of original - not worth compressing beyond this)
+            maxAchievableMB = max(minAchievableMB + 0.5, originalSizeMB * 0.9)
+
+            // Round values for better UX
+            minAchievableMB = (minAchievableMB * 10).rounded() / 10
+            maxAchievableMB = (maxAchievableMB * 10).rounded() / 10
+
+            // If target size is set but out of range, adjust it
+            if let currentTarget = settings.targetSizeMB {
+                if currentTarget < minAchievableMB {
+                    settings.targetSizeMB = minAchievableMB
+                } else if currentTarget > maxAchievableMB {
+                    settings.targetSizeMB = maxAchievableMB
+                }
+            }
+        }
     }
 }
 

@@ -255,24 +255,32 @@ public actor PDFProcessor {
     ) async throws -> URL {
 
         let targetBytes = Int(targetSizeMB * 1_000_000)
-        let qualityLevels: [Double] = [0.9, 0.7, 0.5, 0.3, 0.2, 0.1]
+        let qualityLevels: [CompressionQuality] = [.low, .medium, .high, .maximum]
 
-        for (index, _) in qualityLevels.enumerated() {
+        for (index, quality) in qualityLevels.enumerated() {
             let testURL = try await compressPDFWithQuality(
                 pdf,
-                quality: CompressionQuality.medium,
-                progressHandler: { _ in }
+                quality: quality,
+                progressHandler: { progress in
+                    progressHandler(progress * 0.9 + Double(index) * 0.1 / Double(qualityLevels.count))
+                }
             )
 
             if let attributes = try? FileManager.default.attributesOfItem(atPath: testURL.path),
                let fileSize = attributes[.size] as? Int {
-                if fileSize <= targetBytes || index == qualityLevels.count - 1 {
+                if fileSize <= targetBytes {
+                    progressHandler(1.0)
+                    return testURL
+                }
+
+                // If this is the last attempt and still too large, return it anyway
+                if index == qualityLevels.count - 1 {
                     progressHandler(1.0)
                     return testURL
                 }
             }
 
-            // Clean up test file
+            // Clean up test file if we're trying again
             try? FileManager.default.removeItem(at: testURL)
         }
 

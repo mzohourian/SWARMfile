@@ -362,10 +362,11 @@ actor JobProcessor {
         // Use custom ranges if provided, otherwise split into individual pages
         let ranges: [ClosedRange<Int>]
         if !job.settings.splitRanges.isEmpty {
-            // Convert array of page numbers to closed ranges
+            // Convert user-facing 1-based page numbers to 0-based indices
             ranges = job.settings.splitRanges.compactMap { pageArray -> ClosedRange<Int>? in
                 guard let first = pageArray.first, let last = pageArray.last else { return nil }
-                return first...last
+                // Convert from 1-based (user input) to 0-based (PDF indices)
+                return (first - 1)...(last - 1)
             }
         } else {
             // Default: split into individual pages

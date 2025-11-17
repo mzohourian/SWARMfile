@@ -257,7 +257,7 @@ public actor PDFProcessor {
         let targetBytes = Int(targetSizeMB * 1_000_000)
 
         // Use binary search to find the right quality level
-        var minQuality = 0.01  // Maximum compression
+        var minQuality = 0.05  // Maximum compression (don't go lower to avoid corruption)
         var maxQuality = 0.95  // Minimum compression
         var bestURL: URL?
         var bestSize: Int = Int.max
@@ -266,44 +266,51 @@ public actor PDFProcessor {
         for attempt in 0..<maxAttempts {
             let currentQuality = (minQuality + maxQuality) / 2.0
 
-            let testURL = try await compressPDFWithCustomQuality(
-                pdf,
-                jpegQuality: currentQuality,
-                progressHandler: { progress in
-                    let attemptProgress = Double(attempt) / Double(maxAttempts)
-                    progressHandler(attemptProgress + (progress / Double(maxAttempts)))
-                }
-            )
-
-            if let attributes = try? FileManager.default.attributesOfItem(atPath: testURL.path),
-               let fileSize = attributes[.size] as? Int {
-
-                if fileSize <= targetBytes {
-                    // This compression level works, save it
-                    if bestURL != nil {
-                        try? FileManager.default.removeItem(at: bestURL!)
+            // Try to compress, but catch errors and continue to next iteration
+            do {
+                let testURL = try await compressPDFWithCustomQuality(
+                    pdf,
+                    jpegQuality: currentQuality,
+                    progressHandler: { progress in
+                        let attemptProgress = Double(attempt) / Double(maxAttempts)
+                        progressHandler(attemptProgress + (progress / Double(maxAttempts)))
                     }
-                    bestURL = testURL
-                    bestSize = fileSize
+                )
 
-                    // Try less compression (higher quality) to get closer to target
-                    minQuality = currentQuality
+                if let attributes = try? FileManager.default.attributesOfItem(atPath: testURL.path),
+                   let fileSize = attributes[.size] as? Int {
 
-                    // If we're very close to target (within 5%), accept it
-                    let percentOfTarget = Double(fileSize) / Double(targetBytes)
-                    if percentOfTarget > 0.95 && percentOfTarget <= 1.0 {
-                        progressHandler(1.0)
-                        return testURL
+                    if fileSize <= targetBytes {
+                        // This compression level works, save it
+                        if bestURL != nil {
+                            try? FileManager.default.removeItem(at: bestURL!)
+                        }
+                        bestURL = testURL
+                        bestSize = fileSize
+
+                        // Try less compression (higher quality) to get closer to target
+                        minQuality = currentQuality
+
+                        // If we're very close to target (within 5%), accept it
+                        let percentOfTarget = Double(fileSize) / Double(targetBytes)
+                        if percentOfTarget > 0.95 && percentOfTarget <= 1.0 {
+                            progressHandler(1.0)
+                            return testURL
+                        }
+                    } else {
+                        // File too large, need more compression (lower quality)
+                        maxQuality = currentQuality
+                        try? FileManager.default.removeItem(at: testURL)
                     }
-                } else {
-                    // File too large, need more compression (lower quality)
-                    maxQuality = currentQuality
-                    try? FileManager.default.removeItem(at: testURL)
                 }
+            } catch {
+                // Compression failed at this quality level, try with lower compression (higher quality)
+                minQuality = currentQuality
+                continue
             }
 
             // If quality range is very narrow, we've converged
-            if maxQuality - minQuality < 0.01 {
+            if maxQuality - minQuality < 0.02 {
                 break
             }
         }

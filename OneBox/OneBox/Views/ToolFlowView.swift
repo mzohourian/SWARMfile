@@ -48,6 +48,7 @@ struct ToolFlowView: View {
                     ConfigurationView(
                         tool: tool,
                         settings: $settings,
+                        selectedURLs: selectedURLs,
                         onProcess: processFiles
                     )
                 case .processing:
@@ -356,6 +357,7 @@ struct InputSelectionView: View {
 struct ConfigurationView: View {
     let tool: ToolType
     @Binding var settings: JobSettings
+    let selectedURLs: [URL]
     let onProcess: () -> Void
 
     @State private var showAdvanced = false
@@ -564,7 +566,7 @@ struct ConfigurationView: View {
     }
 
     private var pdfSplitSettings: some View {
-        PDFSplitRangeSelector(settings: $settings)
+        PDFSplitRangeSelector(settings: $settings, pdfURL: selectedURLs.first)
     }
 
     private var watermarkSettings: some View {
@@ -662,14 +664,25 @@ struct ProcessingView: View {
 // MARK: - PDF Split Range Selector
 struct PDFSplitRangeSelector: View {
     @Binding var settings: JobSettings
+    let pdfURL: URL?
+
     @State private var startPage: String = "1"
     @State private var endPage: String = "1"
     @State private var pageRanges: [[Int]] = []
+    @State private var totalPages: Int = 0
+    @State private var errorMessage: String?
 
     var body: some View {
         VStack(spacing: 16) {
             Text("Select Page Ranges")
                 .font(.headline)
+
+            if totalPages > 0 {
+                Text("PDF has \(totalPages) page\(totalPages == 1 ? "" : "s")")
+                    .font(.subheadline)
+                    .foregroundColor(.accentColor)
+                    .fontWeight(.medium)
+            }
 
             Text("Add page ranges to create separate PDF files")
                 .font(.subheadline)
@@ -704,6 +717,16 @@ struct PDFSplitRangeSelector: View {
                 }
             }
 
+            // Error message
+            if let error = errorMessage {
+                Text(error)
+                    .font(.subheadline)
+                    .foregroundColor(.red)
+                    .padding(8)
+                    .background(Color.red.opacity(0.1))
+                    .cornerRadius(8)
+            }
+
             // Display added ranges
             if !pageRanges.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
@@ -731,6 +754,7 @@ struct PDFSplitRangeSelector: View {
             }
         }
         .onAppear {
+            loadPDFInfo()
             pageRanges = settings.splitRanges
         }
         .onChange(of: pageRanges) { newValue in
@@ -738,15 +762,43 @@ struct PDFSplitRangeSelector: View {
         }
     }
 
+    private func loadPDFInfo() {
+        guard let url = pdfURL, let pdf = PDFDocument(url: url) else {
+            totalPages = 0
+            return
+        }
+        totalPages = pdf.pageCount
+    }
+
     private func addRange() {
-        guard let start = Int(startPage), let end = Int(endPage), start <= end, start > 0 else {
+        // Clear previous error
+        errorMessage = nil
+
+        guard let start = Int(startPage), let end = Int(endPage) else {
+            errorMessage = "Please enter valid page numbers"
+            return
+        }
+
+        // Validate page numbers
+        if start < 1 {
+            errorMessage = "Page numbers must be at least 1"
+            return
+        }
+
+        if start > end {
+            errorMessage = "Start page must be less than or equal to end page"
+            return
+        }
+
+        if totalPages > 0 && end > totalPages {
+            errorMessage = "Page \(end) doesn't exist. PDF only has \(totalPages) page\(totalPages == 1 ? "" : "s")"
             return
         }
 
         let range = Array(start...end)
         pageRanges.append(range)
 
-        // Reset fields
+        // Reset fields to next available page
         startPage = "\(end + 1)"
         endPage = "\(end + 1)"
     }

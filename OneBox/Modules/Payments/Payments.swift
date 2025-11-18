@@ -45,7 +45,7 @@ public class PaymentsManager: ObservableObject {
 
     // Free tier tracking
     @Published public private(set) var dailyExportsUsed: Int = 0
-    private let maxFreeExports = 999  // TODO: Change back to 3 for production
+    private let maxFreeExports = 3  // 3 free exports per day for free tier
 
     private var updateListenerTask: Task<Void, Never>?
 

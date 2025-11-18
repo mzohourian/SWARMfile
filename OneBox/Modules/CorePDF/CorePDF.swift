@@ -16,6 +16,71 @@ public actor PDFProcessor {
 
     public init() {}
 
+    // MARK: - Validation & Utility Methods
+
+    /// Checks if a PDF is password-protected (encrypted)
+    /// - Parameter url: URL to the PDF file
+    /// - Returns: True if the PDF is encrypted/password-protected
+    public func isPasswordProtected(url: URL) -> Bool {
+        guard let pdf = PDFDocument(url: url) else { return false }
+        return pdf.isEncrypted
+    }
+
+    /// Validates a PDF can be opened and processed
+    /// - Parameter url: URL to the PDF file
+    /// - Throws: PDFError if the PDF is invalid, encrypted, or corrupted
+    public func validatePDF(url: URL) throws {
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw PDFError.fileNotFound(url.lastPathComponent)
+        }
+
+        guard let pdf = PDFDocument(url: url) else {
+            throw PDFError.corruptedPDF(url.lastPathComponent)
+        }
+
+        if pdf.isEncrypted {
+            throw PDFError.passwordProtected(url.lastPathComponent)
+        }
+
+        if pdf.pageCount == 0 {
+            throw PDFError.emptyPDF(url.lastPathComponent)
+        }
+    }
+
+    /// Checks if there's enough disk space for an operation
+    /// - Parameter estimatedSize: Estimated size in bytes needed for the operation
+    /// - Throws: PDFError.insufficientStorage if not enough space
+    public func checkDiskSpace(estimatedSize: Int64) throws {
+        guard let availableSpace = try? getAvailableDiskSpace() else {
+            // If we can't determine space, proceed (better than blocking user)
+            return
+        }
+
+        // Require at least 50 MB buffer beyond the estimated size
+        let requiredSpace = estimatedSize + (50 * 1_000_000)
+
+        if availableSpace < requiredSpace {
+            let neededMB = Double(requiredSpace - availableSpace) / 1_000_000.0
+            throw PDFError.insufficientStorage(neededMB: neededMB)
+        }
+    }
+
+    /// Gets available disk space in bytes
+    private func getAvailableDiskSpace() throws -> Int64 {
+        let fileURL = URL(fileURLWithPath: NSHomeDirectory() as String)
+        let values = try fileURL.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        return values.volumeAvailableCapacityForImportantUsage ?? 0
+    }
+
+    /// Gets file size in bytes
+    public func getFileSize(url: URL) -> Int64? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? Int64 else {
+            return nil
+        }
+        return size
+    }
+
     // MARK: - Images to PDF
     public func createPDF(
         from images: [URL],
@@ -855,6 +920,11 @@ public enum PDFError: LocalizedError {
     case noPagesToDelete
     case cannotDeleteAllPages
     case invalidRotationAngle
+    case passwordProtected(String)
+    case corruptedPDF(String)
+    case fileNotFound(String)
+    case emptyPDF(String)
+    case insufficientStorage(neededMB: Double)
 
     public var errorDescription: String? {
         switch self {
@@ -867,19 +937,29 @@ public enum PDFError: LocalizedError {
         case .contextCreationFailed:
             return "Failed to create graphics context"
         case .writeFailed:
-            return "Failed to write PDF file"
+            return "Unable to save the PDF. You may be running low on storage space."
         case .creationFailed:
-            return "Failed to create valid PDF file"
+            return "Failed to create PDF. Please try again."
         case .targetSizeUnachievable:
-            return "Could not compress to target size. Try a larger size or lower quality."
+            return "Could not compress to target size. Try a larger target or lower quality setting."
         case .invalidPageRange:
             return "Invalid page range provided"
         case .noPagesToDelete:
             return "No pages selected for deletion"
         case .cannotDeleteAllPages:
-            return "Cannot delete all pages from the PDF"
+            return "Cannot delete all pages from a PDF. At least one page must remain."
         case .invalidRotationAngle:
             return "Rotation angle must be a multiple of 90 degrees"
+        case .passwordProtected(let name):
+            return "This PDF (\(name)) is password-protected. OneBox cannot process encrypted files. Please unlock it first."
+        case .corruptedPDF(let name):
+            return "This file (\(name)) appears to be corrupted or is not a valid PDF. Try re-downloading it."
+        case .fileNotFound(let name):
+            return "File not found: \(name). It may have been moved or deleted."
+        case .emptyPDF(let name):
+            return "This PDF (\(name)) contains no pages and cannot be processed."
+        case .insufficientStorage(let neededMB):
+            return String(format: "Not enough storage space. Please free up %.1f MB and try again.", neededMB)
         }
     }
 }

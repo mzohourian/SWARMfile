@@ -132,7 +132,6 @@ struct ToolFlowView: View {
 
         currentJob = job
         jobManager.submitJob(job)
-        paymentsManager.consumeExport()
 
         step = .processing
 
@@ -147,6 +146,8 @@ struct ToolFlowView: View {
                     currentJob = updatedJob
 
                     if updatedJob.status == .success {
+                        // Only consume export on success (not on failure)
+                        paymentsManager.consumeExport()
                         step = .result
                         break
                     } else if updatedJob.status == .failed {

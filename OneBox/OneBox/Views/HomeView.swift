@@ -13,8 +13,11 @@ struct HomeView: View {
     @State private var showingToolFlow = false
 
     private var filteredTools: [ToolType] {
-        // Hide video compressor - focusing on documents only for this phase
-        let availableTools = ToolType.allCases.filter { $0 != .videoCompress }
+        // Hide video compressor and ZIP tools - focusing on core PDF/image features
+        // ZIP features are redundant with iOS native capabilities (Files app can create/extract ZIPs)
+        let availableTools = ToolType.allCases.filter {
+            $0 != .videoCompress && $0 != .zip && $0 != .unzip
+        }
 
         if searchText.isEmpty {
             return availableTools

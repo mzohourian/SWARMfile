@@ -89,7 +89,7 @@ struct ToolFlowView: View {
             }
             .fullScreenCover(isPresented: $showPageOrganizer) {
                 if let pdfURL = selectedURLs.first {
-                    print("ToolFlow: Presenting PageOrganizer with URL: \(pdfURL.path)")
+                    let _ = print("ToolFlow: Presenting PageOrganizer with URL: \(pdfURL.path)")
                     PageOrganizerView(pdfURL: pdfURL)
                         .environmentObject(jobManager)
                         .environmentObject(paymentsManager)

@@ -324,6 +324,14 @@ actor JobProcessor {
             return try await processPDFWatermark(job: job, progressHandler: progressHandler)
         case .pdfSign:
             return try await processPDFSign(job: job, progressHandler: progressHandler)
+        case .pdfOrganize:
+            // Page Organizer is handled through interactive UI (PageOrganizerView)
+            // Jobs are created after user completes organization, already processed
+            // This case should not normally be reached through standard job flow
+            guard let pdfURL = job.inputs.first else {
+                throw JobError.invalidInput
+            }
+            return [pdfURL]  // Return original URL as it's already processed
         case .imageResize:
             return try await processImageResize(job: job, progressHandler: progressHandler)
         case .videoCompress:

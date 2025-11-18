@@ -199,6 +199,7 @@ struct InputSelectionView: View {
     @State private var showImagePicker = false
     @State private var showFilePicker = false
     @State private var selectedPhotos: [PhotosPickerItem] = []
+    @State private var isLoadingFiles = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -294,9 +295,9 @@ struct InputSelectionView: View {
 
     private var continueButton: some View {
         PrimaryButton(
-            "Continue",
+            isLoadingFiles ? "Loading files..." : "Continue",
             icon: "arrow.right",
-            isDisabled: selectedURLs.isEmpty
+            isDisabled: selectedURLs.isEmpty || isLoadingFiles
         ) {
             onContinue()
         }
@@ -375,6 +376,9 @@ struct InputSelectionView: View {
     private func handleFileImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
+            isLoadingFiles = true
+            print("InputSelection: Starting to copy \(urls.count) file(s)")
+
             // Copy files to temp directory for reliable access
             // (security-scoped URLs from document picker need special handling)
             Task {
@@ -392,14 +396,28 @@ struct InputSelectionView: View {
                         let tempURL = FileManager.default.temporaryDirectory
                             .appendingPathComponent(UUID().uuidString)
                             .appendingPathExtension(url.pathExtension)
+
+                        print("InputSelection: Copying \(url.lastPathComponent) to temp location")
                         try FileManager.default.copyItem(at: url, to: tempURL)
+                        print("InputSelection: Successfully copied to \(tempURL.path)")
+
+                        // Verify the file was copied and is readable
+                        guard FileManager.default.fileExists(atPath: tempURL.path) else {
+                            print("InputSelection Error: File doesn't exist after copy: \(tempURL.path)")
+                            continue
+                        }
 
                         await MainActor.run {
                             selectedURLs.append(tempURL)
                         }
                     } catch {
-                        print("File copy error: \(error)")
+                        print("InputSelection Error: File copy failed - \(error)")
                     }
+                }
+
+                await MainActor.run {
+                    isLoadingFiles = false
+                    print("InputSelection: Finished copying files. Total URLs: \(selectedURLs.count)")
                 }
             }
         case .failure(let error):

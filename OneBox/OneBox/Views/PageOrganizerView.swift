@@ -35,6 +35,10 @@ struct PageOrganizerView: View {
     var body: some View {
         NavigationStack {
             ZStack {
+                // Background color
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
+
                 if pdfDocument != nil, !pages.isEmpty {
                     VStack(spacing: 0) {
                         // Selection info bar
@@ -223,7 +227,14 @@ struct PageOrganizerView: View {
 
         // Try to load PDF document
         guard let pdf = PDFDocument(url: pdfURL) else {
-            print("PageOrganizer Error: Failed to load PDF from URL: \(pdfURL)")
+            if retryCount < 3 {
+                print("PageOrganizer: Failed to load PDF, retrying in 0.5s (attempt \(retryCount + 1)/3)")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.loadPDF(retryCount: retryCount + 1)
+                }
+                return
+            }
+            print("PageOrganizer Error: Failed to load PDF from URL after 3 retries: \(pdfURL)")
             errorMessage = "Failed to load PDF. The file may be corrupted or password-protected."
             showError = true
             dismiss()

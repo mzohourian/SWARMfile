@@ -61,6 +61,7 @@ public enum JobType: String, Codable, CaseIterable {
     case pdfCompress
     case pdfWatermark
     case pdfSign
+    case pdfOrganize
     case imageResize
     case videoCompress
     case zip
@@ -74,6 +75,7 @@ public enum JobType: String, Codable, CaseIterable {
         case .pdfCompress: return "Compress PDF"
         case .pdfWatermark: return "Watermark PDF"
         case .pdfSign: return "Sign PDF"
+        case .pdfOrganize: return "Organize Pages"
         case .imageResize: return "Resize Images"
         case .videoCompress: return "Compress Video"
         case .zip: return "Create ZIP"

@@ -13,10 +13,13 @@ struct HomeView: View {
     @State private var showingToolFlow = false
 
     private var filteredTools: [ToolType] {
+        // Hide video compressor - focusing on documents only for this phase
+        let availableTools = ToolType.allCases.filter { $0 != .videoCompress }
+
         if searchText.isEmpty {
-            return ToolType.allCases
+            return availableTools
         }
-        return ToolType.allCases.filter { tool in
+        return availableTools.filter { tool in
             tool.displayName.localizedCaseInsensitiveContains(searchText) ||
             tool.description.localizedCaseInsensitiveContains(searchText)
         }
@@ -133,6 +136,7 @@ enum ToolType: String, CaseIterable, Identifiable {
     case pdfCompress
     case pdfWatermark
     case pdfSign
+    case pdfOrganize
     case imageResize
     case videoCompress
     case zip
@@ -148,6 +152,7 @@ enum ToolType: String, CaseIterable, Identifiable {
         case .pdfCompress: return "Compress PDF"
         case .pdfWatermark: return "Watermark PDF"
         case .pdfSign: return "Sign PDF"
+        case .pdfOrganize: return "Organize Pages"
         case .imageResize: return "Resize Images"
         case .videoCompress: return "Compress Video"
         case .zip: return "Create ZIP"
@@ -163,6 +168,7 @@ enum ToolType: String, CaseIterable, Identifiable {
         case .pdfCompress: return "Reduce file size"
         case .pdfWatermark: return "Add text or image"
         case .pdfSign: return "Add signature"
+        case .pdfOrganize: return "Reorder & delete pages"
         case .imageResize: return "Batch resize & compress"
         case .videoCompress: return "Reduce video size"
         case .zip: return "Archive files"
@@ -178,6 +184,7 @@ enum ToolType: String, CaseIterable, Identifiable {
         case .pdfCompress: return "arrow.down.circle"
         case .pdfWatermark: return "waterbottle"
         case .pdfSign: return "signature"
+        case .pdfOrganize: return "square.grid.2x2"
         case .imageResize: return "photo.stack"
         case .videoCompress: return "play.rectangle"
         case .zip: return "archivebox"
@@ -193,6 +200,7 @@ enum ToolType: String, CaseIterable, Identifiable {
         case .pdfCompress: return .green
         case .pdfWatermark: return .cyan
         case .pdfSign: return .indigo
+        case .pdfOrganize: return .teal
         case .imageResize: return .pink
         case .videoCompress: return .red
         case .zip: return .yellow

@@ -634,6 +634,136 @@ public actor PDFProcessor {
         image.draw(in: rect)
     }
 
+    // MARK: - Page Organization
+
+    /// Reorders pages in a PDF document according to the specified order.
+    /// - Parameters:
+    ///   - document: The source PDF document
+    ///   - newOrder: Array of original page indices (0-based) in desired order
+    ///   - progressHandler: Closure called with progress (0.0 to 1.0)
+    /// - Returns: URL to the new PDF with reordered pages
+    /// - Throws: PDFError if the operation fails
+    public func reorderPages(
+        in document: PDFDocument,
+        newOrder: [Int],
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> URL {
+
+        guard !newOrder.isEmpty else {
+            throw PDFError.invalidPageRange
+        }
+
+        let outputURL = temporaryOutputURL(prefix: "reordered")
+        let outputDocument = PDFDocument()
+
+        for (index, originalIndex) in newOrder.enumerated() {
+            guard originalIndex >= 0 && originalIndex < document.pageCount,
+                  let page = document.page(at: originalIndex) else {
+                continue
+            }
+
+            outputDocument.insert(page, at: outputDocument.pageCount)
+            progressHandler(Double(index + 1) / Double(newOrder.count))
+        }
+
+        guard outputDocument.write(to: outputURL) else {
+            throw PDFError.writeFailed
+        }
+
+        return outputURL
+    }
+
+    /// Deletes specified pages from a PDF document.
+    /// - Parameters:
+    ///   - document: The source PDF document
+    ///   - indices: Set of page indices (0-based) to delete
+    ///   - progressHandler: Closure called with progress (0.0 to 1.0)
+    /// - Returns: URL to the new PDF with pages removed
+    /// - Throws: PDFError if the operation fails
+    public func deletePages(
+        in document: PDFDocument,
+        indices: Set<Int>,
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> URL {
+
+        let totalPages = document.pageCount
+
+        guard !indices.isEmpty else {
+            throw PDFError.noPagesToDelete
+        }
+
+        guard indices.count < totalPages else {
+            throw PDFError.cannotDeleteAllPages
+        }
+
+        let outputURL = temporaryOutputURL(prefix: "deleted_pages")
+        let outputDocument = PDFDocument()
+
+        let remainingPages = totalPages - indices.count
+        var processedPages = 0
+
+        for pageIndex in 0..<totalPages {
+            // Skip pages marked for deletion
+            if indices.contains(pageIndex) {
+                continue
+            }
+
+            guard let page = document.page(at: pageIndex) else { continue }
+            outputDocument.insert(page, at: outputDocument.pageCount)
+
+            processedPages += 1
+            progressHandler(Double(processedPages) / Double(remainingPages))
+        }
+
+        guard outputDocument.write(to: outputURL) else {
+            throw PDFError.writeFailed
+        }
+
+        return outputURL
+    }
+
+    /// Rotates specified pages in a PDF document.
+    /// - Parameters:
+    ///   - document: The source PDF document
+    ///   - indices: Set of page indices (0-based) to rotate
+    ///   - angle: Rotation angle in degrees (must be multiple of 90: 90, 180, 270, or -90)
+    ///   - progressHandler: Closure called with progress (0.0 to 1.0)
+    /// - Returns: URL to the new PDF with rotated pages
+    /// - Throws: PDFError if the operation fails
+    public func rotatePages(
+        in document: PDFDocument,
+        indices: Set<Int>,
+        angle: Int,
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> URL {
+
+        guard angle % 90 == 0 else {
+            throw PDFError.invalidRotationAngle
+        }
+
+        let outputURL = temporaryOutputURL(prefix: "rotated_pages")
+        let outputDocument = PDFDocument()
+
+        for pageIndex in 0..<document.pageCount {
+            guard let page = document.page(at: pageIndex) else { continue }
+
+            // Rotate page if it's in the indices set
+            if indices.contains(pageIndex) {
+                let currentRotation = page.rotation
+                page.rotation = (currentRotation + angle) % 360
+            }
+
+            outputDocument.insert(page, at: outputDocument.pageCount)
+            progressHandler(Double(pageIndex + 1) / Double(document.pageCount))
+        }
+
+        guard outputDocument.write(to: outputURL) else {
+            throw PDFError.writeFailed
+        }
+
+        return outputURL
+    }
+
     // MARK: - Helper Methods
     private func temporaryOutputURL(prefix: String) -> URL {
         let tempDir = FileManager.default.temporaryDirectory
@@ -721,6 +851,10 @@ public enum PDFError: LocalizedError {
     case writeFailed
     case creationFailed
     case targetSizeUnachievable
+    case invalidPageRange
+    case noPagesToDelete
+    case cannotDeleteAllPages
+    case invalidRotationAngle
 
     public var errorDescription: String? {
         switch self {
@@ -738,6 +872,14 @@ public enum PDFError: LocalizedError {
             return "Failed to create valid PDF file"
         case .targetSizeUnachievable:
             return "Could not compress to target size. Try a larger size or lower quality."
+        case .invalidPageRange:
+            return "Invalid page range provided"
+        case .noPagesToDelete:
+            return "No pages selected for deletion"
+        case .cannotDeleteAllPages:
+            return "Cannot delete all pages from the PDF"
+        case .invalidRotationAngle:
+            return "Rotation angle must be a multiple of 90 degrees"
         }
     }
 }

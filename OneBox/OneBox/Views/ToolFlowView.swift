@@ -26,6 +26,7 @@ struct ToolFlowView: View {
     @State private var showPaywall = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var showPageOrganizer = false
 
     enum FlowStep {
         case selectInput
@@ -42,7 +43,15 @@ struct ToolFlowView: View {
                     InputSelectionView(
                         tool: tool,
                         selectedURLs: $selectedURLs,
-                        onContinue: { step = .configure }
+                        onContinue: {
+                            if tool == .pdfOrganize {
+                                // Page Organizer uses a custom interactive flow
+                                showPageOrganizer = true
+                            } else {
+                                // Standard flow continues to configuration
+                                step = .configure
+                            }
+                        }
                     )
                 case .configure:
                     ConfigurationView(
@@ -77,6 +86,13 @@ struct ToolFlowView: View {
             .sheet(isPresented: $showPaywall) {
                 PaywallView()
             }
+            .fullScreenCover(isPresented: $showPageOrganizer) {
+                if let pdfURL = selectedURLs.first {
+                    PageOrganizerView(pdfURL: pdfURL)
+                        .environmentObject(jobManager)
+                        .environmentObject(paymentsManager)
+                }
+            }
             .alert("Error", isPresented: $showError) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -101,6 +117,7 @@ struct ToolFlowView: View {
         case .pdfCompress: jobType = .pdfCompress
         case .pdfWatermark: jobType = .pdfWatermark
         case .pdfSign: jobType = .pdfSign
+        case .pdfOrganize: jobType = .pdfOrganize
         case .imageResize: jobType = .imageResize
         case .videoCompress: jobType = .videoCompress
         case .zip: jobType = .zip
@@ -264,7 +281,7 @@ struct InputSelectionView: View {
     }
 
     private var allowsMultipleSelection: Bool {
-        tool != .pdfSplit && tool != .pdfSign && tool != .unzip
+        tool != .pdfSplit && tool != .pdfSign && tool != .pdfOrganize && tool != .unzip
     }
 
     private var maxSelectionCount: Int? {
@@ -279,7 +296,7 @@ struct InputSelectionView: View {
         switch tool {
         case .imagesToPDF, .imageResize:
             return [.image]
-        case .pdfMerge, .pdfSplit, .pdfCompress, .pdfWatermark, .pdfSign:
+        case .pdfMerge, .pdfSplit, .pdfCompress, .pdfWatermark, .pdfSign, .pdfOrganize:
             return [.pdf]
         case .videoCompress:
             return [.movie, .video]
@@ -294,6 +311,7 @@ struct InputSelectionView: View {
         switch tool {
         case .imagesToPDF: return "Select Images"
         case .pdfMerge: return "Select PDFs"
+        case .pdfOrganize: return "Select PDF"
         case .imageResize: return "Select Images"
         case .videoCompress: return "Select Video"
         default: return "Select Files"
@@ -306,6 +324,7 @@ struct InputSelectionView: View {
         case .pdfMerge: return "Choose multiple PDFs to combine"
         case .pdfSplit: return "Choose a PDF to split"
         case .pdfCompress: return "Choose a PDF to compress"
+        case .pdfOrganize: return "Choose a PDF to organize"
         default: return "Choose files to process"
         }
     }

@@ -7,6 +7,7 @@ import SwiftUI
 import JobEngine
 import UIComponents
 import QuickLook
+import Photos
 
 struct JobResultView: View {
     let job: Job
@@ -16,6 +17,9 @@ struct JobResultView: View {
     @State private var showShareSheet = false
     @State private var showPreview = false
     @State private var previewURL: URL?
+    @State private var showSaveToPhotosAlert = false
+    @State private var saveToPhotosMessage = ""
+    @State private var isSavingToPhotos = false
 
     var body: some View {
         NavigationStack {
@@ -60,6 +64,19 @@ struct JobResultView: View {
                     QuickLookPreview(url: url)
                 }
             }
+            .alert(isSavingToPhotos ? "Saving to Photos" : "Photos", isPresented: $showSaveToPhotosAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(saveToPhotosMessage)
+            }
+        }
+    }
+
+    // Helper to check if output is images
+    private var hasImageOutputs: Bool {
+        job.outputURLs.contains { url in
+            let ext = url.pathExtension.lowercased()
+            return ["jpg", "jpeg", "png", "heic"].contains(ext)
         }
     }
 
@@ -167,6 +184,14 @@ struct JobResultView: View {
 
     private var actionsSection: some View {
         VStack(spacing: 12) {
+            // Save to Photos button for image outputs
+            if hasImageOutputs {
+                PrimaryButton("Save to Photos", icon: "photo.on.rectangle.angled") {
+                    saveToPhotos()
+                }
+                .disabled(isSavingToPhotos)
+            }
+
             PrimaryButton("Share & Save", icon: "square.and.arrow.up") {
                 showShareSheet = true
             }
@@ -184,6 +209,61 @@ struct JobResultView: View {
             }
             .font(.subheadline)
             .foregroundColor(.accentColor)
+        }
+    }
+
+    // MARK: - Save to Photos
+    private func saveToPhotos() {
+        isSavingToPhotos = true
+
+        // Request photo library permission
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            DispatchQueue.main.async {
+                guard status == .authorized else {
+                    saveToPhotosMessage = "Photo library access denied. Please enable it in Settings to save images."
+                    showSaveToPhotosAlert = true
+                    isSavingToPhotos = false
+                    return
+                }
+
+                // Save all image files
+                var savedCount = 0
+                var failedCount = 0
+
+                PHPhotoLibrary.shared().performChanges({
+                    for url in job.outputURLs {
+                        let ext = url.pathExtension.lowercased()
+                        guard ["jpg", "jpeg", "png", "heic"].contains(ext) else { continue }
+
+                        // Ensure file exists and is accessible
+                        guard FileManager.default.fileExists(atPath: url.path) else {
+                            failedCount += 1
+                            continue
+                        }
+
+                        // Create photo creation request
+                        if let _ = try? PHAssetCreationRequest.creationRequestForAssetFromImage(atFileURL: url) {
+                            savedCount += 1
+                        } else {
+                            failedCount += 1
+                        }
+                    }
+                }) { success, error in
+                    DispatchQueue.main.async {
+                        isSavingToPhotos = false
+
+                        if success && savedCount > 0 {
+                            saveToPhotosMessage = "Successfully saved \(savedCount) image\(savedCount == 1 ? "" : "s") to Photos."
+                        } else if failedCount > 0 {
+                            saveToPhotosMessage = "Failed to save \(failedCount) image\(failedCount == 1 ? "" : "s"). \(error?.localizedDescription ?? "")"
+                        } else {
+                            saveToPhotosMessage = "No images were saved."
+                        }
+
+                        showSaveToPhotosAlert = true
+                    }
+                }
+            }
         }
     }
 
@@ -295,10 +375,44 @@ struct QuickLookPreview: UIViewControllerRepresentable {
     }
 
     class Coordinator: NSObject, QLPreviewControllerDataSource {
-        let url: URL
+        let accessibleURL: URL
 
         init(url: URL) {
-            self.url = url
+            // Copy temp files to a persistent location for QuickLook access
+            let fileManager = FileManager.default
+
+            // Check if file exists
+            guard fileManager.fileExists(atPath: url.path) else {
+                print("QuickLook: File not found at \(url.path)")
+                self.accessibleURL = url
+                return
+            }
+
+            // If file is in temp directory, copy to Documents/Previews
+            if url.path.contains("/tmp/") || url.path.contains("/Tmp/") {
+                if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
+                    let previewsURL = documentsURL.appendingPathComponent("Previews", isDirectory: true)
+                    try? fileManager.createDirectory(at: previewsURL, withIntermediateDirectories: true)
+
+                    let destinationURL = previewsURL.appendingPathComponent(url.lastPathComponent)
+
+                    // Remove old file if exists
+                    try? fileManager.removeItem(at: destinationURL)
+
+                    // Copy file
+                    do {
+                        try fileManager.copyItem(at: url, to: destinationURL)
+                        print("QuickLook: Copied file to \(destinationURL.path)")
+                        self.accessibleURL = destinationURL
+                        return
+                    } catch {
+                        print("QuickLook: Failed to copy file: \(error)")
+                    }
+                }
+            }
+
+            // Use original URL if copy failed or not needed
+            self.accessibleURL = url
         }
 
         func numberOfPreviewItems(in controller: QLPreviewController) -> Int {
@@ -306,7 +420,7 @@ struct QuickLookPreview: UIViewControllerRepresentable {
         }
 
         func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
-            url as QLPreviewItem
+            accessibleURL as QLPreviewItem
         }
     }
 }

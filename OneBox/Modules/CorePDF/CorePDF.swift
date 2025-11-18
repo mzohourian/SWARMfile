@@ -278,7 +278,7 @@ public actor PDFProcessor {
             let pageBounds = page.bounds(for: .mediaBox)
             UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
 
-            guard let pdfContext = UIGraphicsGetCurrentContext() else { continue }
+            guard UIGraphicsGetCurrentContext() != nil else { continue }
 
             // Render page to image first
             let renderer = UIGraphicsImageRenderer(size: pageBounds.size)
@@ -440,7 +440,7 @@ public actor PDFProcessor {
             let pageBounds = page.bounds(for: .mediaBox)
             UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
 
-            guard let pdfContext = UIGraphicsGetCurrentContext() else { continue }
+            guard UIGraphicsGetCurrentContext() != nil else { continue }
 
             // Calculate scaled size for rendering (downsample for compression)
             let scaledSize = CGSize(
@@ -1038,7 +1038,7 @@ public enum CompressionQuality: String, Codable, CaseIterable {
     }
 }
 
-public enum WatermarkPosition: Codable, Equatable {
+public enum WatermarkPosition: Codable, Equatable, Hashable {
     case topLeft, topCenter, topRight
     case middleLeft, center, middleRight
     case bottomLeft, bottomCenter, bottomRight

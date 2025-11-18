@@ -27,6 +27,7 @@ struct ToolFlowView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var showPageOrganizer = false
+    @State private var showSignaturePlacement = false
 
     enum FlowStep {
         case selectInput
@@ -93,6 +94,24 @@ struct ToolFlowView: View {
                         .environmentObject(paymentsManager)
                 }
             }
+            .fullScreenCover(isPresented: $showSignaturePlacement) {
+                if let pdfURL = selectedURLs.first {
+                    let signatureImage: UIImage? = {
+                        if let data = settings.signatureImageData {
+                            return UIImage(data: data)
+                        }
+                        return nil
+                    }()
+
+                    SignaturePlacementView(
+                        pdfURL: pdfURL,
+                        signatureImage: signatureImage,
+                        signatureText: settings.signatureText
+                    )
+                    .environmentObject(jobManager)
+                    .environmentObject(paymentsManager)
+                }
+            }
             .alert("Error", isPresented: $showError) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -102,6 +121,12 @@ struct ToolFlowView: View {
     }
 
     private func processFiles() {
+        // For PDF Sign, show interactive placement view instead of processing
+        if tool == .pdfSign {
+            showSignaturePlacement = true
+            return
+        }
+
         // Check if user can export
         guard paymentsManager.canExport else {
             showPaywall = true
@@ -487,8 +512,8 @@ struct ConfigurationView: View {
                 Spacer()
 
                 PrimaryButton(
-                    "Process Files",
-                    icon: "bolt.fill",
+                    tool == .pdfSign ? "Place Signature" : "Process Files",
+                    icon: tool == .pdfSign ? "hand.tap" : "bolt.fill",
                     isDisabled: !isConfigurationValid,
                     action: onProcess
                 )
@@ -669,7 +694,7 @@ struct ConfigurationView: View {
                     .font(.subheadline)
                     .fontWeight(.medium)
                 Picker("Position", selection: $settings.watermarkPosition) {
-                    ForEach(WatermarkPosition.allCases, id: \.self) { position in
+                    ForEach(WatermarkPosition.allPresets, id: \.self) { position in
                         Text(position.displayName).tag(position)
                     }
                 }
@@ -689,13 +714,23 @@ struct ConfigurationView: View {
     private var signatureSettings: some View {
         VStack(spacing: 16) {
             // Info text
-            Text("The signature will be added to the last page of the PDF")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(8)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "hand.tap")
+                        .foregroundColor(.accentColor)
+                    Text("Interactive Placement")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                }
+
+                Text("After creating your signature, you'll be able to tap anywhere on any page to place it exactly where you want")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.accentColor.opacity(0.1))
+            .cornerRadius(12)
 
             // Signature Type Picker
             VStack(alignment: .leading, spacing: 8) {
@@ -736,27 +771,6 @@ struct ConfigurationView: View {
                         settings.signatureImageData = image?.pngData()
                     }
                 ))
-            }
-
-            // Position
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Position")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Picker("Position", selection: $settings.signaturePosition) {
-                    ForEach(WatermarkPosition.allCases.filter { $0 != .tiled }, id: \.self) { position in
-                        Text(position.displayName).tag(position)
-                    }
-                }
-                .pickerStyle(.menu)
-            }
-
-            // Size
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Size: \(Int(settings.signatureSize * 100))%")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Slider(value: $settings.signatureSize, in: 0.1...0.3, step: 0.05)
             }
         }
     }

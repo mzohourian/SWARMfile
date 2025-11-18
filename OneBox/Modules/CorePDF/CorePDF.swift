@@ -617,6 +617,9 @@ public actor PDFProcessor {
             return CGPoint(x: bounds.width - size.width - margin, y: bounds.height - size.height - margin)
         case .tiled:
             return .zero
+        case .custom(let x, let y):
+            // Custom position uses absolute coordinates
+            return CGPoint(x: x, y: y)
         }
     }
 
@@ -908,6 +911,77 @@ public actor PDFProcessor {
         return outputURL
     }
 
+    /// Signs a specific page of a PDF with text or image signature at a custom position
+    /// - Parameters:
+    ///   - pdfURL: Source PDF URL
+    ///   - pageIndex: Specific page index to sign (0-based)
+    ///   - text: Optional signature text
+    ///   - image: Optional signature image
+    ///   - position: Position for the signature (supports custom coordinates)
+    ///   - opacity: Signature opacity (0.0-1.0)
+    ///   - size: Signature size as percentage of page width
+    ///   - progressHandler: Progress callback
+    /// - Returns: URL to the signed PDF
+    public func signPDF(
+        _ pdfURL: URL,
+        pageIndex: Int,
+        text: String? = nil,
+        image: UIImage? = nil,
+        position: WatermarkPosition,
+        opacity: Double = 1.0,
+        size: Double = 0.15,
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> URL {
+
+        guard let sourcePDF = PDFDocument(url: pdfURL) else {
+            throw PDFError.invalidPDF(pdfURL.lastPathComponent)
+        }
+
+        guard pageIndex >= 0 && pageIndex < sourcePDF.pageCount else {
+            throw PDFError.invalidPageRange
+        }
+
+        let outputURL = temporaryOutputURL(prefix: "signed")
+        let pageCount = sourcePDF.pageCount
+
+        UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
+        defer { UIGraphicsEndPDFContext() }
+
+        for currentPageIndex in 0..<pageCount {
+            guard let page = sourcePDF.page(at: currentPageIndex) else { continue }
+
+            let pageBounds = page.bounds(for: .mediaBox)
+            UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
+
+            guard let context = UIGraphicsGetCurrentContext() else { continue }
+
+            // Draw original page
+            context.saveGState()
+            context.translateBy(x: 0, y: pageBounds.size.height)
+            context.scaleBy(x: 1.0, y: -1.0)
+            page.draw(with: .mediaBox, to: context)
+            context.restoreGState()
+
+            // Draw signature only on the specified page
+            if currentPageIndex == pageIndex {
+                context.saveGState()
+                context.setAlpha(CGFloat(opacity))
+
+                if let text = text {
+                    drawSignatureText(text, in: pageBounds, position: position)
+                } else if let image = image {
+                    drawSignatureImage(image, in: pageBounds, position: position, size: size)
+                }
+
+                context.restoreGState()
+            }
+
+            progressHandler(Double(currentPageIndex + 1) / Double(pageCount))
+        }
+
+        return outputURL
+    }
+
     // MARK: - Helper Methods
     private func temporaryOutputURL(prefix: String) -> URL {
         let tempDir = FileManager.default.temporaryDirectory
@@ -964,11 +1038,18 @@ public enum CompressionQuality: String, Codable, CaseIterable {
     }
 }
 
-public enum WatermarkPosition: String, Codable, CaseIterable {
+public enum WatermarkPosition: Codable, Equatable {
     case topLeft, topCenter, topRight
     case middleLeft, center, middleRight
     case bottomLeft, bottomCenter, bottomRight
     case tiled
+    case custom(x: CGFloat, y: CGFloat)
+
+    public static var allPresets: [WatermarkPosition] {
+        [.topLeft, .topCenter, .topRight,
+         .middleLeft, .center, .middleRight,
+         .bottomLeft, .bottomCenter, .bottomRight]
+    }
 
     public var displayName: String {
         switch self {
@@ -982,6 +1063,56 @@ public enum WatermarkPosition: String, Codable, CaseIterable {
         case .bottomCenter: return "Bottom Center"
         case .bottomRight: return "Bottom Right"
         case .tiled: return "Tiled"
+        case .custom: return "Custom"
+        }
+    }
+
+    // Codable conformance
+    enum CodingKeys: String, CodingKey {
+        case type, x, y
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+
+        switch type {
+        case "topLeft": self = .topLeft
+        case "topCenter": self = .topCenter
+        case "topRight": self = .topRight
+        case "middleLeft": self = .middleLeft
+        case "center": self = .center
+        case "middleRight": self = .middleRight
+        case "bottomLeft": self = .bottomLeft
+        case "bottomCenter": self = .bottomCenter
+        case "bottomRight": self = .bottomRight
+        case "tiled": self = .tiled
+        case "custom":
+            let x = try container.decode(CGFloat.self, forKey: .x)
+            let y = try container.decode(CGFloat.self, forKey: .y)
+            self = .custom(x: x, y: y)
+        default: self = .bottomRight
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        switch self {
+        case .topLeft: try container.encode("topLeft", forKey: .type)
+        case .topCenter: try container.encode("topCenter", forKey: .type)
+        case .topRight: try container.encode("topRight", forKey: .type)
+        case .middleLeft: try container.encode("middleLeft", forKey: .type)
+        case .center: try container.encode("center", forKey: .type)
+        case .middleRight: try container.encode("middleRight", forKey: .type)
+        case .bottomLeft: try container.encode("bottomLeft", forKey: .type)
+        case .bottomCenter: try container.encode("bottomCenter", forKey: .type)
+        case .bottomRight: try container.encode("bottomRight", forKey: .type)
+        case .tiled: try container.encode("tiled", forKey: .type)
+        case .custom(let x, let y):
+            try container.encode("custom", forKey: .type)
+            try container.encode(x, forKey: .x)
+            try container.encode(y, forKey: .y)
         }
     }
 }

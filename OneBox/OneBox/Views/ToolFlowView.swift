@@ -350,7 +350,33 @@ struct InputSelectionView: View {
     private func handleFileImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
-            selectedURLs.append(contentsOf: urls)
+            // Copy files to temp directory for reliable access
+            // (security-scoped URLs from document picker need special handling)
+            Task {
+                for url in urls {
+                    // Start accessing security-scoped resource
+                    let didStartAccessing = url.startAccessingSecurityScopedResource()
+                    defer {
+                        if didStartAccessing {
+                            url.stopAccessingSecurityScopedResource()
+                        }
+                    }
+
+                    do {
+                        // Copy to temp directory
+                        let tempURL = FileManager.default.temporaryDirectory
+                            .appendingPathComponent(UUID().uuidString)
+                            .appendingPathExtension(url.pathExtension)
+                        try FileManager.default.copyItem(at: url, to: tempURL)
+
+                        await MainActor.run {
+                            selectedURLs.append(tempURL)
+                        }
+                    } catch {
+                        print("File copy error: \(error)")
+                    }
+                }
+            }
         case .failure(let error):
             print("File import error: \(error)")
         }

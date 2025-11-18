@@ -193,20 +193,44 @@ struct PageOrganizerView: View {
 
     // MARK: - Actions
     private func loadPDF() {
-        guard let pdf = PDFDocument(url: pdfURL) else {
-            errorMessage = "Failed to load PDF"
+        // Verify file exists
+        guard FileManager.default.fileExists(atPath: pdfURL.path) else {
+            print("PageOrganizer Error: File not found at path: \(pdfURL.path)")
+            errorMessage = "PDF file not found. Please try selecting the file again."
             showError = true
             dismiss()
             return
         }
 
+        // Try to load PDF document
+        guard let pdf = PDFDocument(url: pdfURL) else {
+            print("PageOrganizer Error: Failed to load PDF from URL: \(pdfURL)")
+            errorMessage = "Failed to load PDF. The file may be corrupted or password-protected."
+            showError = true
+            dismiss()
+            return
+        }
+
+        // Check if PDF has pages
+        guard pdf.pageCount > 0 else {
+            print("PageOrganizer Error: PDF has no pages")
+            errorMessage = "This PDF has no pages to organize."
+            showError = true
+            dismiss()
+            return
+        }
+
+        print("PageOrganizer: Successfully loaded PDF with \(pdf.pageCount) pages")
         pdfDocument = pdf
 
         // Load pages and generate thumbnails
         var loadedPages: [PageInfo] = []
 
         for pageIndex in 0..<pdf.pageCount {
-            guard let page = pdf.page(at: pageIndex) else { continue }
+            guard let page = pdf.page(at: pageIndex) else {
+                print("PageOrganizer Warning: Could not load page at index \(pageIndex)")
+                continue
+            }
 
             let thumbnail = page.thumbnail(of: CGSize(width: 200, height: 280), for: .mediaBox)
 
@@ -219,6 +243,7 @@ struct PageOrganizerView: View {
         }
 
         pages = loadedPages
+        print("PageOrganizer: Loaded \(pages.count) page thumbnails")
     }
 
     private func toggleSelection(_ page: PageInfo) {

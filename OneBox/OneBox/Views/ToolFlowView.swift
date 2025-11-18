@@ -89,9 +89,24 @@ struct ToolFlowView: View {
             }
             .fullScreenCover(isPresented: $showPageOrganizer) {
                 if let pdfURL = selectedURLs.first {
+                    print("ToolFlow: Presenting PageOrganizer with URL: \(pdfURL.path)")
                     PageOrganizerView(pdfURL: pdfURL)
                         .environmentObject(jobManager)
                         .environmentObject(paymentsManager)
+                } else {
+                    // DEBUG: This will show if selectedURLs is empty
+                    VStack(spacing: 20) {
+                        Text("ERROR: No PDF URL")
+                            .font(.title)
+                            .foregroundColor(.red)
+                        Text("selectedURLs.count: \(selectedURLs.count)")
+                            .foregroundColor(.blue)
+                        Button("Close") {
+                            showPageOrganizer = false
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.yellow)
                 }
             }
             .fullScreenCover(isPresented: $showSignaturePlacement) {

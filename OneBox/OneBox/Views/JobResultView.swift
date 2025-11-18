@@ -242,7 +242,7 @@ struct JobResultView: View {
                         }
 
                         // Create photo creation request
-                        if let _ = try? PHAssetCreationRequest.creationRequestForAssetFromImage(atFileURL: url) {
+                        if PHAssetCreationRequest.creationRequestForAssetFromImage(atFileURL: url) != nil {
                             savedCount += 1
                         } else {
                             failedCount += 1

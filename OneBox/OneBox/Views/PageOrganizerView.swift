@@ -35,7 +35,7 @@ struct PageOrganizerView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                if let pdf = pdfDocument, !pages.isEmpty {
+                if pdfDocument != nil, !pages.isEmpty {
                     VStack(spacing: 0) {
                         // Selection info bar
                         if !selectedPages.isEmpty {

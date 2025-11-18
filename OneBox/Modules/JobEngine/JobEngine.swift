@@ -123,6 +123,12 @@ public struct JobSettings: Codable {
     // PDF Split Settings
     public var splitRanges: [[Int]] = []  // Array of page ranges [[1,2,3], [4], [5]]
 
+    // PDF Signature Settings
+    public var signatureText: String?
+    public var signaturePosition: WatermarkPosition = .bottomRight
+    public var signatureOpacity: Double = 1.0
+    public var signatureSize: Double = 0.15
+
     public init() {}
 }
 
@@ -410,14 +416,19 @@ actor JobProcessor {
     }
 
     private func processPDFSign(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
-        // PDF signing requires:
-        // 1. Signature drawing canvas UI
-        // 2. Signature placement/position selection
-        // 3. Digital signature integration
-        //
-        // This is a complex feature that requires significant UI/UX work
-        // For now, return an error with clear message about future implementation
-        throw JobError.featureComingSoon("PDF signature feature is under development.\n\nThis feature will include:\n• Draw your signature\n• Choose signature placement\n• Multiple signature formats\n\nComing in version 2.0")
+        let processor = PDFProcessor()
+        guard let pdfURL = job.inputs.first else {
+            throw JobError.invalidInput
+        }
+        let outputURL = try await processor.signPDF(
+            pdfURL,
+            text: job.settings.signatureText,
+            position: job.settings.signaturePosition,
+            opacity: job.settings.signatureOpacity,
+            size: job.settings.signatureSize,
+            progressHandler: progressHandler
+        )
+        return [outputURL]
     }
 
     private func processImageResize(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {

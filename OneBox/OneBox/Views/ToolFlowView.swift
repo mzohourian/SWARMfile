@@ -366,6 +366,8 @@ struct ConfigurationView: View {
         switch tool {
         case .pdfWatermark:
             return settings.watermarkText != nil && !settings.watermarkText!.isEmpty
+        case .pdfSign:
+            return settings.signatureText != nil && !settings.signatureText!.isEmpty
         default:
             return true
         }
@@ -376,6 +378,10 @@ struct ConfigurationView: View {
         case .pdfWatermark:
             if settings.watermarkText == nil || settings.watermarkText!.isEmpty {
                 return "Please enter watermark text"
+            }
+        case .pdfSign:
+            if settings.signatureText == nil || settings.signatureText!.isEmpty {
+                return "Please enter signature text"
             }
         default:
             break
@@ -444,6 +450,8 @@ struct ConfigurationView: View {
                 pdfSplitSettings
             case .pdfWatermark:
                 watermarkSettings
+            case .pdfSign:
+                signatureSettings
             case .imageResize:
                 imageSettings
             case .videoCompress:
@@ -574,6 +582,52 @@ struct ConfigurationView: View {
                     .font(.subheadline)
                     .fontWeight(.medium)
                 Slider(value: $settings.watermarkOpacity, in: 0.1...1.0, step: 0.1)
+            }
+        }
+    }
+
+    private var signatureSettings: some View {
+        VStack(spacing: 16) {
+            // Info text
+            Text("The signature will be added to the last page of the PDF")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(8)
+
+            // Signature Text
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Signature Text")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                TextField("Enter your name or signature text", text: Binding(
+                    get: { settings.signatureText ?? "" },
+                    set: { settings.signatureText = $0.isEmpty ? nil : $0 }
+                ))
+                .textFieldStyle(.roundedBorder)
+            }
+
+            // Position
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Position")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Picker("Position", selection: $settings.signaturePosition) {
+                    ForEach(WatermarkPosition.allCases.filter { $0 != .tiled }, id: \.self) { position in
+                        Text(position.displayName).tag(position)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            // Size
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Size: \(Int(settings.signatureSize * 100))%")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Slider(value: $settings.signatureSize, in: 0.1...0.3, step: 0.05)
             }
         }
     }

@@ -555,6 +555,85 @@ public actor PDFProcessor {
         }
     }
 
+    // MARK: - Sign PDF
+    public func signPDF(
+        _ pdfURL: URL,
+        text: String? = nil,
+        image: UIImage? = nil,
+        position: WatermarkPosition,
+        opacity: Double = 1.0,
+        size: Double = 0.15,
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> URL {
+
+        guard let sourcePDF = PDFDocument(url: pdfURL) else {
+            throw PDFError.invalidPDF(pdfURL.lastPathComponent)
+        }
+
+        let outputURL = temporaryOutputURL(prefix: "signed")
+        let pageCount = sourcePDF.pageCount
+
+        UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
+        defer { UIGraphicsEndPDFContext() }
+
+        for pageIndex in 0..<pageCount {
+            guard let page = sourcePDF.page(at: pageIndex) else { continue }
+
+            let pageBounds = page.bounds(for: .mediaBox)
+            UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
+
+            guard let context = UIGraphicsGetCurrentContext() else { continue }
+
+            // Draw original page
+            context.saveGState()
+            context.translateBy(x: 0, y: pageBounds.size.height)
+            context.scaleBy(x: 1.0, y: -1.0)
+            page.draw(with: .mediaBox, to: context)
+            context.restoreGState()
+
+            // Draw signature only on the last page
+            if pageIndex == pageCount - 1 {
+                context.saveGState()
+                context.setAlpha(CGFloat(opacity))
+
+                if let text = text {
+                    drawSignatureText(text, in: pageBounds, position: position)
+                } else if let image = image {
+                    drawSignatureImage(image, in: pageBounds, position: position, size: size)
+                }
+
+                context.restoreGState()
+            }
+
+            progressHandler(Double(pageIndex + 1) / Double(pageCount))
+        }
+
+        return outputURL
+    }
+
+    private func drawSignatureText(_ text: String, in bounds: CGRect, position: WatermarkPosition) {
+        let fontSize: CGFloat = bounds.height * 0.04
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont(name: "Snell Roundhand", size: fontSize) ?? UIFont.italicSystemFont(ofSize: fontSize),
+            .foregroundColor: UIColor.black
+        ]
+
+        let textSize = (text as NSString).size(withAttributes: attributes)
+        let point = positionForWatermark(textSize, in: bounds, position: position)
+        (text as NSString).draw(at: point, withAttributes: attributes)
+    }
+
+    private func drawSignatureImage(_ image: UIImage, in bounds: CGRect, position: WatermarkPosition, size: Double) {
+        let signatureSize = CGSize(
+            width: bounds.width * CGFloat(size),
+            height: bounds.width * CGFloat(size) * (image.size.height / image.size.width)
+        )
+
+        let origin = positionForWatermark(signatureSize, in: bounds, position: position)
+        let rect = CGRect(origin: origin, size: signatureSize)
+        image.draw(in: rect)
+    }
+
     // MARK: - Helper Methods
     private func temporaryOutputURL(prefix: String) -> URL {
         let tempDir = FileManager.default.temporaryDirectory

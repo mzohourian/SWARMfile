@@ -32,6 +32,9 @@ struct PageOrganizerView: View {
     // Drag & drop state
     @State private var draggedPage: PageInfo?
 
+    // Security-scoped resource tracking
+    @State private var didStartAccessingSecurityScoped = false
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -136,6 +139,14 @@ struct PageOrganizerView: View {
                 print("PageOrganizer: File exists: \(FileManager.default.fileExists(atPath: pdfURL.path))")
                 loadPDF()
             }
+            .onDisappear {
+                // Stop accessing security-scoped resource when view is dismissed
+                if didStartAccessingSecurityScoped {
+                    print("PageOrganizer: Stopping security-scoped resource access")
+                    pdfURL.stopAccessingSecurityScopedResource()
+                    didStartAccessingSecurityScoped = false
+                }
+            }
             .sheet(isPresented: $showingPaywall) {
                 PaywallView()
             }
@@ -225,6 +236,12 @@ struct PageOrganizerView: View {
     // MARK: - Actions
     private func loadPDF(retryCount: Int = 0) {
         print("PageOrganizer: Starting to load PDF from: \(pdfURL.path)")
+
+        // Start accessing security-scoped resource (only on first attempt)
+        if retryCount == 0 && !didStartAccessingSecurityScoped {
+            didStartAccessingSecurityScoped = pdfURL.startAccessingSecurityScopedResource()
+            print("PageOrganizer: Security-scoped access started: \(didStartAccessingSecurityScoped)")
+        }
 
         // Verify file exists (with retry for timing issues)
         guard FileManager.default.fileExists(atPath: pdfURL.path) else {

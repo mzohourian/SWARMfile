@@ -406,47 +406,55 @@ struct InputSelectionView: View {
         switch result {
         case .success(let urls):
             isLoadingFiles = true
-            print("InputSelection: Starting to copy \(urls.count) file(s)")
+            print("InputSelection: Starting to handle \(urls.count) file(s)")
 
-            // Copy files to temp directory for reliable access
-            // (security-scoped URLs from document picker need special handling)
             Task {
                 for url in urls {
-                    // Start accessing security-scoped resource
-                    let didStartAccessing = url.startAccessingSecurityScopedResource()
-                    defer {
-                        if didStartAccessing {
-                            url.stopAccessingSecurityScopedResource()
-                        }
-                    }
-
-                    do {
-                        // Copy to temp directory
-                        let tempURL = FileManager.default.temporaryDirectory
-                            .appendingPathComponent(UUID().uuidString)
-                            .appendingPathExtension(url.pathExtension)
-
-                        print("InputSelection: Copying \(url.lastPathComponent) to temp location")
-                        try FileManager.default.copyItem(at: url, to: tempURL)
-                        print("InputSelection: Successfully copied to \(tempURL.path)")
-
-                        // Verify the file was copied and is readable
-                        guard FileManager.default.fileExists(atPath: tempURL.path) else {
-                            print("InputSelection Error: File doesn't exist after copy: \(tempURL.path)")
-                            continue
-                        }
-
+                    // For PDF Organizer, we don't need to copy - just use the original URL
+                    // The security-scoped access will be handled in PageOrganizerView
+                    if tool == .pdfOrganize {
+                        print("InputSelection: Using original URL for PDF Organizer: \(url.path)")
                         await MainActor.run {
-                            selectedURLs.append(tempURL)
+                            selectedURLs.append(url)
                         }
-                    } catch {
-                        print("InputSelection Error: File copy failed - \(error)")
+                    } else {
+                        // For other tools, copy files to temp directory for reliable access
+                        // Start accessing security-scoped resource
+                        let didStartAccessing = url.startAccessingSecurityScopedResource()
+                        defer {
+                            if didStartAccessing {
+                                url.stopAccessingSecurityScopedResource()
+                            }
+                        }
+
+                        do {
+                            // Copy to temp directory
+                            let tempURL = FileManager.default.temporaryDirectory
+                                .appendingPathComponent(UUID().uuidString)
+                                .appendingPathExtension(url.pathExtension)
+
+                            print("InputSelection: Copying \(url.lastPathComponent) to temp location")
+                            try FileManager.default.copyItem(at: url, to: tempURL)
+                            print("InputSelection: Successfully copied to \(tempURL.path)")
+
+                            // Verify the file was copied and is readable
+                            guard FileManager.default.fileExists(atPath: tempURL.path) else {
+                                print("InputSelection Error: File doesn't exist after copy: \(tempURL.path)")
+                                continue
+                            }
+
+                            await MainActor.run {
+                                selectedURLs.append(tempURL)
+                            }
+                        } catch {
+                            print("InputSelection Error: File copy failed - \(error)")
+                        }
                     }
                 }
 
                 await MainActor.run {
                     isLoadingFiles = false
-                    print("InputSelection: Finished copying files. Total URLs: \(selectedURLs.count)")
+                    print("InputSelection: Finished handling files. Total URLs: \(selectedURLs.count)")
                 }
             }
         case .failure(let error):

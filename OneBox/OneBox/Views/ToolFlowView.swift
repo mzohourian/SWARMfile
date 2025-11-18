@@ -27,6 +27,7 @@ struct ToolFlowView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var showPageOrganizer = false
+    @State private var pageOrganizerURL: URL?
     @State private var showSignaturePlacement = false
 
     enum FlowStep {
@@ -47,7 +48,14 @@ struct ToolFlowView: View {
                         onContinue: {
                             if tool == .pdfOrganize {
                                 // Page Organizer uses a custom interactive flow
-                                showPageOrganizer = true
+                                print("ToolFlow: onContinue called, selectedURLs.count = \(selectedURLs.count)")
+                                if let url = selectedURLs.first {
+                                    print("ToolFlow: Setting pageOrganizerURL to \(url.path)")
+                                    pageOrganizerURL = url
+                                    showPageOrganizer = true
+                                } else {
+                                    print("ToolFlow ERROR: No URL in selectedURLs!")
+                                }
                             } else {
                                 // Standard flow continues to configuration
                                 step = .configure
@@ -88,17 +96,23 @@ struct ToolFlowView: View {
                 PaywallView()
             }
             .fullScreenCover(isPresented: $showPageOrganizer) {
-                if let pdfURL = selectedURLs.first {
+                if let pdfURL = pageOrganizerURL {
                     let _ = print("ToolFlow: Presenting PageOrganizer with URL: \(pdfURL.path)")
                     PageOrganizerView(pdfURL: pdfURL)
                         .environmentObject(jobManager)
                         .environmentObject(paymentsManager)
+                        .onDisappear {
+                            // Clear the URL when organizer is dismissed
+                            pageOrganizerURL = nil
+                        }
                 } else {
-                    // DEBUG: This will show if selectedURLs is empty
+                    // DEBUG: This will show if pageOrganizerURL is nil
                     VStack(spacing: 20) {
                         Text("ERROR: No PDF URL")
                             .font(.title)
                             .foregroundColor(.red)
+                        Text("pageOrganizerURL: nil")
+                            .foregroundColor(.blue)
                         Text("selectedURLs.count: \(selectedURLs.count)")
                             .foregroundColor(.blue)
                         Button("Close") {

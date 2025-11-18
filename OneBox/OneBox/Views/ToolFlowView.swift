@@ -52,7 +52,11 @@ struct ToolFlowView: View {
                                 if let url = selectedURLs.first {
                                     print("ToolFlow: Setting pageOrganizerURL to \(url.path)")
                                     pageOrganizerURL = url
-                                    showPageOrganizer = true
+                                    // Delay showing the organizer to ensure state update completes
+                                    DispatchQueue.main.async {
+                                        print("ToolFlow: Now setting showPageOrganizer = true")
+                                        showPageOrganizer = true
+                                    }
                                 } else {
                                     print("ToolFlow ERROR: No URL in selectedURLs!")
                                 }

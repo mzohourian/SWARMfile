@@ -13,6 +13,7 @@ struct SignatureDrawingView: View {
     @Binding var signatureImage: UIImage?
 
     @State private var canvas = PKCanvasView()
+    @State private var drawing = PKDrawing()
     @State private var showClearConfirmation = false
 
     var body: some View {
@@ -22,7 +23,7 @@ struct SignatureDrawingView: View {
                 instructionsBar
 
                 // Drawing canvas
-                CanvasView(canvasView: $canvas)
+                CanvasView(canvasView: $canvas, drawing: $drawing)
                     .background(Color.white)
                     .cornerRadius(12)
                     .padding()
@@ -48,7 +49,7 @@ struct SignatureDrawingView: View {
                     Button("Done") {
                         saveSignature()
                     }
-                    .disabled(canvas.drawing.bounds.isEmpty)
+                    .disabled(drawing.bounds.isEmpty)
                     .fontWeight(.semibold)
                 }
             }
@@ -91,7 +92,7 @@ struct SignatureDrawingView: View {
                         .font(.caption2)
                 }
             }
-            .disabled(canvas.drawing.bounds.isEmpty)
+            .disabled(drawing.bounds.isEmpty)
             .foregroundColor(.red)
 
             Spacer()
@@ -110,6 +111,7 @@ struct SignatureDrawingView: View {
     }
 
     private func clearCanvas() {
+        drawing = PKDrawing()
         canvas.drawing = PKDrawing()
     }
 
@@ -158,16 +160,38 @@ struct SignatureDrawingView: View {
 // MARK: - Canvas View (UIViewRepresentable)
 struct CanvasView: UIViewRepresentable {
     @Binding var canvasView: PKCanvasView
+    @Binding var drawing: PKDrawing
 
     func makeUIView(context: Context) -> PKCanvasView {
         canvasView.drawingPolicy = .anyInput  // Support both finger and Apple Pencil
         canvasView.tool = PKInkingTool(.pen, color: .black, width: 3)
         canvasView.backgroundColor = .white
+        canvasView.delegate = context.coordinator
+        canvasView.drawing = drawing
         return canvasView
     }
 
     func updateUIView(_ uiView: PKCanvasView, context: Context) {
-        // No updates needed
+        // Update canvas if drawing changed from outside
+        if uiView.drawing != drawing {
+            uiView.drawing = drawing
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(drawing: $drawing)
+    }
+
+    class Coordinator: NSObject, PKCanvasViewDelegate {
+        @Binding var drawing: PKDrawing
+
+        init(drawing: Binding<PKDrawing>) {
+            _drawing = drawing
+        }
+
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            drawing = canvasView.drawing
+        }
     }
 }
 

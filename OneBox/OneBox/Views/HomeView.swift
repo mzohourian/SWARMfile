@@ -134,6 +134,7 @@ struct ToolCard: View {
 // MARK: - Tool Type
 enum ToolType: String, CaseIterable, Identifiable {
     case imagesToPDF
+    case pdfToImages
     case pdfMerge
     case pdfSplit
     case pdfCompress
@@ -150,6 +151,7 @@ enum ToolType: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .imagesToPDF: return "Images → PDF"
+        case .pdfToImages: return "PDF → Images"
         case .pdfMerge: return "Merge PDFs"
         case .pdfSplit: return "Split PDF"
         case .pdfCompress: return "Compress PDF"
@@ -166,6 +168,7 @@ enum ToolType: String, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .imagesToPDF: return "Convert photos to PDF"
+        case .pdfToImages: return "Extract pages as images"
         case .pdfMerge: return "Combine multiple PDFs"
         case .pdfSplit: return "Extract pages"
         case .pdfCompress: return "Reduce file size"
@@ -182,6 +185,7 @@ enum ToolType: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .imagesToPDF: return "photo.on.rectangle.angled"
+        case .pdfToImages: return "photo.on.rectangle"
         case .pdfMerge: return "doc.on.doc"
         case .pdfSplit: return "scissors"
         case .pdfCompress: return "arrow.down.circle"
@@ -198,6 +202,7 @@ enum ToolType: String, CaseIterable, Identifiable {
     var color: Color {
         switch self {
         case .imagesToPDF: return .blue
+        case .pdfToImages: return .mint
         case .pdfMerge: return .purple
         case .pdfSplit: return .orange
         case .pdfCompress: return .green

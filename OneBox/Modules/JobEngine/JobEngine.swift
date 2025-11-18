@@ -56,6 +56,7 @@ public struct Job: Identifiable, Codable {
 // MARK: - Job Type
 public enum JobType: String, Codable, CaseIterable {
     case imagesToPDF
+    case pdfToImages
     case pdfMerge
     case pdfSplit
     case pdfCompress
@@ -70,6 +71,7 @@ public enum JobType: String, Codable, CaseIterable {
     public var displayName: String {
         switch self {
         case .imagesToPDF: return "Images to PDF"
+        case .pdfToImages: return "PDF to Images"
         case .pdfMerge: return "Merge PDFs"
         case .pdfSplit: return "Split PDF"
         case .pdfCompress: return "Compress PDF"
@@ -110,6 +112,7 @@ public struct JobSettings: Codable {
     public var imageQuality: Double = 0.8
     public var maxDimension: Int?
     public var resizePercentage: Double?
+    public var imageResolution: CGFloat = 150.0  // DPI for PDF to Images
 
     // Video Settings
     public var videoPreset: VideoCompressionPreset = .mediumQuality
@@ -126,7 +129,9 @@ public struct JobSettings: Codable {
     public var splitRanges: [[Int]] = []  // Array of page ranges [[1,2,3], [4], [5]]
 
     // PDF Signature Settings
+    public var signatureType: SignatureType = .text
     public var signatureText: String?
+    public var signatureImageData: Data?  // For handwritten signatures
     public var signaturePosition: WatermarkPosition = .bottomRight
     public var signatureOpacity: Double = 1.0
     public var signatureSize: Double = 0.15
@@ -152,6 +157,18 @@ public enum PDFPageSize: String, Codable, CaseIterable {
         case .a4: return CGSize(width: 595, height: 842) // A4 in points
         case .letter: return CGSize(width: 612, height: 792) // Letter in points
         case .fit: return nil
+        }
+    }
+}
+
+public enum SignatureType: String, Codable, CaseIterable {
+    case text
+    case handwritten
+
+    public var displayName: String {
+        switch self {
+        case .text: return "Text"
+        case .handwritten: return "Handwritten"
         }
     }
 }
@@ -314,6 +331,8 @@ actor JobProcessor {
         switch job.type {
         case .imagesToPDF:
             return try await processImagesToPDF(job: job, progressHandler: progressHandler)
+        case .pdfToImages:
+            return try await processPDFToImages(job: job, progressHandler: progressHandler)
         case .pdfMerge:
             return try await processPDFMerge(job: job, progressHandler: progressHandler)
         case .pdfSplit:
@@ -356,6 +375,23 @@ actor JobProcessor {
             progressHandler: progressHandler
         )
         return [outputURL]
+    }
+
+    private func processPDFToImages(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
+        let processor = PDFProcessor()
+        guard let pdfURL = job.inputs.first else {
+            throw JobError.invalidInput
+        }
+
+        let format = job.settings.imageFormat == .png ? "png" : "jpeg"
+        let outputURLs = try await processor.pdfToImages(
+            pdfURL,
+            format: format,
+            quality: job.settings.imageQuality,
+            resolution: job.settings.imageResolution,
+            progressHandler: progressHandler
+        )
+        return outputURLs
     }
 
     private func processPDFMerge(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
@@ -430,9 +466,18 @@ actor JobProcessor {
         guard let pdfURL = job.inputs.first else {
             throw JobError.invalidInput
         }
+
+        // Handle handwritten signature if provided
+        var signatureImage: UIImage?
+        if job.settings.signatureType == .handwritten,
+           let imageData = job.settings.signatureImageData {
+            signatureImage = UIImage(data: imageData)
+        }
+
         let outputURL = try await processor.signPDF(
             pdfURL,
-            text: job.settings.signatureText,
+            text: job.settings.signatureType == .text ? job.settings.signatureText : nil,
+            image: signatureImage,
             position: job.settings.signaturePosition,
             opacity: job.settings.signatureOpacity,
             size: job.settings.signatureSize,

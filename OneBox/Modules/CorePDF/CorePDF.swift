@@ -699,6 +699,85 @@ public actor PDFProcessor {
         image.draw(in: rect)
     }
 
+    // MARK: - PDF to Images
+
+    /// Exports PDF pages as individual images
+    /// - Parameters:
+    ///   - pdfURL: Source PDF URL
+    ///   - format: Output image format (JPEG, PNG)
+    ///   - quality: JPEG quality (0.0-1.0, ignored for PNG)
+    ///   - resolution: DPI for rendering (72-300)
+    ///   - progressHandler: Progress callback
+    /// - Returns: Array of image file URLs
+    public func pdfToImages(
+        _ pdfURL: URL,
+        format: String = "jpeg",
+        quality: Double = 0.9,
+        resolution: CGFloat = 150,
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> [URL] {
+
+        // Validate PDF
+        try validatePDF(url: pdfURL)
+
+        guard let pdf = PDFDocument(url: pdfURL) else {
+            throw PDFError.invalidPDF(pdfURL.lastPathComponent)
+        }
+
+        let pageCount = pdf.pageCount
+        var outputURLs: [URL] = []
+
+        // Estimate disk space needed (rough estimate: resolution * resolution * pageCount * 3 bytes)
+        let estimatedSize = Int64(resolution * resolution * CGFloat(pageCount) * 3)
+        try checkDiskSpace(estimatedSize: estimatedSize)
+
+        for pageIndex in 0..<pageCount {
+            guard let page = pdf.page(at: pageIndex) else { continue }
+
+            let pageBounds = page.bounds(for: .mediaBox)
+
+            // Calculate size based on resolution (DPI)
+            let scale = resolution / 72.0  // 72 DPI is default
+            let imageSize = CGSize(
+                width: pageBounds.width * scale,
+                height: pageBounds.height * scale
+            )
+
+            // Render page to image
+            let renderer = UIGraphicsImageRenderer(size: imageSize)
+            let pageImage = renderer.image { context in
+                UIColor.white.setFill()
+                context.fill(CGRect(origin: .zero, size: imageSize))
+
+                context.cgContext.scaleBy(x: scale, y: scale)
+                context.cgContext.translateBy(x: 0, y: pageBounds.height)
+                context.cgContext.scaleBy(x: 1.0, y: -1.0)
+
+                page.draw(with: .mediaBox, to: context.cgContext)
+            }
+
+            // Save to file
+            let tempDir = FileManager.default.temporaryDirectory
+            let fileName = "page_\(pageIndex + 1)_\(UUID().uuidString).\(format)"
+            let outputURL = tempDir.appendingPathComponent(fileName)
+
+            let imageData: Data?
+            if format.lowercased() == "png" {
+                imageData = pageImage.pngData()
+            } else {
+                imageData = pageImage.jpegData(compressionQuality: quality)
+            }
+
+            guard let data = imageData else { continue }
+            try data.write(to: outputURL)
+
+            outputURLs.append(outputURL)
+            progressHandler(Double(pageIndex + 1) / Double(pageCount))
+        }
+
+        return outputURLs
+    }
+
     // MARK: - Page Organization
 
     /// Reorders pages in a PDF document according to the specified order.

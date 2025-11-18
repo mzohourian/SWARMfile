@@ -112,6 +112,7 @@ struct ToolFlowView: View {
         let jobType: JobType
         switch tool {
         case .imagesToPDF: jobType = .imagesToPDF
+        case .pdfToImages: jobType = .pdfToImages
         case .pdfMerge: jobType = .pdfMerge
         case .pdfSplit: jobType = .pdfSplit
         case .pdfCompress: jobType = .pdfCompress
@@ -282,7 +283,7 @@ struct InputSelectionView: View {
     }
 
     private var allowsMultipleSelection: Bool {
-        tool != .pdfSplit && tool != .pdfSign && tool != .pdfOrganize && tool != .unzip
+        tool != .pdfSplit && tool != .pdfSign && tool != .pdfOrganize && tool != .pdfToImages && tool != .unzip
     }
 
     private var maxSelectionCount: Int? {
@@ -297,7 +298,7 @@ struct InputSelectionView: View {
         switch tool {
         case .imagesToPDF, .imageResize:
             return [.image]
-        case .pdfMerge, .pdfSplit, .pdfCompress, .pdfWatermark, .pdfSign, .pdfOrganize:
+        case .pdfMerge, .pdfSplit, .pdfCompress, .pdfWatermark, .pdfSign, .pdfOrganize, .pdfToImages:
             return [.pdf]
         case .videoCompress:
             return [.movie, .video]
@@ -311,6 +312,7 @@ struct InputSelectionView: View {
     private var emptyStateTitle: String {
         switch tool {
         case .imagesToPDF: return "Select Images"
+        case .pdfToImages: return "Select PDF"
         case .pdfMerge: return "Select PDFs"
         case .pdfOrganize: return "Select PDF"
         case .imageResize: return "Select Images"
@@ -322,6 +324,7 @@ struct InputSelectionView: View {
     private var emptyStateMessage: String {
         switch tool {
         case .imagesToPDF: return "Choose one or more images to convert to PDF"
+        case .pdfToImages: return "Choose a PDF to extract pages as images"
         case .pdfMerge: return "Choose multiple PDFs to combine"
         case .pdfSplit: return "Choose a PDF to split"
         case .pdfCompress: return "Choose a PDF to compress"
@@ -387,7 +390,11 @@ struct ConfigurationView: View {
         case .pdfWatermark:
             return settings.watermarkText != nil && !settings.watermarkText!.isEmpty
         case .pdfSign:
-            return settings.signatureText != nil && !settings.signatureText!.isEmpty
+            if settings.signatureType == .text {
+                return settings.signatureText != nil && !settings.signatureText!.isEmpty
+            } else {
+                return settings.signatureImageData != nil
+            }
         default:
             return true
         }
@@ -400,8 +407,14 @@ struct ConfigurationView: View {
                 return "Please enter watermark text"
             }
         case .pdfSign:
-            if settings.signatureText == nil || settings.signatureText!.isEmpty {
-                return "Please enter signature text"
+            if settings.signatureType == .text {
+                if settings.signatureText == nil || settings.signatureText!.isEmpty {
+                    return "Please enter signature text"
+                }
+            } else {
+                if settings.signatureImageData == nil {
+                    return "Please draw your signature"
+                }
             }
         default:
             break
@@ -464,6 +477,8 @@ struct ConfigurationView: View {
             switch tool {
             case .imagesToPDF:
                 pdfSettings
+            case .pdfToImages:
+                pdfToImagesSettings
             case .pdfCompress:
                 compressionSettings
             case .pdfSplit:
@@ -508,6 +523,45 @@ struct ConfigurationView: View {
                     Text("Landscape").tag(PDFOrientation.landscape)
                 }
                 .pickerStyle(.segmented)
+            }
+        }
+    }
+
+    private var pdfToImagesSettings: some View {
+        VStack(spacing: 16) {
+            // Format
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Format")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Picker("Format", selection: $settings.imageFormat) {
+                    Text("JPEG").tag(ImageFormat.jpeg)
+                    Text("PNG").tag(ImageFormat.png)
+                }
+                .pickerStyle(.segmented)
+            }
+
+            // Quality (JPEG only)
+            if settings.imageFormat == .jpeg {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Quality: \(Int(settings.imageQuality * 100))%")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    Slider(value: $settings.imageQuality, in: 0.5...1.0, step: 0.05)
+                }
+            }
+
+            // Resolution
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Resolution")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Picker("Resolution", selection: $settings.imageResolution) {
+                    Text("Low (72 DPI)").tag(CGFloat(72))
+                    Text("Medium (150 DPI)").tag(CGFloat(150))
+                    Text("High (300 DPI)").tag(CGFloat(300))
+                }
+                .pickerStyle(.menu)
             }
         }
     }
@@ -617,16 +671,45 @@ struct ConfigurationView: View {
                 .background(Color(.secondarySystemGroupedBackground))
                 .cornerRadius(8)
 
-            // Signature Text
+            // Signature Type Picker
             VStack(alignment: .leading, spacing: 8) {
-                Text("Signature Text")
+                Text("Signature Type")
                     .font(.subheadline)
                     .fontWeight(.medium)
-                TextField("Enter your name or signature text", text: Binding(
-                    get: { settings.signatureText ?? "" },
-                    set: { settings.signatureText = $0.isEmpty ? nil : $0 }
+                Picker("Signature Type", selection: $settings.signatureType) {
+                    ForEach(SignatureType.allCases, id: \.self) { type in
+                        Text(type.displayName).tag(type)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            // Conditional signature input based on type
+            if settings.signatureType == .text {
+                // Text Signature Input
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Signature Text")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    TextField("Enter your name or signature text", text: Binding(
+                        get: { settings.signatureText ?? "" },
+                        set: { settings.signatureText = $0.isEmpty ? nil : $0 }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                }
+            } else {
+                // Handwritten Signature
+                SavedSignatureView(signatureImage: Binding(
+                    get: {
+                        if let data = settings.signatureImageData {
+                            return UIImage(data: data)
+                        }
+                        return nil
+                    },
+                    set: { image in
+                        settings.signatureImageData = image?.pngData()
+                    }
                 ))
-                .textFieldStyle(.roundedBorder)
             }
 
             // Position

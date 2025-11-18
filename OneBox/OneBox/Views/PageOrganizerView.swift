@@ -64,7 +64,14 @@ struct PageOrganizerView: View {
                         bottomToolbar
                     }
                 } else {
-                    ProgressView("Loading PDF...")
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                        Text("Loading PDF...")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
 
                 // Processing overlay
@@ -103,6 +110,9 @@ struct PageOrganizerView: View {
                 }
             }
             .onAppear {
+                print("PageOrganizer: View appeared, loading PDF...")
+                print("PageOrganizer: PDF URL: \(pdfURL)")
+                print("PageOrganizer: File exists: \(FileManager.default.fileExists(atPath: pdfURL.path))")
                 loadPDF()
             }
             .sheet(isPresented: $showingPaywall) {
@@ -192,10 +202,19 @@ struct PageOrganizerView: View {
     }
 
     // MARK: - Actions
-    private func loadPDF() {
-        // Verify file exists
+    private func loadPDF(retryCount: Int = 0) {
+        print("PageOrganizer: Starting to load PDF from: \(pdfURL.path)")
+
+        // Verify file exists (with retry for timing issues)
         guard FileManager.default.fileExists(atPath: pdfURL.path) else {
-            print("PageOrganizer Error: File not found at path: \(pdfURL.path)")
+            if retryCount < 3 {
+                print("PageOrganizer: File not found yet, retrying in 0.5s (attempt \(retryCount + 1)/3)")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.loadPDF(retryCount: retryCount + 1)
+                }
+                return
+            }
+            print("PageOrganizer Error: File not found at path after 3 retries: \(pdfURL.path)")
             errorMessage = "PDF file not found. Please try selecting the file again."
             showError = true
             dismiss()
@@ -223,27 +242,31 @@ struct PageOrganizerView: View {
         print("PageOrganizer: Successfully loaded PDF with \(pdf.pageCount) pages")
         pdfDocument = pdf
 
-        // Load pages and generate thumbnails
-        var loadedPages: [PageInfo] = []
+        // Load pages and generate thumbnails asynchronously
+        Task {
+            var loadedPages: [PageInfo] = []
 
-        for pageIndex in 0..<pdf.pageCount {
-            guard let page = pdf.page(at: pageIndex) else {
-                print("PageOrganizer Warning: Could not load page at index \(pageIndex)")
-                continue
+            for pageIndex in 0..<pdf.pageCount {
+                guard let page = pdf.page(at: pageIndex) else {
+                    print("PageOrganizer Warning: Could not load page at index \(pageIndex)")
+                    continue
+                }
+
+                let thumbnail = page.thumbnail(of: CGSize(width: 200, height: 280), for: .mediaBox)
+
+                loadedPages.append(PageInfo(
+                    originalIndex: pageIndex,
+                    displayIndex: pageIndex,
+                    thumbnail: thumbnail,
+                    rotation: 0
+                ))
             }
 
-            let thumbnail = page.thumbnail(of: CGSize(width: 200, height: 280), for: .mediaBox)
-
-            loadedPages.append(PageInfo(
-                originalIndex: pageIndex,
-                displayIndex: pageIndex,
-                thumbnail: thumbnail,
-                rotation: 0
-            ))
+            await MainActor.run {
+                pages = loadedPages
+                print("PageOrganizer: Loaded \(pages.count) page thumbnails")
+            }
         }
-
-        pages = loadedPages
-        print("PageOrganizer: Loaded \(pages.count) page thumbnails")
     }
 
     private func toggleSelection(_ page: PageInfo) {

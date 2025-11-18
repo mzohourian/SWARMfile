@@ -403,21 +403,28 @@ struct InputSelectionView: View {
     }
 
     private func handleFileImport(_ result: Result<[URL], Error>) {
+        print("InputSelection: handleFileImport called")
         switch result {
         case .success(let urls):
             isLoadingFiles = true
-            print("InputSelection: Starting to handle \(urls.count) file(s)")
+            print("InputSelection: Starting to handle \(urls.count) file(s), tool = \(tool)")
 
             Task {
                 for url in urls {
+                    print("InputSelection: Processing URL: \(url.path)")
+                    print("InputSelection: URL lastPathComponent: \(url.lastPathComponent)")
+
                     // For PDF Organizer, we don't need to copy - just use the original URL
                     // The security-scoped access will be handled in PageOrganizerView
                     if tool == .pdfOrganize {
-                        print("InputSelection: Using original URL for PDF Organizer: \(url.path)")
+                        print("InputSelection: Tool is pdfOrganize, using original URL")
                         await MainActor.run {
+                            print("InputSelection: About to append URL to selectedURLs")
                             selectedURLs.append(url)
+                            print("InputSelection: Successfully appended. selectedURLs.count = \(selectedURLs.count)")
                         }
                     } else {
+                        print("InputSelection: Tool is NOT pdfOrganize, copying file")
                         // For other tools, copy files to temp directory for reliable access
                         // Start accessing security-scoped resource
                         let didStartAccessing = url.startAccessingSecurityScopedResource()
@@ -455,6 +462,10 @@ struct InputSelectionView: View {
                 await MainActor.run {
                     isLoadingFiles = false
                     print("InputSelection: Finished handling files. Total URLs: \(selectedURLs.count)")
+                    print("InputSelection: selectedURLs contents:")
+                    for (index, url) in selectedURLs.enumerated() {
+                        print("  [\(index)]: \(url.path)")
+                    }
                 }
             }
         case .failure(let error):

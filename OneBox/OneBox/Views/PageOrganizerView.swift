@@ -462,6 +462,8 @@ struct PageCell: View {
     let onDrag: () -> Void
     let onDrop: () -> Void
 
+    @State private var isTargeted = false
+
     var body: some View {
         VStack(spacing: 8) {
             ZStack(alignment: .topTrailing) {
@@ -475,8 +477,9 @@ struct PageCell: View {
                         .rotationEffect(.degrees(Double(page.rotation)))
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 3)
+                                .stroke(isSelected ? Color.accentColor : (isTargeted ? Color.green : Color.clear), lineWidth: 3)
                         )
+                        .shadow(color: isTargeted ? .green.opacity(0.5) : .clear, radius: 8)
                 } else {
                     Rectangle()
                         .fill(Color(.systemGray5))
@@ -492,6 +495,17 @@ struct PageCell: View {
                         .background(Circle().fill(Color(.systemBackground)))
                         .offset(x: 8, y: -8)
                 }
+
+                // Drag handle hint
+                if !isSelected {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.caption)
+                        .foregroundColor(.secondary.opacity(0.5))
+                        .padding(4)
+                        .background(Color(.systemBackground).opacity(0.8))
+                        .cornerRadius(4)
+                        .offset(x: -8, y: 8)
+                }
             }
 
             // Page number
@@ -506,25 +520,27 @@ struct PageCell: View {
             onDrag()
             return NSItemProvider(object: page.id.uuidString as NSString)
         }
-        .onDrop(of: [.text], delegate: PageDropDelegate(onDrop: onDrop))
+        .onDrop(of: [.text], delegate: PageDropDelegate(onDrop: onDrop, isTargeted: $isTargeted))
     }
 }
 
 // MARK: - Drop Delegate
 struct PageDropDelegate: DropDelegate {
     let onDrop: () -> Void
+    @Binding var isTargeted: Bool
 
     func performDrop(info: DropInfo) -> Bool {
+        isTargeted = false
         onDrop()
         return true
     }
 
     func dropEntered(info: DropInfo) {
-        // Optional: Add visual feedback
+        isTargeted = true
     }
 
     func dropExited(info: DropInfo) {
-        // Optional: Remove visual feedback
+        isTargeted = false
     }
 }
 

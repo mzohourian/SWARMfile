@@ -53,8 +53,8 @@ struct ToolFlowView: View {
                                     print("ToolFlow: Setting pageOrganizerURL to \(url.path)")
                                     pageOrganizerURL = url
                                     // Delay showing the organizer to ensure state update completes
-                                    DispatchQueue.main.async {
-                                        print("ToolFlow: Now setting showPageOrganizer = true")
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                        print("ToolFlow: Now setting showPageOrganizer = true (after 0.1s delay)")
                                         showPageOrganizer = true
                                     }
                                 } else {

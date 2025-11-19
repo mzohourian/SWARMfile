@@ -12,6 +12,11 @@ import JobEngine
 import UIComponents
 import PDFKit
 
+// Extension to make URL conform to Identifiable for fullScreenCover(item:)
+extension URL: Identifiable {
+    public var id: String { absoluteString }
+}
+
 struct ToolFlowView: View {
     let tool: ToolType
 
@@ -26,7 +31,6 @@ struct ToolFlowView: View {
     @State private var showPaywall = false
     @State private var showError = false
     @State private var errorMessage = ""
-    @State private var showPageOrganizer = false
     @State private var pageOrganizerURL: URL?
     @State private var showSignaturePlacement = false
 
@@ -50,13 +54,8 @@ struct ToolFlowView: View {
                                 // Page Organizer uses a custom interactive flow
                                 print("ToolFlow: onContinue called, selectedURLs.count = \(selectedURLs.count)")
                                 if let url = selectedURLs.first {
-                                    print("ToolFlow: Setting pageOrganizerURL to \(url.path)")
+                                    print("ToolFlow: Setting pageOrganizerURL to \(url.path) - this will trigger fullScreenCover")
                                     pageOrganizerURL = url
-                                    // Delay showing the organizer to ensure state update completes
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                        print("ToolFlow: Now setting showPageOrganizer = true (after 0.1s delay)")
-                                        showPageOrganizer = true
-                                    }
                                 } else {
                                     print("ToolFlow ERROR: No URL in selectedURLs!")
                                 }
@@ -99,33 +98,11 @@ struct ToolFlowView: View {
             .sheet(isPresented: $showPaywall) {
                 PaywallView()
             }
-            .fullScreenCover(isPresented: $showPageOrganizer) {
-                if let pdfURL = pageOrganizerURL {
-                    let _ = print("ToolFlow: Presenting PageOrganizer with URL: \(pdfURL.path)")
-                    PageOrganizerView(pdfURL: pdfURL)
-                        .environmentObject(jobManager)
-                        .environmentObject(paymentsManager)
-                        .onDisappear {
-                            // Clear the URL when organizer is dismissed
-                            pageOrganizerURL = nil
-                        }
-                } else {
-                    // DEBUG: This will show if pageOrganizerURL is nil
-                    VStack(spacing: 20) {
-                        Text("ERROR: No PDF URL")
-                            .font(.title)
-                            .foregroundColor(.red)
-                        Text("pageOrganizerURL: nil")
-                            .foregroundColor(.blue)
-                        Text("selectedURLs.count: \(selectedURLs.count)")
-                            .foregroundColor(.blue)
-                        Button("Close") {
-                            showPageOrganizer = false
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.yellow)
-                }
+            .fullScreenCover(item: $pageOrganizerURL) { pdfURL in
+                let _ = print("ToolFlow: Presenting PageOrganizer with URL: \(pdfURL.path)")
+                PageOrganizerView(pdfURL: pdfURL)
+                    .environmentObject(jobManager)
+                    .environmentObject(paymentsManager)
             }
             .fullScreenCover(isPresented: $showSignaturePlacement) {
                 if let pdfURL = selectedURLs.first {

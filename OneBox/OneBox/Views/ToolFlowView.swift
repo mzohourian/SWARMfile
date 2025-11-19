@@ -52,12 +52,8 @@ struct ToolFlowView: View {
                         onContinue: {
                             if tool == .pdfOrganize {
                                 // Page Organizer uses a custom interactive flow
-                                print("ToolFlow: onContinue called, selectedURLs.count = \(selectedURLs.count)")
                                 if let url = selectedURLs.first {
-                                    print("ToolFlow: Setting pageOrganizerURL to \(url.path) - this will trigger fullScreenCover")
                                     pageOrganizerURL = url
-                                } else {
-                                    print("ToolFlow ERROR: No URL in selectedURLs!")
                                 }
                             } else {
                                 // Standard flow continues to configuration
@@ -99,7 +95,6 @@ struct ToolFlowView: View {
                 PaywallView()
             }
             .fullScreenCover(item: $pageOrganizerURL) { pdfURL in
-                let _ = print("ToolFlow: Presenting PageOrganizer with URL: \(pdfURL.path)")
                 PageOrganizerView(pdfURL: pdfURL)
                     .environmentObject(jobManager)
                     .environmentObject(paymentsManager)
@@ -384,28 +379,19 @@ struct InputSelectionView: View {
     }
 
     private func handleFileImport(_ result: Result<[URL], Error>) {
-        print("InputSelection: handleFileImport called")
         switch result {
         case .success(let urls):
             isLoadingFiles = true
-            print("InputSelection: Starting to handle \(urls.count) file(s), tool = \(tool)")
 
             Task {
                 for url in urls {
-                    print("InputSelection: Processing URL: \(url.path)")
-                    print("InputSelection: URL lastPathComponent: \(url.lastPathComponent)")
-
                     // For PDF Organizer, we don't need to copy - just use the original URL
                     // The security-scoped access will be handled in PageOrganizerView
                     if tool == .pdfOrganize {
-                        print("InputSelection: Tool is pdfOrganize, using original URL")
                         await MainActor.run {
-                            print("InputSelection: About to append URL to selectedURLs")
                             selectedURLs.append(url)
-                            print("InputSelection: Successfully appended. selectedURLs.count = \(selectedURLs.count)")
                         }
                     } else {
-                        print("InputSelection: Tool is NOT pdfOrganize, copying file")
                         // For other tools, copy files to temp directory for reliable access
                         // Start accessing security-scoped resource
                         let didStartAccessing = url.startAccessingSecurityScopedResource()
@@ -421,13 +407,11 @@ struct InputSelectionView: View {
                                 .appendingPathComponent(UUID().uuidString)
                                 .appendingPathExtension(url.pathExtension)
 
-                            print("InputSelection: Copying \(url.lastPathComponent) to temp location")
                             try FileManager.default.copyItem(at: url, to: tempURL)
-                            print("InputSelection: Successfully copied to \(tempURL.path)")
 
                             // Verify the file was copied and is readable
                             guard FileManager.default.fileExists(atPath: tempURL.path) else {
-                                print("InputSelection Error: File doesn't exist after copy: \(tempURL.path)")
+                                print("Error: File doesn't exist after copy: \(tempURL.path)")
                                 continue
                             }
 
@@ -435,18 +419,13 @@ struct InputSelectionView: View {
                                 selectedURLs.append(tempURL)
                             }
                         } catch {
-                            print("InputSelection Error: File copy failed - \(error)")
+                            print("Error: File copy failed - \(error.localizedDescription)")
                         }
                     }
                 }
 
                 await MainActor.run {
                     isLoadingFiles = false
-                    print("InputSelection: Finished handling files. Total URLs: \(selectedURLs.count)")
-                    print("InputSelection: selectedURLs contents:")
-                    for (index, url) in selectedURLs.enumerated() {
-                        print("  [\(index)]: \(url.path)")
-                    }
                 }
             }
         case .failure(let error):

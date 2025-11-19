@@ -42,23 +42,6 @@ struct PageOrganizerView: View {
                 Color(.systemGroupedBackground)
                     .ignoresSafeArea()
 
-                // DEBUG: Very visible indicator that view is loaded
-                VStack {
-                    Text("DEBUG: PageOrganizerView Loaded")
-                        .font(.title)
-                        .foregroundColor(.red)
-                        .padding()
-                    Text("pdfDocument: \(pdfDocument != nil ? "YES" : "NO")")
-                        .foregroundColor(.blue)
-                    Text("pages.count: \(pages.count)")
-                        .foregroundColor(.blue)
-                    Text("URL: \(pdfURL.lastPathComponent)")
-                        .foregroundColor(.blue)
-                        .font(.caption)
-                }
-                .background(Color.yellow)
-                .zIndex(1000)
-
                 if pdfDocument != nil, !pages.isEmpty {
                     VStack(spacing: 0) {
                         // Selection info bar

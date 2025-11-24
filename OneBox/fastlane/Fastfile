@@ -1,0 +1,259 @@
+# Fastfile for OneBox
+# CI/CD automation for iOS app
+
+default_platform(:ios)
+
+platform :ios do
+
+  # Environment variables
+  APP_IDENTIFIER = "com.yourcompany.onebox"
+  SCHEME = "OneBox"
+  WORKSPACE = "OneBox.xcworkspace"
+
+  before_all do
+    ensure_git_status_clean unless ENV['SKIP_GIT_CHECK']
+  end
+
+  # MARK: - Testing
+
+  desc "Run all unit and UI tests"
+  lane :tests do
+    run_tests(
+      workspace: WORKSPACE,
+      scheme: SCHEME,
+      devices: ["iPhone 15 Pro", "iPad Pro (12.9-inch) (6th generation)"],
+      code_coverage: true,
+      output_directory: "./fastlane/test_output",
+      result_bundle: true
+    )
+
+    # Generate code coverage report
+    xcov(
+      workspace: WORKSPACE,
+      scheme: SCHEME,
+      output_directory: "./fastlane/coverage",
+      minimum_coverage_percentage: 70.0
+    )
+  end
+
+  desc "Run quick tests (unit tests only)"
+  lane :quick_test do
+    scan(
+      workspace: WORKSPACE,
+      scheme: SCHEME,
+      skip_slack: true,
+      code_coverage: true,
+      derived_data_path: "./DerivedData"
+    )
+  end
+
+  # MARK: - Building
+
+  desc "Build app for testing"
+  lane :build do
+    gym(
+      workspace: WORKSPACE,
+      scheme: SCHEME,
+      configuration: "Debug",
+      skip_archive: true,
+      skip_codesigning: true,
+      build_path: "./build"
+    )
+  end
+
+  desc "Build release version"
+  lane :build_release do
+    gym(
+      workspace: WORKSPACE,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "./build/release"
+    )
+  end
+
+  # MARK: - Beta Distribution
+
+  desc "Upload to TestFlight (Internal Testing)"
+  lane :beta do
+    ensure_git_branch(branch: 'main')
+
+    # Increment build number
+    increment_build_number(
+      xcodeproj: "OneBox.xcodeproj"
+    )
+
+    # Build the app
+    build_app(
+      workspace: WORKSPACE,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "./build/testflight"
+    )
+
+    # Upload to TestFlight
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      skip_submission: true,
+      notify_external_testers: false,
+      changelog: changelog_from_git_commits(
+        pretty: "- %s",
+        merge_commit_filtering: "exclude_merges"
+      )
+    )
+
+    # Commit version bump
+    commit_version_bump(
+      message: "Bump build number [skip ci]",
+      xcodeproj: "OneBox.xcodeproj"
+    )
+
+    push_to_git_remote
+
+    slack(
+      message: "✅ New TestFlight build uploaded successfully!",
+      success: true
+    ) if ENV['SLACK_WEBHOOK_URL']
+  end
+
+  # MARK: - App Store Release
+
+  desc "Deploy to App Store"
+  lane :release do
+    ensure_git_branch(branch: 'main')
+
+    # Validate metadata
+    validate_app_store_metadata
+
+    # Increment version
+    increment_version_number(
+      bump_type: "patch"
+    )
+
+    increment_build_number(
+      xcodeproj: "OneBox.xcodeproj"
+    )
+
+    # Build
+    build_app(
+      workspace: WORKSPACE,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "./build/appstore"
+    )
+
+    # Generate screenshots (if setup)
+    # snapshot
+
+    # Upload screenshots and metadata
+    upload_to_app_store(
+      force: true,
+      skip_screenshots: false,
+      skip_metadata: false,
+      submit_for_review: false,
+      automatic_release: false,
+      precheck_include_in_app_purchases: false
+    )
+
+    # Commit version bump
+    commit_version_bump(
+      message: "Version bump to #{lane_context[SharedValues::VERSION_NUMBER]} [skip ci]",
+      xcodeproj: "OneBox.xcodeproj"
+    )
+
+    # Create git tag
+    add_git_tag(
+      tag: "v#{lane_context[SharedValues::VERSION_NUMBER]}"
+    )
+
+    push_to_git_remote(tags: true)
+
+    slack(
+      message: "🚀 OneBox #{lane_context[SharedValues::VERSION_NUMBER]} submitted to App Store!",
+      success: true
+    ) if ENV['SLACK_WEBHOOK_URL']
+  end
+
+  # MARK: - Screenshots
+
+  desc "Generate App Store screenshots"
+  lane :screenshots do
+    snapshot(
+      devices: [
+        "iPhone 15 Pro Max",
+        "iPhone 15 Pro",
+        "iPhone SE (3rd generation)",
+        "iPad Pro (12.9-inch) (6th generation)"
+      ],
+      languages: ["en-US"],
+      output_directory: "./fastlane/screenshots",
+      clear_previous_screenshots: true,
+      override_status_bar: true,
+      dark_mode: false
+    )
+  end
+
+  # MARK: - Certificates & Provisioning
+
+  desc "Setup code signing"
+  lane :setup_signing do
+    match(
+      type: "development",
+      readonly: true
+    )
+
+    match(
+      type: "appstore",
+      readonly: true
+    )
+  end
+
+  desc "Renew provisioning profiles"
+  lane :renew_profiles do
+    match(
+      type: "development",
+      force_for_new_devices: true
+    )
+
+    match(
+      type: "appstore",
+      force: true
+    )
+  end
+
+  # MARK: - Utility Lanes
+
+  desc "Validate App Store metadata"
+  lane :validate_metadata do
+    precheck(
+      app_identifier: APP_IDENTIFIER,
+      skip_binary_upload: true,
+      include_in_app_purchases: true
+    )
+  end
+
+  desc "Clean build artifacts"
+  lane :clean do
+    clean_build_artifacts
+    clear_derived_data
+  end
+
+  # MARK: - Error Handling
+
+  error do |lane, exception|
+    slack(
+      message: "❌ Lane #{lane} failed: #{exception.message}",
+      success: false
+    ) if ENV['SLACK_WEBHOOK_URL']
+  end
+
+  after_all do |lane|
+    notification(
+      title: "OneBox Fastlane",
+      message: "Lane #{lane} completed successfully"
+    )
+  end
+
+end

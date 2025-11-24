@@ -1,0 +1,184 @@
+# XcodeGen Configuration for OneBox
+# Install XcodeGen: brew install xcodegen
+# Run: xcodegen generate
+# This will create OneBox.xcodeproj
+
+name: OneBox
+options:
+  bundleIdPrefix: com.yourcompany
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: en
+
+settings:
+  MARKETING_VERSION: "1.0.0"
+  CURRENT_PROJECT_VERSION: "1"
+  SWIFT_VERSION: "5.9"
+  IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+
+targets:
+  OneBox:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: OneBox
+      - path: Modules
+    resources:
+      - OneBox/Assets.xcassets
+      - OneBox/Preview Content
+    info:
+      path: OneBox/Info.plist
+      properties:
+        CFBundleDisplayName: OneBox
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSPhotoLibraryUsageDescription: "OneBox needs access to your photos to convert them to PDF"
+        NSPhotoLibraryAddUsageDescription: "OneBox needs permission to save processed files"
+        UIBackgroundModes:
+          - processing
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.onebox.process
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox
+      INFOPLIST_FILE: OneBox/Info.plist
+      CODE_SIGN_STYLE: Automatic
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      TARGETED_DEVICE_FAMILY: "1,2"
+      ENABLE_PREVIEWS: true
+      SWIFT_VERSION: "5.9"
+      IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    dependencies:
+      - target: CommonTypes
+      - target: CorePDF
+      - target: CoreImageKit
+      - target: JobEngine
+      - target: Payments
+      - target: Ads
+      - target: UIComponents
+      - target: Privacy
+    scheme:
+      testTargets:
+        - OneBoxTests
+
+  # Framework Targets
+  CommonTypes:
+    type: framework
+    platform: iOS
+    sources:
+      - Modules/CommonTypes
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.commontypes
+      GENERATE_INFOPLIST_FILE: YES
+
+  CorePDF:
+    type: framework
+    platform: iOS
+    sources:
+      - Modules/CorePDF
+    dependencies:
+      - target: CommonTypes
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.corepdf
+      GENERATE_INFOPLIST_FILE: YES
+
+  CoreImageKit:
+    type: framework
+    platform: iOS
+    sources:
+      - Modules/CoreImageKit
+    dependencies:
+      - target: CommonTypes
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.coreimagekit
+      GENERATE_INFOPLIST_FILE: YES
+
+  JobEngine:
+    type: framework
+    platform: iOS
+    sources:
+      - Modules/JobEngine
+    dependencies:
+      - target: CommonTypes
+      - target: CorePDF
+      - target: CoreImageKit
+      - target: Privacy
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.jobengine
+      GENERATE_INFOPLIST_FILE: YES
+
+  Payments:
+    type: framework
+    platform: iOS
+    sources:
+      - Modules/Payments
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.payments
+      GENERATE_INFOPLIST_FILE: YES
+
+  Ads:
+    type: framework
+    platform: iOS
+    sources:
+      - Modules/Ads
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.ads
+      GENERATE_INFOPLIST_FILE: YES
+
+  UIComponents:
+    type: framework
+    platform: iOS
+    sources:
+      - Modules/UIComponents
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.uicomponents
+      GENERATE_INFOPLIST_FILE: YES
+
+  Privacy:
+    type: framework
+    platform: iOS
+    sources:
+      - Modules/Privacy
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.privacy
+      GENERATE_INFOPLIST_FILE: YES
+
+  # Test Targets
+  OneBoxTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+    dependencies:
+      - target: OneBox
+      - target: CorePDF
+      - target: JobEngine
+      - target: Payments
+      - target: Privacy
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.tests
+      GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  OneBox:
+    build:
+      targets:
+        OneBox: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - OneBoxTests
+    archive:
+      config: Release

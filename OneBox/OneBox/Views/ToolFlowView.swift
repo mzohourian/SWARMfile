@@ -73,6 +73,15 @@ struct ToolFlowView: View {
                 jobManager: jobManager,
                 onDismiss: {
                     showInteractiveSigning = false
+                },
+                onJobSubmitted: { job in
+                    // Job was submitted, advance to processing step
+                    showInteractiveSigning = false
+                    currentJob = job
+                    step = .processing
+                    paymentsManager.consumeExport()
+                    // Observe job completion
+                    observeJobCompletion(job)
                 }
             )
         }
@@ -329,15 +338,19 @@ struct InteractiveSignPDFViewWrapper: View {
     let pdfURL: URL?
     let jobManager: JobManager
     let onDismiss: () -> Void
+    let onJobSubmitted: (Job) -> Void
     
     var body: some View {
         Group {
             if let pdfURL = pdfURL {
-                InteractiveSignPDFView(pdfURL: pdfURL)
-                    .environmentObject(jobManager)
-                    .onAppear {
-                        print("🔵 ToolFlowView: fullScreenCover presenting InteractiveSignPDFView with URL: \(pdfURL)")
-                    }
+                InteractiveSignPDFView(
+                    pdfURL: pdfURL,
+                    onJobSubmitted: onJobSubmitted
+                )
+                .environmentObject(jobManager)
+                .onAppear {
+                    print("🔵 ToolFlowView: fullScreenCover presenting InteractiveSignPDFView with URL: \(pdfURL)")
+                }
             } else {
                 // Fallback view if URL is missing
                 VStack {

@@ -12,6 +12,7 @@ import JobEngine
 
 struct InteractiveSignPDFView: View {
     let pdfURL: URL
+    let onJobSubmitted: (Job) -> Void
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var jobManager: JobManager
     
@@ -469,6 +470,8 @@ struct InteractiveSignPDFView: View {
         Task {
             await jobManager.submitJob(job)
             await MainActor.run {
+                // Notify parent that job was submitted, then dismiss
+                onJobSubmitted(job)
                 dismiss()
             }
         }

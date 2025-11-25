@@ -210,15 +210,15 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         // Create a fresh canvas view - don't reuse from state
         let canvasView = PKCanvasView()
         
+        // CRITICAL: Configure for touch input FIRST, before anything else
+        canvasView.isUserInteractionEnabled = true
+        canvasView.isMultipleTouchEnabled = false
+        
         // Configure canvas for better drawing experience
         canvasView.tool = PKInkingTool(.pen, color: .black, width: 3.0)
         canvasView.drawingPolicy = .anyInput // Allow finger and pencil
-        canvasView.backgroundColor = .clear
-        canvasView.isOpaque = false
-        
-        // CRITICAL: Enable user interaction for touch input on real devices
-        canvasView.isUserInteractionEnabled = true
-        canvasView.isMultipleTouchEnabled = false // Single touch only for drawing
+        canvasView.backgroundColor = .white // Use white background instead of clear
+        canvasView.isOpaque = true
         
         // Disable scrolling and bouncing
         canvasView.alwaysBounceVertical = false
@@ -227,14 +227,18 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         canvasView.showsHorizontalScrollIndicator = false
         canvasView.isScrollEnabled = false
         
-        // Ensure canvas can receive touches
+        // CRITICAL: Ensure canvas can receive touches immediately
         canvasView.delaysContentTouches = false
         canvasView.canCancelContentTouches = false
         
-        // CRITICAL for real devices: Ensure proper layout
-        // Don't set contentSize directly - let it be determined by the frame
-        // But ensure the view has a proper frame
-        canvasView.frame = CGRect(x: 0, y: 0, width: 1000, height: 500)
+        // CRITICAL: Disable any gesture recognizers that might interfere
+        if let gestureRecognizers = canvasView.gestureRecognizers {
+            for gesture in gestureRecognizers {
+                if gesture is UITapGestureRecognizer || gesture is UIPanGestureRecognizer {
+                    gesture.isEnabled = false
+                }
+            }
+        }
         
         // Set up delegate
         canvasView.delegate = context.coordinator

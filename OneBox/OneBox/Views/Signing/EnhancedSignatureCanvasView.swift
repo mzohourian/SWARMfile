@@ -14,9 +14,9 @@ struct EnhancedSignatureCanvasView: View {
     let onSave: (Data?) -> Void
     @Environment(\.dismiss) var dismiss
     
-    @State private var canvasView = PKCanvasView()
     @State private var hasDrawing = false
     @State private var showClearConfirmation = false
+    @State private var canvasViewRef: PKCanvasView?
     
     var body: some View {
         NavigationStack {
@@ -45,7 +45,7 @@ struct EnhancedSignatureCanvasView: View {
                             .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
                         
                         // Drawing Canvas - ensure it's on top and can receive touches
-                        EnhancedSignatureCanvasWrapper(canvasView: $canvasView) { hasDrawing in
+                        EnhancedSignatureCanvasWrapper(canvasViewRef: $canvasViewRef) { hasDrawing in
                             self.hasDrawing = hasDrawing
                         }
                         .padding(OneBoxSpacing.medium)
@@ -138,7 +138,7 @@ struct EnhancedSignatureCanvasView: View {
     }
     
     private func saveSignature() {
-        guard !canvasView.drawing.bounds.isEmpty else { return }
+        guard let canvasView = canvasViewRef, !canvasView.drawing.bounds.isEmpty else { return }
         
         let image = canvasView.drawing.image(
             from: canvasView.drawing.bounds,
@@ -179,6 +179,7 @@ struct EnhancedSignatureCanvasView: View {
     }
     
     private func clearCanvas() {
+        guard let canvasView = canvasViewRef else { return }
         canvasView.drawing = PKDrawing()
         signatureData = nil
         hasDrawing = false
@@ -186,6 +187,7 @@ struct EnhancedSignatureCanvasView: View {
     }
     
     private func undoLastStroke() {
+        guard let canvasView = canvasViewRef else { return }
         let strokes = canvasView.drawing.strokes
         guard !strokes.isEmpty else { return }
         
@@ -200,10 +202,13 @@ struct EnhancedSignatureCanvasView: View {
 
 // MARK: - Canvas View Wrapper
 struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
-    @Binding var canvasView: PKCanvasView
+    @Binding var canvasViewRef: PKCanvasView?
     let onDrawingChanged: (Bool) -> Void
     
     func makeUIView(context: Context) -> PKCanvasView {
+        // Create a fresh canvas view - don't reuse from state
+        let canvasView = PKCanvasView()
+        
         // Configure canvas for better drawing experience
         canvasView.tool = PKInkingTool(.pen, color: .black, width: 3.0)
         canvasView.drawingPolicy = .anyInput // Allow finger and pencil
@@ -225,8 +230,16 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         canvasView.delaysContentTouches = false
         canvasView.canCancelContentTouches = false
         
+        // CRITICAL for real devices: Set content size
+        canvasView.contentSize = CGSize(width: 1000, height: 500)
+        
         // Set up delegate
         canvasView.delegate = context.coordinator
+        
+        // Store reference
+        DispatchQueue.main.async {
+            canvasViewRef = canvasView
+        }
         
         return canvasView
     }
@@ -236,6 +249,15 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         uiView.isUserInteractionEnabled = true
         uiView.drawingPolicy = .anyInput
         uiView.tool = PKInkingTool(.pen, color: .black, width: 3.0)
+        uiView.delaysContentTouches = false
+        uiView.canCancelContentTouches = false
+        
+        // Update reference if needed
+        if canvasViewRef !== uiView {
+            DispatchQueue.main.async {
+                canvasViewRef = uiView
+            }
+        }
     }
     
     func makeCoordinator() -> Coordinator {

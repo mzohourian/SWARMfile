@@ -21,6 +21,8 @@ struct InteractiveSignPDFView: View {
     @State private var detectedFields: [DetectedSignatureField] = []
     @State private var isDetectingFields = false
     @State private var selectedPlacement: SignaturePlacement?
+    @State private var isLoadingPDF = true
+    @State private var loadError: String?
     
     // Signature creation
     @State private var showingSignatureCanvas = false
@@ -62,15 +64,37 @@ struct InteractiveSignPDFView: View {
                             }
                         )
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if let error = loadError {
+                        // Error state
+                        VStack(spacing: OneBoxSpacing.large) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 48))
+                                .foregroundColor(OneBoxColors.warningAmber)
+                            Text("Failed to Load PDF")
+                                .font(OneBoxTypography.title)
+                                .foregroundColor(OneBoxColors.primaryText)
+                            Text(error)
+                                .font(OneBoxTypography.body)
+                                .foregroundColor(OneBoxColors.secondaryText)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                            Button("Dismiss") {
+                                dismiss()
+                            }
+                            .foregroundColor(OneBoxColors.primaryGold)
+                            .padding(.top)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         // Loading state
-                        VStack {
+                        VStack(spacing: OneBoxSpacing.medium) {
                             ProgressView()
+                                .tint(OneBoxColors.primaryGold)
                             Text("Loading PDF...")
                                 .font(OneBoxTypography.body)
                                 .foregroundColor(OneBoxColors.secondaryText)
-                                .padding(.top)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     
                     // Controls Bar
@@ -112,8 +136,8 @@ struct InteractiveSignPDFView: View {
                     }
                 }
             }
-            .onAppear {
-                loadPDF()
+            .task {
+                await loadPDF()
             }
         }
     }
@@ -260,8 +284,58 @@ struct InteractiveSignPDFView: View {
     }
     
     // MARK: - Functions
-    private func loadPDF() {
-        pdfDocument = PDFDocument(url: pdfURL)
+    @MainActor
+    private func loadPDF(retryCount: Int = 0) {
+        isLoadingPDF = true
+        loadError = nil
+        
+        // Start accessing security-scoped resource (only on first attempt)
+        if retryCount == 0 {
+            _ = pdfURL.startAccessingSecurityScopedResource()
+        }
+        
+        // Verify file exists (with retry for timing issues)
+        guard FileManager.default.fileExists(atPath: pdfURL.path) else {
+            if retryCount < 3 {
+                Task {
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+                    await loadPDF(retryCount: retryCount + 1)
+                }
+                return
+            }
+            // File not found - show error
+            print("InteractiveSignPDF Error: File not found at path: \(pdfURL.path)")
+            loadError = "PDF file not found. Please try selecting the file again."
+            isLoadingPDF = false
+            return
+        }
+        
+        // Try to load PDF document
+        guard let pdf = PDFDocument(url: pdfURL) else {
+            if retryCount < 3 {
+                Task {
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+                    await loadPDF(retryCount: retryCount + 1)
+                }
+                return
+            }
+            print("InteractiveSignPDF Error: Failed to load PDF from URL: \(pdfURL)")
+            loadError = "Failed to load PDF. The file may be corrupted or password-protected."
+            isLoadingPDF = false
+            return
+        }
+        
+        // Check if PDF has pages
+        guard pdf.pageCount > 0 else {
+            print("InteractiveSignPDF Error: PDF has no pages")
+            loadError = "This PDF has no pages."
+            isLoadingPDF = false
+            return
+        }
+        
+        print("InteractiveSignPDF: Successfully loaded PDF with \(pdf.pageCount) pages")
+        pdfDocument = pdf
+        isLoadingPDF = false
     }
     
     private func detectSignatureFields() {

@@ -76,6 +76,9 @@ struct ToolFlowView: View {
                                 // Sign PDF uses interactive flow
                                 if !selectedURLs.isEmpty {
                                     showInteractiveSigning = true
+                                } else {
+                                    // No file selected - should not happen, but handle gracefully
+                                    return
                                 }
                             } else {
                                 // Standard flow continues to configuration

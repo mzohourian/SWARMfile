@@ -71,7 +71,7 @@ struct InteractiveSignPDFView: View {
                                 .font(.system(size: 48))
                                 .foregroundColor(OneBoxColors.warningAmber)
                             Text("Failed to Load PDF")
-                                .font(OneBoxTypography.title)
+                                .font(OneBoxTypography.sectionTitle)
                                 .foregroundColor(OneBoxColors.primaryText)
                             Text(error)
                                 .font(OneBoxTypography.body)
@@ -285,7 +285,7 @@ struct InteractiveSignPDFView: View {
     
     // MARK: - Functions
     @MainActor
-    private func loadPDF(retryCount: Int = 0) {
+    private func loadPDF(retryCount: Int = 0) async {
         isLoadingPDF = true
         loadError = nil
         
@@ -297,10 +297,8 @@ struct InteractiveSignPDFView: View {
         // Verify file exists (with retry for timing issues)
         guard FileManager.default.fileExists(atPath: pdfURL.path) else {
             if retryCount < 3 {
-                Task {
-                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-                    await loadPDF(retryCount: retryCount + 1)
-                }
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+                await loadPDF(retryCount: retryCount + 1)
                 return
             }
             // File not found - show error
@@ -313,10 +311,8 @@ struct InteractiveSignPDFView: View {
         // Try to load PDF document
         guard let pdf = PDFDocument(url: pdfURL) else {
             if retryCount < 3 {
-                Task {
-                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-                    await loadPDF(retryCount: retryCount + 1)
-                }
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+                await loadPDF(retryCount: retryCount + 1)
                 return
             }
             print("InteractiveSignPDF Error: Failed to load PDF from URL: \(pdfURL)")

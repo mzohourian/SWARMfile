@@ -208,12 +208,20 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         canvasView.backgroundColor = .clear
         canvasView.isOpaque = false
         
+        // CRITICAL: Enable user interaction for touch input on real devices
+        canvasView.isUserInteractionEnabled = true
+        canvasView.isMultipleTouchEnabled = false // Single touch only for drawing
+        
         // Disable scrolling and bouncing
         canvasView.alwaysBounceVertical = false
         canvasView.alwaysBounceHorizontal = false
         canvasView.showsVerticalScrollIndicator = false
         canvasView.showsHorizontalScrollIndicator = false
         canvasView.isScrollEnabled = false
+        
+        // Ensure canvas can receive touches
+        canvasView.delaysContentTouches = false
+        canvasView.canCancelContentTouches = false
         
         // Set up delegate
         canvasView.delegate = context.coordinator
@@ -222,7 +230,10 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: PKCanvasView, context: Context) {
-        // Update if needed
+        // Ensure configuration is maintained on updates
+        uiView.isUserInteractionEnabled = true
+        uiView.drawingPolicy = .anyInput
+        uiView.tool = PKInkingTool(.pen, color: .black, width: 3.0)
     }
     
     func makeCoordinator() -> Coordinator {

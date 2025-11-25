@@ -76,8 +76,8 @@ struct ToolFlowView: View {
                 }
             )
         }
-        .onChange(of: showInteractiveSigning) { oldValue, newValue in
-            print("🔵 ToolFlowView: showInteractiveSigning changed from \(oldValue) to \(newValue)")
+        .onChange(of: showInteractiveSigning) { newValue in
+            print("🔵 ToolFlowView: showInteractiveSigning changed to \(newValue)")
         }
         .fullScreenCover(isPresented: $showRedactionView) {
             if let url = selectedURLs.first {

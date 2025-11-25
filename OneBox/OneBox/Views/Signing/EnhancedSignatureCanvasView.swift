@@ -231,14 +231,8 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         canvasView.delaysContentTouches = false
         canvasView.canCancelContentTouches = false
         
-        // CRITICAL: Disable any gesture recognizers that might interfere
-        if let gestureRecognizers = canvasView.gestureRecognizers {
-            for gesture in gestureRecognizers {
-                if gesture is UITapGestureRecognizer || gesture is UIPanGestureRecognizer {
-                    gesture.isEnabled = false
-                }
-            }
-        }
+        // CRITICAL: Ensure the canvas view is properly set up for drawing
+        // Don't disable PencilKit's internal gestures - they're needed for drawing
         
         // Set up delegate
         canvasView.delegate = context.coordinator

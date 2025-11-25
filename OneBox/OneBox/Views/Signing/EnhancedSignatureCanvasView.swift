@@ -131,7 +131,7 @@ struct EnhancedSignatureCanvasView: View {
             .onAppear {
                 // CRITICAL: Ensure canvas is ready after view appears (for real devices)
                 // Small delay to ensure layout is complete
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     if let canvasView = canvasViewRef {
                         // Force reconfiguration
                         canvasView.isUserInteractionEnabled = true
@@ -142,7 +142,11 @@ struct EnhancedSignatureCanvasView: View {
                         // Force layout update
                         canvasView.setNeedsLayout()
                         canvasView.layoutIfNeeded()
-                        print("🔵 EnhancedSignatureCanvas: Canvas reconfigured after appear")
+                        // CRITICAL: Make canvas first responder to receive touches
+                        if canvasView.canBecomeFirstResponder {
+                            _ = canvasView.becomeFirstResponder()
+                        }
+                        print("🔵 EnhancedSignatureCanvas: Canvas reconfigured and made first responder")
                     }
                 }
             }
@@ -242,12 +246,21 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         canvasView.delaysContentTouches = false
         canvasView.canCancelContentTouches = false
         
+        // CRITICAL for real devices: Ensure canvas is ready to receive input
+        canvasView.becomeFirstResponder()
+        
         // Set up delegate
         canvasView.delegate = context.coordinator
         
         // Store reference
         DispatchQueue.main.async {
             canvasViewRef = canvasView
+            // Ensure canvas is ready after view is added to hierarchy
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                canvasView.becomeFirstResponder()
+                canvasView.isUserInteractionEnabled = true
+                print("🔵 EnhancedSignatureCanvas: Canvas made first responder")
+            }
         }
         
         return canvasView
@@ -262,6 +275,13 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         uiView.canCancelContentTouches = false
         uiView.backgroundColor = .white
         uiView.isOpaque = true
+        
+        // CRITICAL: Ensure canvas can become first responder for touch input
+        if uiView.canBecomeFirstResponder && !uiView.isFirstResponder {
+            DispatchQueue.main.async {
+                _ = uiView.becomeFirstResponder()
+            }
+        }
         
         // Update reference if needed
         if canvasViewRef != uiView {

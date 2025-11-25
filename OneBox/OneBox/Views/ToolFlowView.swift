@@ -306,12 +306,17 @@ struct ToolFlowView: View {
                     currentJob = updatedJob
 
                     if updatedJob.status == .success {
-                        step = .exportPreview
+                        await MainActor.run {
+                            step = .exportPreview
+                        }
                         break
                     } else if updatedJob.status == .failed {
-                        errorMessage = updatedJob.error ?? "Unknown error"
-                        showError = true
-                        dismiss()
+                        await MainActor.run {
+                            errorMessage = updatedJob.error ?? "Unknown error"
+                            showError = true
+                            // Don't dismiss on error - let user see the error and retry
+                            step = .selectInput // Go back to input selection
+                        }
                         break
                     }
                 }

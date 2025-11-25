@@ -305,12 +305,23 @@ class TouchableCanvasView: UIView {
         backgroundColor = .white
         isUserInteractionEnabled = true
         isMultipleTouchEnabled = false
+        // CRITICAL for real devices
+        delaysContentTouches = false
+        canCancelContentTouches = false
+    }
+    
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Ensure canvas view has proper frame after layout
+        canvasView?.frame = bounds
     }
     
     // CRITICAL: Override hit testing to ensure touches reach the canvas
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         // Always return the canvas view if it exists and point is within bounds
         if let canvasView = canvasView, bounds.contains(point) {
+            // Ensure canvas is properly configured
+            canvasView.isUserInteractionEnabled = true
             let canvasPoint = convert(point, to: canvasView)
             if let hitView = canvasView.hitTest(canvasPoint, with: event) {
                 return hitView
@@ -323,6 +334,36 @@ class TouchableCanvasView: UIView {
     // Ensure touches are passed through
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         return bounds.contains(point)
+    }
+    
+    // CRITICAL: Override touch methods to ensure they reach the canvas
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesBegan(touches, with: event)
+        // Forward to canvas if needed
+        if let canvasView = canvasView {
+            canvasView.touchesBegan(touches, with: event)
+        }
+    }
+    
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesMoved(touches, with: event)
+        if let canvasView = canvasView {
+            canvasView.touchesMoved(touches, with: event)
+        }
+    }
+    
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesEnded(touches, with: event)
+        if let canvasView = canvasView {
+            canvasView.touchesEnded(touches, with: event)
+        }
+    }
+    
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesCancelled(touches, with: event)
+        if let canvasView = canvasView {
+            canvasView.touchesCancelled(touches, with: event)
+        }
     }
 }
 

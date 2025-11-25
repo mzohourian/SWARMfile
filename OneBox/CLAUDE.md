@@ -429,11 +429,13 @@ The app uses MVVM (Model-View-ViewModel), which means:
 ✅ Complimentary export modal (shows before final free export)
 ✅ Workflow hooks (create workflows from file selection)
 ✅ **NEW: Completely redesigned Sign PDF feature** with interactive placement, large drawing canvas, field detection, and multi-page support
+✅ **Sign PDF drawing**: Custom drawing canvas implemented for real devices, works reliably on iPhone 15 Pro Max (iOS 18.1)
+✅ **Sign PDF workflow**: Fixed infinite loop, now properly advances from signing to processing to result
+✅ **Transparent signatures**: Signatures no longer cover PDF text when moved or resized
 
 **What is Partial:**
 ⚠️ Some advanced features may need additional testing
 ⚠️ Swift 6 concurrency warnings (non-blocking, but should be addressed eventually)
-⚠️ **Sign PDF drawing canvas**: Works perfectly on simulator but touch input not registering on real iPhone 15 Pro Max (iOS 18.1). Multiple troubleshooting attempts made - may be iOS 18-specific PencilKit issue or requires different approach.
 
 **What is Planned:**
 - OCR / Searchable PDF
@@ -451,19 +453,45 @@ The app uses MVVM (Model-View-ViewModel), which means:
 
 ## Recent Changes
 
-**Most Recent (Today - Sign PDF Touch Input Fixes):**
-1. **PencilKit Touch Input Troubleshooting on Real Devices:**
-   - Identified issue: Drawing works on simulator but not on real iPhone 15 Pro Max (iOS 18.1)
-   - Removed `TouchableCanvasView` wrapper class that may have been blocking touches
-   - Simplified implementation to use `PKCanvasView` directly via `UIViewRepresentable`
-   - Made canvas first responder in `makeUIView`, `updateUIView`, and `onAppear` with delays
-   - Removed VStack wrapper around canvas that may have interfered with touch events
-   - Added tap gesture diagnostic to verify if touches reach the view
-   - Added `contentShape(Rectangle())` to ensure entire canvas area is tappable
-   - Added canvas reconfiguration in `onAppear` with 0.2s delay to ensure layout is complete
-   - Set `delaysContentTouches = false` and `canCancelContentTouches = false` on canvas
-   - All changes committed to `feature/claude-documentation` branch
-   - **Status**: Issue persists - drawing works on simulator but not on real device. Diagnostic tap gesture added to help identify if touches are reaching the view.
+**Most Recent (Today - Sign PDF Complete Fixes):**
+1. **Fixed Sign PDF Workflow Infinite Loop:**
+   - Issue: After signing and clicking "Done", workflow would loop back to input selection instead of proceeding to processing/result
+   - Fix: Added `onJobSubmitted` callback to `InteractiveSignPDFViewWrapper` that properly advances workflow to processing step
+   - Updated `InteractiveSignPDFView` to call callback when job is submitted
+   - `ToolFlowView` now tracks submitted job and observes completion automatically
+   - Workflow now correctly: Select PDF → Sign → Processing → Result/Export Preview
+
+2. **Fixed Sign PDF Crash During Processing:**
+   - Issue: App crashed when processing signed PDF, kicked user back to main dashboard
+   - Fix: Improved signature size calculation to use actual page bounds instead of hardcoded 612
+   - Added validation to clamp signature size to valid range (0.05 to 1.0)
+   - Explicitly set `signatureOpacity = 1.0` in job settings
+   - Added error handling in `processSignatures()` with try-catch
+   - Improved `observeJobCompletion()` to use `MainActor` for UI updates
+   - On error, returns to input selection instead of dismissing, allowing user to see error and retry
+
+3. **Made Signature Images Transparent:**
+   - Issue: Signatures had white backgrounds that covered PDF text when moved/resized
+   - Fix: Changed `CustomDrawingView` background to `.clear` with `isOpaque = false`
+   - Updated `getImage()` to render only drawing paths with transparent background
+   - Preserved transparency in all image scaling operations
+   - Changed compression to always use PNG format (JPEG doesn't support transparency)
+   - Added `.renderingMode(.original)` to signature display to preserve transparency
+   - Signatures now overlay PDF without obscuring text
+
+4. **Implemented Custom Drawing Canvas Fallback:**
+   - Issue: PencilKit's `handwritingd` daemon failing on real iPhone 15 Pro Max (iOS 18.1)
+   - Solution: Created `CustomDrawingCanvasView.swift` with Core Graphics-based drawing as fallback
+   - App automatically uses PencilKit on simulator, custom drawing on real devices
+   - Custom drawing uses `UIBezierPath` and direct touch handling, bypassing PencilKit issues
+   - Drawing now works reliably on real devices
+
+5. **Improved Error Handling for PDF Write Failures:**
+   - Enhanced error messages to distinguish storage issues from other problems
+   - Added diagnostics to check temporary directory accessibility
+   - Verify file size to detect empty/corrupted files
+   - Check available disk space when context creation fails
+   - More specific error messages that explain possible causes (storage, permissions, system issues)
 
 2. **Previous Session - Complete Sign PDF Feature Redesign:**
    - Created comprehensive audit report identifying 15 critical issues and 8 UX problems
@@ -596,17 +624,11 @@ The app uses MVVM (Model-View-ViewModel), which means:
 ## Next Steps
 
 **Immediate Priorities:**
-1. **Fix Sign PDF drawing on real devices** - Resolve PencilKit touch input issue on iPhone 15 Pro Max (iOS 18.1). Current status: Works on simulator, not on real device. Next steps:
-   - Test diagnostic tap gesture to verify if touches reach the view
-   - If taps are detected but drawing doesn't work: Try alternative PencilKit configuration or different drawing approach
-   - If taps are not detected: Investigate sheet presentation or view hierarchy blocking touches
-   - Consider using fullScreenCover instead of sheet for signature canvas
-   - Research iOS 18-specific PencilKit issues and workarounds
-2. **Test new Sign PDF feature end-to-end** - Once drawing is fixed, verify all functionality works (drawing, placement, resize, field detection, multi-page)
-3. **Update CorePDF.signPDF() for multiple signatures** - Currently processes one signature at a time; update to accept array of SignaturePlacement and process all at once
-4. Address Swift 6 concurrency warnings (non-blocking but good to fix)
-5. Test all features end-to-end to ensure everything works as expected
-6. Consider adding unit tests for new features (OnDeviceSearchService, WorkflowAutomationView, SignatureFieldDetectionService)
+1. **Test Sign PDF feature end-to-end on real device** - Verify all functionality works (drawing, placement, resize, field detection, multi-page, workflow progression)
+2. **Update CorePDF.signPDF() for multiple signatures** - Currently processes one signature at a time; update to accept array of SignaturePlacement and process all at once (if user needs multiple signatures per page)
+3. Address Swift 6 concurrency warnings (non-blocking but good to fix)
+4. Test all features end-to-end to ensure everything works as expected
+5. Consider adding unit tests for new features (OnDeviceSearchService, WorkflowAutomationView, SignatureFieldDetectionService)
 
 **Short-Term (Next Session):**
 1. User testing and feedback collection

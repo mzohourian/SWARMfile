@@ -30,6 +30,8 @@ struct InteractiveSignPDFView: View {
     @State private var currentSignatureData: SignatureData?
     @State private var signatureText = ""
     
+    // Use fullScreenCover instead of sheet for better PencilKit compatibility on real devices
+    
     // Placement mode
     @State private var isPlacingSignature = false
     @State private var placementSize: CGSize = CGSize(width: 200, height: 80)
@@ -128,11 +130,12 @@ struct InteractiveSignPDFView: View {
                     .disabled(signaturePlacements.isEmpty)
                 }
             }
-            .sheet(isPresented: $showingSignatureCanvas) {
+            .fullScreenCover(isPresented: $showingSignatureCanvas) {
                 EnhancedSignatureCanvasView(signatureData: .constant(nil)) { data in
                     if let data = data {
                         currentSignatureData = .image(data)
                         isPlacingSignature = true
+                        showingSignatureCanvas = false // Dismiss after saving
                     }
                 }
             }

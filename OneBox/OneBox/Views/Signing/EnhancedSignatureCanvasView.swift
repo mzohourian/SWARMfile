@@ -199,9 +199,8 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
     @Binding var canvasViewRef: PKCanvasView?
     let onDrawingChanged: (Bool) -> Void
     
-    func makeUIView(context: Context) -> TouchableCanvasView {
-        // Use a custom wrapper view that ensures touches work
-        let wrapperView = TouchableCanvasView()
+    func makeUIView(context: Context) -> PKCanvasView {
+        // Create canvas directly - no wrapper to avoid touch issues
         let canvasView = PKCanvasView()
         
         // CRITICAL: Configure for touch input FIRST, before anything else
@@ -228,49 +227,28 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         // Set up delegate
         canvasView.delegate = context.coordinator
         
-        // Add canvas to wrapper
-        wrapperView.addSubview(canvasView)
-        wrapperView.canvasView = canvasView
-        
-        // Set up constraints - CRITICAL for real devices
-        canvasView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            canvasView.topAnchor.constraint(equalTo: wrapperView.topAnchor),
-            canvasView.leadingAnchor.constraint(equalTo: wrapperView.leadingAnchor),
-            canvasView.trailingAnchor.constraint(equalTo: wrapperView.trailingAnchor),
-            canvasView.bottomAnchor.constraint(equalTo: wrapperView.bottomAnchor)
-        ])
-        
-        // CRITICAL: Force layout immediately for real devices
-        wrapperView.setNeedsLayout()
-        wrapperView.layoutIfNeeded()
-        canvasView.setNeedsLayout()
-        canvasView.layoutIfNeeded()
-        
         // Store reference
         DispatchQueue.main.async {
             canvasViewRef = canvasView
         }
         
-        return wrapperView
+        return canvasView
     }
     
-    func updateUIView(_ uiView: TouchableCanvasView, context: Context) {
-        // Ensure configuration is maintained on updates
-        if let canvasView = uiView.canvasView {
-            canvasView.isUserInteractionEnabled = true
-            canvasView.drawingPolicy = .anyInput
-            canvasView.tool = PKInkingTool(.pen, color: .black, width: 3.0)
-            canvasView.delaysContentTouches = false
-            canvasView.canCancelContentTouches = false
-            canvasView.backgroundColor = .white
-            canvasView.isOpaque = true
-            
-            // Update reference if needed
-            if canvasViewRef != canvasView {
-                DispatchQueue.main.async {
-                    canvasViewRef = canvasView
-                }
+    func updateUIView(_ uiView: PKCanvasView, context: Context) {
+        // Ensure configuration is maintained on updates - CRITICAL for real devices
+        uiView.isUserInteractionEnabled = true
+        uiView.drawingPolicy = .anyInput
+        uiView.tool = PKInkingTool(.pen, color: .black, width: 3.0)
+        uiView.delaysContentTouches = false
+        uiView.canCancelContentTouches = false
+        uiView.backgroundColor = .white
+        uiView.isOpaque = true
+        
+        // Update reference if needed
+        if canvasViewRef != uiView {
+            DispatchQueue.main.async {
+                canvasViewRef = uiView
             }
         }
     }

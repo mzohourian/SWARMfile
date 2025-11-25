@@ -47,6 +47,18 @@ struct EnhancedSignatureCanvasView: View {
                     .frame(height: 500) // Large, usable size
                     .padding(.horizontal, OneBoxSpacing.medium)
                     .padding(.vertical, OneBoxSpacing.large)
+                    .contentShape(Rectangle()) // Ensure entire area is tappable
+                    .simultaneousGesture(
+                        TapGesture()
+                            .onEnded { _ in
+                                print("🔵 EnhancedSignatureCanvas: Tap detected on canvas area")
+                                // Force canvas to become first responder on tap
+                                if let canvasView = canvasViewRef {
+                                    _ = canvasView.becomeFirstResponder()
+                                    print("🔵 EnhancedSignatureCanvas: Canvas made first responder after tap")
+                                }
+                            }
+                    )
                     
                     // Controls
                     HStack(spacing: OneBoxSpacing.large) {

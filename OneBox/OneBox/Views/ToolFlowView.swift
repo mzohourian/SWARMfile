@@ -170,30 +170,13 @@ struct ToolFlowView: View {
                     .environmentObject(paymentsManager)
             }
             .fullScreenCover(isPresented: $showInteractiveSigning) {
-                Group {
-                    if let pdfURL = selectedURLs.first {
-                        InteractiveSignPDFView(pdfURL: pdfURL)
-                            .environmentObject(jobManager)
-                            .onAppear {
-                                print("🔵 ToolFlowView: fullScreenCover presenting InteractiveSignPDFView with URL: \(pdfURL)")
-                            }
-                    } else {
-                        // Fallback view if URL is missing
-                        VStack {
-                            Text("Error: No PDF selected")
-                                .foregroundColor(OneBoxColors.primaryText)
-                            Button("Dismiss") {
-                                showInteractiveSigning = false
-                            }
-                            .foregroundColor(OneBoxColors.primaryGold)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(OneBoxColors.primaryGraphite)
-                        .onAppear {
-                            print("❌ ToolFlowView: fullScreenCover triggered but selectedURLs.first is nil!")
-                        }
+                InteractiveSignPDFViewWrapper(
+                    pdfURL: selectedURLs.first,
+                    jobManager: jobManager,
+                    onDismiss: {
+                        showInteractiveSigning = false
                     }
-                }
+                )
             }
             .onChange(of: showInteractiveSigning) { oldValue, newValue in
                 print("🔵 ToolFlowView: showInteractiveSigning changed from \(oldValue) to \(newValue)")
@@ -325,6 +308,40 @@ struct ToolFlowView: View {
             }
         }
         return totalSize
+    }
+}
+
+// MARK: - Interactive Sign PDF View Wrapper
+struct InteractiveSignPDFViewWrapper: View {
+    let pdfURL: URL?
+    let jobManager: JobManager
+    let onDismiss: () -> Void
+    
+    var body: some View {
+        Group {
+            if let pdfURL = pdfURL {
+                InteractiveSignPDFView(pdfURL: pdfURL)
+                    .environmentObject(jobManager)
+                    .onAppear {
+                        print("🔵 ToolFlowView: fullScreenCover presenting InteractiveSignPDFView with URL: \(pdfURL)")
+                    }
+            } else {
+                // Fallback view if URL is missing
+                VStack {
+                    Text("Error: No PDF selected")
+                        .foregroundColor(OneBoxColors.primaryText)
+                    Button("Dismiss") {
+                        onDismiss()
+                    }
+                    .foregroundColor(OneBoxColors.primaryGold)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(OneBoxColors.primaryGraphite)
+                .onAppear {
+                    print("❌ ToolFlowView: fullScreenCover triggered but selectedURLs.first is nil!")
+                }
+            }
+        }
     }
 }
 

@@ -714,8 +714,18 @@ public actor PDFProcessor {
 
         let outputURL = temporaryOutputURL(prefix: "signed")
         
+        // Ensure temporary directory exists and is writable
+        let tempDir = FileManager.default.temporaryDirectory
+        if !FileManager.default.fileExists(atPath: tempDir.path) {
+            try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        }
+        
         // Check if context creation succeeds
         guard UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil) else {
+            // Context creation failed - check if it's a storage issue
+            if let availableSpace = try? getAvailableDiskSpace(), availableSpace < 10 * 1024 * 1024 {
+                throw PDFError.insufficientStorage(neededMB: 10.0)
+            }
             throw PDFError.contextCreationFailed
         }
         defer { UIGraphicsEndPDFContext() }
@@ -785,12 +795,26 @@ public actor PDFProcessor {
         
         // Verify output file was created and is valid
         guard FileManager.default.fileExists(atPath: outputURL.path) else {
+            // Check if temporary directory is accessible
+            let tempDir = FileManager.default.temporaryDirectory
+            if !FileManager.default.fileExists(atPath: tempDir.path) {
+                throw PDFError.writeFailed // Temporary directory doesn't exist
+            }
+            // Check available space
+            if let availableSpace = try? getAvailableDiskSpace(), availableSpace < 10 * 1024 * 1024 {
+                throw PDFError.insufficientStorage(neededMB: 10.0)
+            }
             throw PDFError.writeFailed
         }
         
         // Verify output is a valid PDF
         guard PDFDocument(url: outputURL) != nil else {
-            throw PDFError.writeFailed
+            // File exists but PDF is invalid - might be corrupted
+            // Try to get file size to see if it was written
+            if let fileSize = getFileSize(url: outputURL), fileSize == 0 {
+                throw PDFError.writeFailed // File is empty
+            }
+            throw PDFError.writeFailed // PDF is corrupted
         }
 
         return outputURL

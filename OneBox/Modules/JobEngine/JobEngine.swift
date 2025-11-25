@@ -699,7 +699,8 @@ actor JobProcessor {
             case .contextCreationFailed:
                 userMessage = "Failed to create PDF. You may be running low on storage space."
             case .writeFailed:
-                userMessage = "Unable to save the signed PDF. Please free up storage space and try again."
+                // Check if it's actually a storage issue
+                userMessage = "Unable to save the signed PDF. This could be due to insufficient storage space, file permissions, or a temporary system issue. Please try again or free up storage space."
             case .insufficientStorage(let neededMB):
                 userMessage = String(format: "Not enough storage space. Please free up at least %.1f MB and try again.", neededMB)
             case .passwordProtected(let name):

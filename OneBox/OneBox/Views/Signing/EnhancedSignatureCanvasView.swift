@@ -198,8 +198,8 @@ struct EnhancedSignatureCanvasView: View {
             // Compress if needed
             var finalData = finalImage.pngData() ?? imageData
             let maxSize = 10 * 1024 * 1024 // 10MB
-            if let data = finalData, data.count > maxSize {
-                finalData = finalImage.jpegData(compressionQuality: 0.7) ?? data
+            if finalData.count > maxSize {
+                finalData = finalImage.jpegData(compressionQuality: 0.7) ?? finalData
             }
             
             signatureData = finalData

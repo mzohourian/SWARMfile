@@ -318,8 +318,17 @@ class TouchableCanvasView: UIView {
     
     override func layoutSubviews() {
         super.layoutSubviews()
-        // Ensure canvas view has proper frame after layout
-        canvasView?.frame = bounds
+        // CRITICAL: Ensure canvas view has proper frame after layout
+        // This is essential for touch input on real devices
+        if let canvasView = canvasView {
+            canvasView.frame = bounds
+            // Force canvas to update its internal layout
+            canvasView.setNeedsLayout()
+            canvasView.layoutIfNeeded()
+            // Re-enable interaction after layout (sometimes gets disabled on real devices)
+            canvasView.isUserInteractionEnabled = true
+            canvasView.drawingPolicy = .anyInput
+        }
     }
     
     // CRITICAL: Override hit testing to ensure touches reach the canvas

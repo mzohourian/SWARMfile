@@ -37,21 +37,14 @@ struct EnhancedSignatureCanvasView: View {
                     .padding(.top, OneBoxSpacing.large)
                     .padding(.horizontal, OneBoxSpacing.medium)
                     
-                    // Large Drawing Canvas
-                    ZStack {
-                        // Background - ensure it doesn't block touches
-                        RoundedRectangle(cornerRadius: OneBoxRadius.large)
-                            .fill(Color.white)
-                            .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
-                            .allowsHitTesting(false) // Don't block touches to canvas
-                        
-                        // Drawing Canvas - MUST be on top and receive all touches
+                    // Large Drawing Canvas - simplified to avoid touch blocking
+                    VStack {
                         EnhancedSignatureCanvasWrapper(canvasViewRef: $canvasViewRef) { hasDrawing in
                             self.hasDrawing = hasDrawing
                         }
-                        .padding(OneBoxSpacing.medium)
-                        .allowsHitTesting(true) // Explicitly enable hit testing
-                        .zIndex(1) // Ensure it's on top
+                        .background(Color.white)
+                        .cornerRadius(OneBoxRadius.large)
+                        .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
                     }
                     .frame(height: 500) // Large, usable size
                     .padding(.horizontal, OneBoxSpacing.medium)

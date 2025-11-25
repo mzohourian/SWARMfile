@@ -38,14 +38,12 @@ struct EnhancedSignatureCanvasView: View {
                     .padding(.horizontal, OneBoxSpacing.medium)
                     
                     // Large Drawing Canvas - simplified to avoid touch blocking
-                    VStack {
-                        EnhancedSignatureCanvasWrapper(canvasViewRef: $canvasViewRef) { hasDrawing in
-                            self.hasDrawing = hasDrawing
-                        }
-                        .background(Color.white)
-                        .cornerRadius(OneBoxRadius.large)
-                        .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+                    EnhancedSignatureCanvasWrapper(canvasViewRef: $canvasViewRef) { hasDrawing in
+                        self.hasDrawing = hasDrawing
                     }
+                    .background(Color.white)
+                    .cornerRadius(OneBoxRadius.large)
+                    .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
                     .frame(height: 500) // Large, usable size
                     .padding(.horizontal, OneBoxSpacing.medium)
                     .padding(.vertical, OneBoxSpacing.large)

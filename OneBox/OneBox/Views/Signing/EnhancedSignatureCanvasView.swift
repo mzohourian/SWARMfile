@@ -199,8 +199,9 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
     @Binding var canvasViewRef: PKCanvasView?
     let onDrawingChanged: (Bool) -> Void
     
-    func makeUIView(context: Context) -> PKCanvasView {
-        // Create a fresh canvas view - don't reuse from state
+    func makeUIView(context: Context) -> TouchableCanvasView {
+        // Use a custom wrapper view that ensures touches work
+        let wrapperView = TouchableCanvasView()
         let canvasView = PKCanvasView()
         
         // CRITICAL: Configure for touch input FIRST, before anything else
@@ -210,7 +211,7 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         // Configure canvas for better drawing experience
         canvasView.tool = PKInkingTool(.pen, color: .black, width: 3.0)
         canvasView.drawingPolicy = .anyInput // Allow finger and pencil
-        canvasView.backgroundColor = .white // Use white background instead of clear
+        canvasView.backgroundColor = .white
         canvasView.isOpaque = true
         
         // Disable scrolling and bouncing
@@ -224,18 +225,28 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         canvasView.delaysContentTouches = false
         canvasView.canCancelContentTouches = false
         
-        // CRITICAL: Ensure the canvas view is properly set up for drawing
-        // Don't disable PencilKit's internal gestures - they're needed for drawing
-        
         // Set up delegate
         canvasView.delegate = context.coordinator
+        
+        // Add canvas to wrapper
+        wrapperView.addSubview(canvasView)
+        wrapperView.canvasView = canvasView
+        
+        // Set up constraints
+        canvasView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            canvasView.topAnchor.constraint(equalTo: wrapperView.topAnchor),
+            canvasView.leadingAnchor.constraint(equalTo: wrapperView.leadingAnchor),
+            canvasView.trailingAnchor.constraint(equalTo: wrapperView.trailingAnchor),
+            canvasView.bottomAnchor.constraint(equalTo: wrapperView.bottomAnchor)
+        ])
         
         // Store reference
         DispatchQueue.main.async {
             canvasViewRef = canvasView
         }
         
-        return canvasView
+        return wrapperView
     }
     
     func updateUIView(_ uiView: PKCanvasView, context: Context) {
@@ -269,6 +280,45 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
             let hasDrawing = !canvasView.drawing.bounds.isEmpty
             onDrawingChanged(hasDrawing)
         }
+    }
+}
+
+// MARK: - Touchable Canvas View Wrapper
+class TouchableCanvasView: UIView {
+    var canvasView: PKCanvasView?
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setup()
+    }
+    
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setup()
+    }
+    
+    private func setup() {
+        backgroundColor = .white
+        isUserInteractionEnabled = true
+        isMultipleTouchEnabled = false
+    }
+    
+    // CRITICAL: Override hit testing to ensure touches reach the canvas
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        // Always return the canvas view if it exists and point is within bounds
+        if let canvasView = canvasView, bounds.contains(point) {
+            let canvasPoint = convert(point, to: canvasView)
+            if let hitView = canvasView.hitTest(canvasPoint, with: event) {
+                return hitView
+            }
+            return canvasView
+        }
+        return super.hitTest(point, with: event)
+    }
+    
+    // Ensure touches are passed through
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        return bounds.contains(point)
     }
 }
 

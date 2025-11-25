@@ -80,7 +80,7 @@ struct ToolFlowView: View {
                     currentJob = job
                     step = .processing
                     paymentsManager.consumeExport()
-                    // Observe job completion
+                    // Observe job completion with error handling
                     observeJobCompletion(job)
                 }
             )

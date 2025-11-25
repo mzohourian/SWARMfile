@@ -447,6 +447,22 @@ struct InteractiveSignPDFView: View {
         // For now, we'll use the first placement (we'll update CorePDF to support multiple later)
         let firstPlacement = signaturePlacements[0]
         
+        // Get the actual page bounds for size calculation
+        guard let document = pdfDocument,
+              let page = document.page(at: firstPlacement.pageIndex) else {
+            print("❌ InteractiveSignPDF: Cannot get page for signature placement")
+            return
+        }
+        
+        let pageBounds = page.bounds(for: .mediaBox)
+        let pageWidth = pageBounds.width
+        
+        // Calculate signature size as a ratio of page width (must be between 0.0 and 1.0)
+        // The placement size is in screen coordinates, we need to normalize it to page coordinates
+        // For now, use a safe default if calculation would be invalid
+        let calculatedSize = pageWidth > 0 ? Double(firstPlacement.size.width / pageWidth) : 0.15
+        let signatureSize = max(0.05, min(1.0, calculatedSize)) // Clamp between 0.05 and 1.0
+        
         var settings = JobSettings()
         
         switch firstPlacement.signatureData {
@@ -459,7 +475,10 @@ struct InteractiveSignPDFView: View {
         settings.signaturePosition = .bottomRight // Default, will be overridden by custom position
         settings.signatureCustomPosition = firstPlacement.position
         settings.signaturePageIndex = firstPlacement.pageIndex
-        settings.signatureSize = Double(firstPlacement.size.width / 612.0) // Normalize to page width
+        settings.signatureSize = signatureSize
+        settings.signatureOpacity = 1.0 // Full opacity by default
+        
+        print("🔵 InteractiveSignPDF: Processing signature with size: \(signatureSize), pageIndex: \(firstPlacement.pageIndex), position: \(firstPlacement.position)")
         
         let job = Job(
             type: .pdfSign,
@@ -468,15 +487,22 @@ struct InteractiveSignPDFView: View {
         )
         
         Task {
-            await jobManager.submitJob(job)
-            await MainActor.run {
-                // Notify parent that job was submitted, then dismiss
-                onJobSubmitted(job)
-                dismiss()
+            do {
+                await jobManager.submitJob(job)
+                await MainActor.run {
+                    // Notify parent that job was submitted, then dismiss
+                    onJobSubmitted(job)
+                    dismiss()
+                }
+                HapticManager.shared.notification(.success)
+            } catch {
+                print("❌ InteractiveSignPDF: Failed to submit job: \(error)")
+                await MainActor.run {
+                    // Show error to user
+                    loadError = "Failed to submit signing job: \(error.localizedDescription)"
+                }
             }
         }
-        
-        HapticManager.shared.notification(.success)
     }
 }
 

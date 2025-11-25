@@ -90,11 +90,19 @@ struct InteractiveSignPDFView: View {
                         VStack(spacing: OneBoxSpacing.medium) {
                             ProgressView()
                                 .tint(OneBoxColors.primaryGold)
+                                .scaleEffect(1.5)
                             Text("Loading PDF...")
                                 .font(OneBoxTypography.body)
                                 .foregroundColor(OneBoxColors.secondaryText)
+                            if isLoadingPDF {
+                                Text("Please wait...")
+                                    .font(OneBoxTypography.caption)
+                                    .foregroundColor(OneBoxColors.tertiaryText)
+                                    .padding(.top, OneBoxSpacing.tiny)
+                            }
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(OneBoxColors.primaryGraphite)
                     }
                     
                     // Controls Bar
@@ -137,7 +145,15 @@ struct InteractiveSignPDFView: View {
                 }
             }
             .task {
+                print("🔵 InteractiveSignPDF: View appeared, starting PDF load...")
                 await loadPDF()
+            }
+            .onAppear {
+                print("🔵 InteractiveSignPDF: onAppear called")
+                print("🔵 InteractiveSignPDF: pdfURL: \(pdfURL)")
+                print("🔵 InteractiveSignPDF: pdfDocument is nil: \(pdfDocument == nil)")
+                print("🔵 InteractiveSignPDF: isLoadingPDF: \(isLoadingPDF)")
+                print("🔵 InteractiveSignPDF: loadError: \(loadError ?? "nil")")
             }
         }
     }
@@ -286,52 +302,66 @@ struct InteractiveSignPDFView: View {
     // MARK: - Functions
     @MainActor
     private func loadPDF(retryCount: Int = 0) async {
+        print("🔵 InteractiveSignPDF: loadPDF called, retryCount: \(retryCount)")
+        print("🔵 InteractiveSignPDF: PDF URL: \(pdfURL)")
+        print("🔵 InteractiveSignPDF: PDF URL path: \(pdfURL.path)")
+        
         isLoadingPDF = true
         loadError = nil
         
         // Start accessing security-scoped resource (only on first attempt)
         if retryCount == 0 {
-            _ = pdfURL.startAccessingSecurityScopedResource()
+            let hasAccess = pdfURL.startAccessingSecurityScopedResource()
+            print("🔵 InteractiveSignPDF: Security-scoped access: \(hasAccess)")
         }
         
         // Verify file exists (with retry for timing issues)
-        guard FileManager.default.fileExists(atPath: pdfURL.path) else {
+        let fileExists = FileManager.default.fileExists(atPath: pdfURL.path)
+        print("🔵 InteractiveSignPDF: File exists check: \(fileExists)")
+        
+        guard fileExists else {
             if retryCount < 3 {
+                print("🔵 InteractiveSignPDF: File not found, retrying in 0.5s (attempt \(retryCount + 1)/3)")
                 try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
                 await loadPDF(retryCount: retryCount + 1)
                 return
             }
             // File not found - show error
-            print("InteractiveSignPDF Error: File not found at path: \(pdfURL.path)")
+            print("❌ InteractiveSignPDF Error: File not found at path after 3 retries: \(pdfURL.path)")
             loadError = "PDF file not found. Please try selecting the file again."
             isLoadingPDF = false
             return
         }
         
         // Try to load PDF document
+        print("🔵 InteractiveSignPDF: Attempting to load PDFDocument from URL...")
         guard let pdf = PDFDocument(url: pdfURL) else {
             if retryCount < 3 {
+                print("🔵 InteractiveSignPDF: Failed to load PDF, retrying in 0.5s (attempt \(retryCount + 1)/3)")
                 try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
                 await loadPDF(retryCount: retryCount + 1)
                 return
             }
-            print("InteractiveSignPDF Error: Failed to load PDF from URL: \(pdfURL)")
+            print("❌ InteractiveSignPDF Error: Failed to load PDF from URL after 3 retries: \(pdfURL)")
             loadError = "Failed to load PDF. The file may be corrupted or password-protected."
             isLoadingPDF = false
             return
         }
         
+        print("🔵 InteractiveSignPDF: PDFDocument loaded, page count: \(pdf.pageCount)")
+        
         // Check if PDF has pages
         guard pdf.pageCount > 0 else {
-            print("InteractiveSignPDF Error: PDF has no pages")
+            print("❌ InteractiveSignPDF Error: PDF has no pages")
             loadError = "This PDF has no pages."
             isLoadingPDF = false
             return
         }
         
-        print("InteractiveSignPDF: Successfully loaded PDF with \(pdf.pageCount) pages")
+        print("✅ InteractiveSignPDF: Successfully loaded PDF with \(pdf.pageCount) pages")
         pdfDocument = pdf
         isLoadingPDF = false
+        print("✅ InteractiveSignPDF: pdfDocument state updated, isLoadingPDF: \(isLoadingPDF)")
     }
     
     private func detectSignatureFields() {

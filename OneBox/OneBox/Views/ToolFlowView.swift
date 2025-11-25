@@ -50,168 +50,181 @@ struct ToolFlowView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                // OneBox Standard background
-                OneBoxColors.primaryGraphite.ignoresSafeArea()
-                
-                Group {
-                    switch step {
-                case .selectInput:
-                    InputSelectionView(
-                        tool: tool,
-                        selectedURLs: $selectedURLs,
-                        onContinue: {
-                            print("🔵 ToolFlowView: onContinue called")
-                            print("🔵 ToolFlowView: tool = \(tool)")
-                            print("🔵 ToolFlowView: selectedURLs.count = \(selectedURLs.count)")
-                            
-                            if tool == .pdfOrganize {
-                                // Page Organizer uses a custom interactive flow
-                                if let url = selectedURLs.first {
-                                    pageOrganizerURL = IdentifiableURL(url: url)
-                                }
-                            } else if tool == .pdfRedact {
-                                // Redaction uses a custom interactive flow
-                                if !selectedURLs.isEmpty {
-                                    // Show RedactionView directly
-                                    showRedactionView = true
-                                }
-                            } else if tool == .pdfSign {
-                                // Sign PDF uses interactive flow
-                                if !selectedURLs.isEmpty {
-                                    print("🔵 ToolFlowView: Setting showInteractiveSigning = true")
-                                    print("🔵 ToolFlowView: selectedURLs.count = \(selectedURLs.count)")
-                                    print("🔵 ToolFlowView: First URL = \(selectedURLs.first?.absoluteString ?? "nil")")
-                                    showInteractiveSigning = true
-                                } else {
-                                    // No file selected - should not happen, but handle gracefully
-                                    print("❌ ToolFlowView: No URLs selected for PDF signing")
-                                    return
-                                }
-                            } else {
-                                // Standard flow continues to configuration
-                                step = .configure
-                            }
-                        }
-                    )
-                case .configure:
-                    ConfigurationView(
-                        tool: tool,
-                        settings: $settings,
-                        selectedURLs: selectedURLs,
-                        onProcess: processFiles
-                    )
-                case .processing:
-                    ProcessingView(job: currentJob)
-                case .exportPreview:
-                    if let job = currentJob, !job.outputURLs.isEmpty {
-                        ExportPreviewView(
-                            outputURLs: job.outputURLs,
-                            exportTitle: tool.displayName,
-                            originalSize: calculateOriginalSize(),
-                            onConfirm: {
-                                step = .result
-                            },
-                            onCancel: {
-                                dismiss()
-                            }
-                        )
-                    }
-                case .result:
-                    if let job = currentJob {
-                        JobResultView(job: job)
-                    }
+            mainContent
+        }
+        .navigationTitle(tool.displayName)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbarBackground(OneBoxColors.primaryGraphite, for: .navigationBar)
+        .toolbar {
+            toolbarContent
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+        }
+        .fullScreenCover(item: $pageOrganizerURL) { identifiableURL in
+            PageOrganizerView(pdfURL: identifiableURL.url)
+                .environmentObject(jobManager)
+                .environmentObject(paymentsManager)
+        }
+        .fullScreenCover(isPresented: $showInteractiveSigning) {
+            InteractiveSignPDFViewWrapper(
+                pdfURL: selectedURLs.first,
+                jobManager: jobManager,
+                onDismiss: {
+                    showInteractiveSigning = false
                 }
-                }
-            }
-            .navigationTitle(tool.displayName)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .toolbarBackground(OneBoxColors.primaryGraphite, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if step == .selectInput {
-                        Button("Cancel") {
-                            dismiss()
-                            HapticManager.shared.impact(.light)
-                        }
-                        .foregroundColor(OneBoxColors.primaryText)
-                    } else if step == .configure {
-                        Button(action: {
-                            step = .selectInput
-                            HapticManager.shared.impact(.light)
-                        }) {
-                            HStack(spacing: OneBoxSpacing.tiny) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 14, weight: .medium))
-                                Text("Back")
-                                    .font(OneBoxTypography.caption)
-                            }
-                            .foregroundColor(OneBoxColors.primaryText)
-                        }
-                    } else if step == .exportPreview {
-                        // ExportPreviewView handles its own navigation
-                        EmptyView()
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if step == .selectInput || step == .configure {
-                        SecurityBadge(style: .minimal)
-                    }
-                }
-            }
-            .sheet(isPresented: $showPaywall) {
-                PaywallView()
-            }
-            .fullScreenCover(item: $pageOrganizerURL) { identifiableURL in
-                PageOrganizerView(pdfURL: identifiableURL.url)
+            )
+        }
+        .onChange(of: showInteractiveSigning) { oldValue, newValue in
+            print("🔵 ToolFlowView: showInteractiveSigning changed from \(oldValue) to \(newValue)")
+        }
+        .fullScreenCover(isPresented: $showRedactionView) {
+            if let url = selectedURLs.first {
+                RedactionView(pdfURL: url)
                     .environmentObject(jobManager)
-                    .environmentObject(paymentsManager)
             }
-            .fullScreenCover(isPresented: $showInteractiveSigning) {
-                InteractiveSignPDFViewWrapper(
-                    pdfURL: selectedURLs.first,
-                    jobManager: jobManager,
-                    onDismiss: {
-                        showInteractiveSigning = false
-                    }
-                )
-            }
-            .onChange(of: showInteractiveSigning) { oldValue, newValue in
-                print("🔵 ToolFlowView: showInteractiveSigning changed from \(oldValue) to \(newValue)")
-            }
-            .fullScreenCover(isPresented: $showRedactionView) {
-                if let url = selectedURLs.first {
-                    RedactionView(pdfURL: url)
-                        .environmentObject(jobManager)
-                }
-            }
-            .alert("Error", isPresented: $showError) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(errorMessage)
-            }
-            .sheet(isPresented: $showComplimentaryExportModal) {
-                ComplimentaryExportModal(
-                    onContinue: {
-                        showComplimentaryExportModal = false
-                        proceedWithExportAfterComplimentary()
-                    },
-                    onUpgrade: {
-                        showComplimentaryExportModal = false
-                        showPaywall = true
-                    }
-                )
-            }
-            .alert("View-Only Mode", isPresented: $showViewOnlyModeAlert) {
-                Button("Upgrade to Pro", role: .none) {
+        }
+        .alert("Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+        .sheet(isPresented: $showComplimentaryExportModal) {
+            ComplimentaryExportModal(
+                onContinue: {
+                    showComplimentaryExportModal = false
+                    proceedWithExportAfterComplimentary()
+                },
+                onUpgrade: {
+                    showComplimentaryExportModal = false
                     showPaywall = true
                 }
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("You've reached your daily free export limit. Upgrade to Pro for unlimited exports, or wait until tomorrow. You can still view and manage your existing files.")
+            )
+        }
+        .alert("View-Only Mode", isPresented: $showViewOnlyModeAlert) {
+            Button("Upgrade to Pro", role: .none) {
+                showPaywall = true
             }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("You've reached your daily free export limit. Upgrade to Pro for unlimited exports, or wait until tomorrow. You can still view and manage your existing files.")
+        }
+    }
+    
+    private var mainContent: some View {
+        ZStack {
+            OneBoxColors.primaryGraphite.ignoresSafeArea()
+            stepContent
+        }
+    }
+    
+    @ViewBuilder
+    private var stepContent: some View {
+        switch step {
+        case .selectInput:
+            InputSelectionView(
+                tool: tool,
+                selectedURLs: $selectedURLs,
+                onContinue: handleContinue
+            )
+        case .configure:
+            ConfigurationView(
+                tool: tool,
+                settings: $settings,
+                selectedURLs: selectedURLs,
+                onProcess: processFiles
+            )
+        case .processing:
+            ProcessingView(job: currentJob)
+        case .exportPreview:
+            if let job = currentJob, !job.outputURLs.isEmpty {
+                ExportPreviewView(
+                    outputURLs: job.outputURLs,
+                    exportTitle: tool.displayName,
+                    originalSize: calculateOriginalSize(),
+                    onConfirm: {
+                        step = .result
+                    },
+                    onCancel: {
+                        dismiss()
+                    }
+                )
+            }
+        case .result:
+            if let job = currentJob {
+                JobResultView(job: job)
+            }
+        }
+    }
+    
+    private func handleContinue() {
+        print("🔵 ToolFlowView: onContinue called")
+        print("🔵 ToolFlowView: tool = \(tool)")
+        print("🔵 ToolFlowView: selectedURLs.count = \(selectedURLs.count)")
+        
+        if tool == .pdfOrganize {
+            if let url = selectedURLs.first {
+                pageOrganizerURL = IdentifiableURL(url: url)
+            }
+        } else if tool == .pdfRedact {
+            if !selectedURLs.isEmpty {
+                showRedactionView = true
+            }
+        } else if tool == .pdfSign {
+            if !selectedURLs.isEmpty {
+                print("🔵 ToolFlowView: Setting showInteractiveSigning = true")
+                print("🔵 ToolFlowView: selectedURLs.count = \(selectedURLs.count)")
+                print("🔵 ToolFlowView: First URL = \(selectedURLs.first?.absoluteString ?? "nil")")
+                showInteractiveSigning = true
+            } else {
+                print("❌ ToolFlowView: No URLs selected for PDF signing")
+            }
+        } else {
+            step = .configure
+        }
+    }
+    
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            leadingToolbarItem
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            trailingToolbarItem
+        }
+    }
+    
+    @ViewBuilder
+    private var leadingToolbarItem: some View {
+        if step == .selectInput {
+            Button("Cancel") {
+                dismiss()
+                HapticManager.shared.impact(.light)
+            }
+            .foregroundColor(OneBoxColors.primaryText)
+        } else if step == .configure {
+            Button(action: {
+                step = .selectInput
+                HapticManager.shared.impact(.light)
+            }) {
+                HStack(spacing: OneBoxSpacing.tiny) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .medium))
+                    Text("Back")
+                        .font(OneBoxTypography.caption)
+                }
+                .foregroundColor(OneBoxColors.primaryText)
+            }
+        } else if step == .exportPreview {
+            EmptyView()
+        }
+    }
+    
+    @ViewBuilder
+    private var trailingToolbarItem: some View {
+        if step == .selectInput || step == .configure {
+            SecurityBadge(style: .minimal)
         }
     }
 

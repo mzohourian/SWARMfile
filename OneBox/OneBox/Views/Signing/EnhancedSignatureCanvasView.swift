@@ -48,17 +48,7 @@ struct EnhancedSignatureCanvasView: View {
                     .padding(.horizontal, OneBoxSpacing.medium)
                     .padding(.vertical, OneBoxSpacing.large)
                     .contentShape(Rectangle()) // Ensure entire area is tappable
-                    .simultaneousGesture(
-                        TapGesture()
-                            .onEnded { _ in
-                                print("🔵 EnhancedSignatureCanvas: Tap detected on canvas area")
-                                // Force canvas to become first responder on tap
-                                if let canvasView = canvasViewRef {
-                                    _ = canvasView.becomeFirstResponder()
-                                    print("🔵 EnhancedSignatureCanvas: Canvas made first responder after tap")
-                                }
-                            }
-                    )
+                    // Removed simultaneous gesture - may interfere with PencilKit's own gestures
                     
                     // Controls
                     HStack(spacing: OneBoxSpacing.large) {
@@ -140,23 +130,30 @@ struct EnhancedSignatureCanvasView: View {
             }
             .onAppear {
                 // CRITICAL: Ensure canvas is ready after view appears (for real devices)
-                // Small delay to ensure layout is complete
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                // Longer delay for fullScreenCover to ensure everything is ready
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                     if let canvasView = canvasViewRef {
-                        // Force reconfiguration
+                        // Force reconfiguration - CRITICAL for real devices
                         canvasView.isUserInteractionEnabled = true
                         canvasView.drawingPolicy = .anyInput
                         canvasView.tool = PKInkingTool(.pen, color: .black, width: 3.0)
                         canvasView.delaysContentTouches = false
                         canvasView.canCancelContentTouches = false
+                        canvasView.isMultipleTouchEnabled = false
                         // Force layout update
                         canvasView.setNeedsLayout()
                         canvasView.layoutIfNeeded()
                         // CRITICAL: Make canvas first responder to receive touches
-                        if canvasView.canBecomeFirstResponder {
+                        if canvasView.canBecomeFirstResponder && !canvasView.isFirstResponder {
                             _ = canvasView.becomeFirstResponder()
+                            print("🔵 EnhancedSignatureCanvas: Canvas reconfigured and made first responder in onAppear")
                         }
-                        print("🔵 EnhancedSignatureCanvas: Canvas reconfigured and made first responder")
+                        // Verify it worked
+                        print("🔵 EnhancedSignatureCanvas: isUserInteractionEnabled = \(canvasView.isUserInteractionEnabled)")
+                        print("🔵 EnhancedSignatureCanvas: isFirstResponder = \(canvasView.isFirstResponder)")
+                        print("🔵 EnhancedSignatureCanvas: drawingPolicy = \(canvasView.drawingPolicy.rawValue)")
+                    } else {
+                        print("❌ EnhancedSignatureCanvas: canvasViewRef is nil in onAppear")
                     }
                 }
             }
@@ -256,20 +253,24 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         canvasView.delaysContentTouches = false
         canvasView.canCancelContentTouches = false
         
-        // CRITICAL for real devices: Ensure canvas is ready to receive input
-        canvasView.becomeFirstResponder()
-        
         // Set up delegate
         canvasView.delegate = context.coordinator
         
-        // Store reference
+        // Store reference and ensure canvas is ready
         DispatchQueue.main.async {
             canvasViewRef = canvasView
-            // Ensure canvas is ready after view is added to hierarchy
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                canvasView.becomeFirstResponder()
+            // CRITICAL: Delay first responder until view is fully in hierarchy
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                // Re-verify all settings
                 canvasView.isUserInteractionEnabled = true
-                print("🔵 EnhancedSignatureCanvas: Canvas made first responder")
+                canvasView.drawingPolicy = .anyInput
+                canvasView.delaysContentTouches = false
+                canvasView.canCancelContentTouches = false
+                // Make first responder after everything is set up
+                if canvasView.canBecomeFirstResponder {
+                    _ = canvasView.becomeFirstResponder()
+                    print("🔵 EnhancedSignatureCanvas: Canvas configured and made first responder")
+                }
             }
         }
         

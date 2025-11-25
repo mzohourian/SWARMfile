@@ -235,6 +235,7 @@ struct SignaturePlacementOverlay: View {
                let image = UIImage(data: data) {
                 Image(uiImage: image)
                     .resizable()
+                    .renderingMode(.original) // Preserve transparency
                     .aspectRatio(contentMode: .fit)
                     .frame(width: currentSize.width, height: currentSize.height)
             } else if case .text(let text) = placement.signatureData {

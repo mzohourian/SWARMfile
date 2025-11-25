@@ -28,7 +28,8 @@ class CustomDrawingView: UIView {
     }
     
     private func setup() {
-        backgroundColor = .white
+        backgroundColor = .clear // Transparent background for signature
+        isOpaque = false // Allow transparency
         isUserInteractionEnabled = true
         isMultipleTouchEnabled = false
     }
@@ -78,11 +79,22 @@ class CustomDrawingView: UIView {
     }
     
     func getImage() -> UIImage? {
+        // Render with transparent background (opaque: false)
         UIGraphicsBeginImageContextWithOptions(bounds.size, false, 2.0)
         defer { UIGraphicsEndImageContext() }
         
         guard let context = UIGraphicsGetCurrentContext() else { return nil }
-        layer.render(in: context)
+        
+        // Clear the context to ensure transparency
+        context.clear(bounds)
+        
+        // Draw only the paths (not the background)
+        lineColor.setStroke()
+        for path in paths {
+            path.stroke()
+        }
+        path.stroke()
+        
         return UIGraphicsGetImageFromCurrentImageContext()
     }
     

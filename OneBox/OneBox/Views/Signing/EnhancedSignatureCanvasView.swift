@@ -181,25 +181,48 @@ struct EnhancedSignatureCanvasView: View {
             guard let image = customCanvas.getImage() else { return }
             guard let imageData = image.pngData() else { return }
             
-            // Scale down if too large
+            // Scale down if too large (preserve transparency)
             let maxDimension: CGFloat = 4096
             let finalImage: UIImage
             if image.size.width > maxDimension || image.size.height > maxDimension {
                 let scale = min(maxDimension / image.size.width, maxDimension / image.size.height)
                 let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+                // Use opaque: false to preserve transparency
                 UIGraphicsBeginImageContextWithOptions(newSize, false, 2.0)
-                image.draw(in: CGRect(origin: .zero, size: newSize))
+                defer { UIGraphicsEndImageContext() }
+                
+                // Clear context to ensure transparency
+                if let context = UIGraphicsGetCurrentContext() {
+                    context.clear(CGRect(origin: .zero, size: newSize))
+                }
+                
+                // Draw image with transparency preserved
+                image.draw(in: CGRect(origin: .zero, size: newSize), blendMode: .normal, alpha: 1.0)
                 finalImage = UIGraphicsGetImageFromCurrentImageContext() ?? image
-                UIGraphicsEndImageContext()
             } else {
                 finalImage = image
             }
             
-            // Compress if needed
+            // Always use PNG to preserve transparency (JPEG doesn't support alpha channel)
             var finalData = finalImage.pngData() ?? imageData
             let maxSize = 10 * 1024 * 1024 // 10MB
+            // Note: We don't convert to JPEG here because JPEG doesn't support transparency
+            // If size is too large, we'll need to reduce quality or dimensions instead
             if finalData.count > maxSize {
-                finalData = finalImage.jpegData(compressionQuality: 0.7) ?? finalData
+                // Re-scale to smaller size if PNG is too large
+                let reducedScale = 0.8
+                let reducedSize = CGSize(width: finalImage.size.width * reducedScale, height: finalImage.size.height * reducedScale)
+                UIGraphicsBeginImageContextWithOptions(reducedSize, false, 2.0)
+                defer { UIGraphicsEndImageContext() }
+                
+                if let context = UIGraphicsGetCurrentContext() {
+                    context.clear(CGRect(origin: .zero, size: reducedSize))
+                }
+                
+                finalImage.draw(in: CGRect(origin: .zero, size: reducedSize), blendMode: .normal, alpha: 1.0)
+                if let reducedImage = UIGraphicsGetImageFromCurrentImageContext() {
+                    finalData = reducedImage.pngData() ?? finalData
+                }
             }
             
             signatureData = finalData
@@ -224,10 +247,18 @@ struct EnhancedSignatureCanvasView: View {
         if image.size.width > maxDimension || image.size.height > maxDimension {
             let scale = min(maxDimension / image.size.width, maxDimension / image.size.height)
             let scaledSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-            UIGraphicsBeginImageContextWithOptions(scaledSize, false, 1.0)
-            image.draw(in: CGRect(origin: .zero, size: scaledSize))
+            // Use opaque: false to preserve transparency
+            UIGraphicsBeginImageContextWithOptions(scaledSize, false, 2.0)
+            defer { UIGraphicsEndImageContext() }
+            
+            // Clear context to ensure transparency
+            if let context = UIGraphicsGetCurrentContext() {
+                context.clear(CGRect(origin: .zero, size: scaledSize))
+            }
+            
+            // Draw image with transparency preserved
+            image.draw(in: CGRect(origin: .zero, size: scaledSize), blendMode: .normal, alpha: 1.0)
             finalImage = UIGraphicsGetImageFromCurrentImageContext() ?? image
-            UIGraphicsEndImageContext()
         }
         
         // Convert to PNG data

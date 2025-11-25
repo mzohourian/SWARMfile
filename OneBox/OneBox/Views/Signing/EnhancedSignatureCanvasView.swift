@@ -17,6 +17,8 @@ struct EnhancedSignatureCanvasView: View {
     @State private var hasDrawing = false
     @State private var showClearConfirmation = false
     @State private var canvasViewRef: PKCanvasView?
+    @State private var useCustomDrawing = false // Fallback flag
+    @State private var customCanvasRef: CustomDrawingView?
     
     var body: some View {
         NavigationStack {
@@ -129,31 +131,33 @@ struct EnhancedSignatureCanvasView: View {
                 Text("This will erase your entire signature.")
             }
             .onAppear {
-                // CRITICAL: Ensure canvas is ready after view appears (for real devices)
-                // Longer delay for fullScreenCover to ensure everything is ready
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    if let canvasView = canvasViewRef {
-                        // Force reconfiguration - CRITICAL for real devices
-                        canvasView.isUserInteractionEnabled = true
-                        canvasView.drawingPolicy = .anyInput
-                        canvasView.tool = PKInkingTool(.pen, color: .black, width: 3.0)
-                        canvasView.delaysContentTouches = false
-                        canvasView.canCancelContentTouches = false
-                        canvasView.isMultipleTouchEnabled = false
-                        // Force layout update
-                        canvasView.setNeedsLayout()
-                        canvasView.layoutIfNeeded()
-                        // CRITICAL: Make canvas first responder to receive touches
-                        if canvasView.canBecomeFirstResponder && !canvasView.isFirstResponder {
-                            _ = canvasView.becomeFirstResponder()
-                            print("🔵 EnhancedSignatureCanvas: Canvas reconfigured and made first responder in onAppear")
+                // Detect if we're on a real device and PencilKit might not work
+                // Based on the logs showing "handwritingd" connection errors, use custom drawing
+                #if targetEnvironment(simulator)
+                // Use PencilKit on simulator
+                useCustomDrawing = false
+                #else
+                // Use custom drawing on real devices to avoid PencilKit issues
+                useCustomDrawing = true
+                print("🔵 EnhancedSignatureCanvas: Using custom drawing fallback for real device")
+                #endif
+                
+                if !useCustomDrawing {
+                    // PencilKit configuration (for simulator)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        if let canvasView = canvasViewRef {
+                            canvasView.isUserInteractionEnabled = true
+                            canvasView.drawingPolicy = .anyInput
+                            canvasView.tool = PKInkingTool(.pen, color: .black, width: 3.0)
+                            canvasView.delaysContentTouches = false
+                            canvasView.canCancelContentTouches = false
+                            canvasView.isMultipleTouchEnabled = false
+                            canvasView.setNeedsLayout()
+                            canvasView.layoutIfNeeded()
+                            if canvasView.canBecomeFirstResponder && !canvasView.isFirstResponder {
+                                _ = canvasView.becomeFirstResponder()
+                            }
                         }
-                        // Verify it worked
-                        print("🔵 EnhancedSignatureCanvas: isUserInteractionEnabled = \(canvasView.isUserInteractionEnabled)")
-                        print("🔵 EnhancedSignatureCanvas: isFirstResponder = \(canvasView.isFirstResponder)")
-                        print("🔵 EnhancedSignatureCanvas: drawingPolicy = \(canvasView.drawingPolicy.rawValue)")
-                    } else {
-                        print("❌ EnhancedSignatureCanvas: canvasViewRef is nil in onAppear")
                     }
                 }
             }
@@ -161,6 +165,41 @@ struct EnhancedSignatureCanvasView: View {
     }
     
     private func saveSignature() {
+        if useCustomDrawing {
+            // Save from custom drawing
+            guard let customCanvas = customCanvasRef, customCanvas.hasDrawing else { return }
+            guard let image = customCanvas.getImage() else { return }
+            guard let imageData = image.pngData() else { return }
+            
+            // Scale down if too large
+            let maxDimension: CGFloat = 4096
+            let finalImage: UIImage
+            if image.size.width > maxDimension || image.size.height > maxDimension {
+                let scale = min(maxDimension / image.size.width, maxDimension / image.size.height)
+                let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+                UIGraphicsBeginImageContextWithOptions(newSize, false, 2.0)
+                image.draw(in: CGRect(origin: .zero, size: newSize))
+                finalImage = UIGraphicsGetImageFromCurrentImageContext() ?? image
+                UIGraphicsEndImageContext()
+            } else {
+                finalImage = image
+            }
+            
+            // Compress if needed
+            var finalData = finalImage.pngData() ?? imageData
+            let maxSize = 10 * 1024 * 1024 // 10MB
+            if let data = finalData, data.count > maxSize {
+                finalData = finalImage.jpegData(compressionQuality: 0.7) ?? data
+            }
+            
+            signatureData = finalData
+            onSave(finalData)
+            SignatureManager.shared.saveSignatureImage(finalData)
+            dismiss()
+            return
+        }
+        
+        // Save from PencilKit
         guard let canvasView = canvasViewRef, !canvasView.drawing.bounds.isEmpty else { return }
         
         let image = canvasView.drawing.image(

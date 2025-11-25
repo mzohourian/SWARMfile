@@ -128,6 +128,24 @@ struct EnhancedSignatureCanvasView: View {
             } message: {
                 Text("This will erase your entire signature.")
             }
+            .onAppear {
+                // CRITICAL: Ensure canvas is ready after view appears (for real devices)
+                // Small delay to ensure layout is complete
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    if let canvasView = canvasViewRef {
+                        // Force reconfiguration
+                        canvasView.isUserInteractionEnabled = true
+                        canvasView.drawingPolicy = .anyInput
+                        canvasView.tool = PKInkingTool(.pen, color: .black, width: 3.0)
+                        canvasView.delaysContentTouches = false
+                        canvasView.canCancelContentTouches = false
+                        // Force layout update
+                        canvasView.setNeedsLayout()
+                        canvasView.layoutIfNeeded()
+                        print("🔵 EnhancedSignatureCanvas: Canvas reconfigured after appear")
+                    }
+                }
+            }
         }
     }
     

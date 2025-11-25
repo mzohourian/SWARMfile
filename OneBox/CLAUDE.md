@@ -450,7 +450,23 @@ The app uses MVVM (Model-View-ViewModel), which means:
 
 ## Recent Changes
 
-**Most Recent (Today):**
+**Most Recent (Today - Sign PDF Redesign):**
+1. **Complete Sign PDF Feature Redesign:**
+   - Created comprehensive audit report identifying 15 critical issues and 8 UX problems
+   - Fixed all critical issues (memory crashes, validation, error handling)
+   - Built new interactive signing system with:
+     - Large, usable drawing canvas (500px height, improved PencilKit integration)
+     - Touch-to-place signatures on any page (not just last page)
+     - Pinch-to-resize signatures when selected
+     - Drag-to-move signatures when selected
+     - Auto-detect signature fields using Vision framework
+     - Multi-page support with navigation
+   - Created 5 new files: `InteractiveSignPDFView.swift`, `EnhancedSignatureCanvasView.swift`, `InteractivePDFPageView.swift`, `SignatureFieldDetectionService.swift`, `SignaturePlacement.swift`
+   - Integrated new view into `ToolFlowView.swift`
+   - Fixed all compilation errors (Button syntax, gesture handling, font initialization, scope issues)
+   - Enhanced error handling in `CorePDF.signPDF()` and `JobEngine.processPDFSign()`
+
+**Previous Session:**
 1. Fixed `Task.sleep` errors in `WorkflowAutomationView.swift` - Added `try` keyword to two `Task.sleep` calls (lines 1044 and 2058)
 
 **Previous Session:**

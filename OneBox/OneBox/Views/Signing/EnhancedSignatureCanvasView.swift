@@ -232,7 +232,7 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         wrapperView.addSubview(canvasView)
         wrapperView.canvasView = canvasView
         
-        // Set up constraints
+        // Set up constraints - CRITICAL for real devices
         canvasView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             canvasView.topAnchor.constraint(equalTo: wrapperView.topAnchor),
@@ -240,6 +240,12 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
             canvasView.trailingAnchor.constraint(equalTo: wrapperView.trailingAnchor),
             canvasView.bottomAnchor.constraint(equalTo: wrapperView.bottomAnchor)
         ])
+        
+        // CRITICAL: Force layout immediately for real devices
+        wrapperView.setNeedsLayout()
+        wrapperView.layoutIfNeeded()
+        canvasView.setNeedsLayout()
+        canvasView.layoutIfNeeded()
         
         // Store reference
         DispatchQueue.main.async {

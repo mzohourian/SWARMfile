@@ -249,18 +249,22 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         return wrapperView
     }
     
-    func updateUIView(_ uiView: PKCanvasView, context: Context) {
+    func updateUIView(_ uiView: TouchableCanvasView, context: Context) {
         // Ensure configuration is maintained on updates
-        uiView.isUserInteractionEnabled = true
-        uiView.drawingPolicy = .anyInput
-        uiView.tool = PKInkingTool(.pen, color: .black, width: 3.0)
-        uiView.delaysContentTouches = false
-        uiView.canCancelContentTouches = false
-        
-        // Update reference if needed
-        if canvasViewRef != uiView {
-            DispatchQueue.main.async {
-                canvasViewRef = uiView
+        if let canvasView = uiView.canvasView {
+            canvasView.isUserInteractionEnabled = true
+            canvasView.drawingPolicy = .anyInput
+            canvasView.tool = PKInkingTool(.pen, color: .black, width: 3.0)
+            canvasView.delaysContentTouches = false
+            canvasView.canCancelContentTouches = false
+            canvasView.backgroundColor = .white
+            canvasView.isOpaque = true
+            
+            // Update reference if needed
+            if canvasViewRef != canvasView {
+                DispatchQueue.main.async {
+                    canvasViewRef = canvasView
+                }
             }
         }
     }

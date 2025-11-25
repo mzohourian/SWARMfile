@@ -44,11 +44,13 @@ struct EnhancedSignatureCanvasView: View {
                             .fill(Color.white)
                             .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
                         
-                        // Drawing Canvas
+                        // Drawing Canvas - ensure it's on top and can receive touches
                         EnhancedSignatureCanvasWrapper(canvasView: $canvasView) { hasDrawing in
                             self.hasDrawing = hasDrawing
                         }
                         .padding(OneBoxSpacing.medium)
+                        .contentShape(Rectangle()) // Ensure entire area is tappable
+                        .allowsHitTesting(true) // Explicitly enable hit testing
                     }
                     .frame(height: 500) // Large, usable size
                     .padding(.horizontal, OneBoxSpacing.medium)

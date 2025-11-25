@@ -428,7 +428,42 @@ public struct SignatureDrawingView: UIViewRepresentable {
                 parent.signatureData = nil
             } else {
                 let image = canvasView.drawing.image(from: canvasView.drawing.bounds, scale: 2.0)
-                parent.signatureData = image.pngData()
+                
+                // Validate image size to prevent memory issues
+                let maxDimension: CGFloat = 4096
+                if image.size.width > maxDimension || image.size.height > maxDimension {
+                    // Scale down if too large
+                    let scale = min(maxDimension / image.size.width, maxDimension / image.size.height)
+                    let scaledSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+                    UIGraphicsBeginImageContextWithOptions(scaledSize, false, 1.0)
+                    image.draw(in: CGRect(origin: .zero, size: scaledSize))
+                    let scaledImage = UIGraphicsGetImageFromCurrentImageContext()
+                    UIGraphicsEndImageContext()
+                    
+                    if let scaledImage = scaledImage, let data = scaledImage.pngData() {
+                        // Limit PNG data size to 10MB
+                        if data.count <= 10 * 1024 * 1024 {
+                            parent.signatureData = data
+                        } else {
+                            // Compress further if still too large
+                            if let compressedData = scaledImage.jpegData(compressionQuality: 0.7) {
+                                parent.signatureData = compressedData
+                            }
+                        }
+                    }
+                } else {
+                    if let data = image.pngData() {
+                        // Limit PNG data size to 10MB
+                        if data.count <= 10 * 1024 * 1024 {
+                            parent.signatureData = data
+                        } else {
+                            // Use JPEG compression if PNG is too large
+                            if let compressedData = image.jpegData(compressionQuality: 0.8) {
+                                parent.signatureData = compressedData
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -589,21 +624,17 @@ public struct ReorderableFilePickerRow: View {
             Image(systemName: icon)
                 .foregroundColor(.accentColor)
                 .frame(width: 32)
-
             VStack(alignment: .leading, spacing: 2) {
                 Text(fileName)
                     .font(.subheadline)
                     .lineLimit(1)
-
                 if let fileSize = fileSize {
                     Text(fileSize)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
             }
-
             Spacer()
-
             if let onRemove = onRemove {
                 Button(action: onRemove) {
                     Image(systemName: "xmark.circle.fill")

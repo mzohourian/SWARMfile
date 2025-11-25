@@ -38,6 +38,7 @@ struct ToolFlowView: View {
     @State private var showRedactionView = false
     @State private var showComplimentaryExportModal = false
     @State private var showViewOnlyModeAlert = false
+    @State private var showInteractiveSigning = false
 
     enum FlowStep {
         case selectInput
@@ -70,6 +71,11 @@ struct ToolFlowView: View {
                                 if !selectedURLs.isEmpty {
                                     // Show RedactionView directly
                                     showRedactionView = true
+                                }
+                            } else if tool == .pdfSign {
+                                // Sign PDF uses interactive flow
+                                if !selectedURLs.isEmpty {
+                                    showInteractiveSigning = true
                                 }
                             } else {
                                 // Standard flow continues to configuration
@@ -109,6 +115,8 @@ struct ToolFlowView: View {
             }
             .navigationTitle(tool.displayName)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(OneBoxColors.primaryGraphite, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     if step == .selectInput {
@@ -149,6 +157,12 @@ struct ToolFlowView: View {
                 PageOrganizerView(pdfURL: identifiableURL.url)
                     .environmentObject(jobManager)
                     .environmentObject(paymentsManager)
+            }
+            .fullScreenCover(isPresented: $showInteractiveSigning) {
+                if let pdfURL = selectedURLs.first {
+                    InteractiveSignPDFView(pdfURL: pdfURL)
+                        .environmentObject(jobManager)
+                }
             }
             .fullScreenCover(isPresented: $showRedactionView) {
                 if let url = selectedURLs.first {
@@ -291,6 +305,7 @@ struct InputSelectionView: View {
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var preflightInsights: [PreflightInsight] = []
     @State private var showingWorkflowHooks = false
+    @State private var isEditingOrder = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -396,6 +411,11 @@ struct InputSelectionView: View {
                 }
             }
         }
+    }
+    
+    private func moveImages(from source: IndexSet, to destination: Int) {
+        selectedURLs.move(fromOffsets: source, toOffset: destination)
+        HapticManager.shared.impact(.light)
     }
     
     private func analyzeSelectedFiles() {
@@ -560,50 +580,91 @@ struct InputSelectionView: View {
                 )
             } else {
                 // Use luxury file cards for other tools
-                ScrollView {
-                    VStack(spacing: OneBoxSpacing.medium) {
-                        // File header with security message
-                        if !selectedURLs.isEmpty {
-                            HStack {
-                                VStack(alignment: .leading, spacing: OneBoxSpacing.tiny) {
-                                    Text("Selected Files")
-                                        .font(OneBoxTypography.cardTitle)
-                                        .foregroundColor(OneBoxColors.primaryText)
-                                    
-                                    Text("Ready for on-device processing")
-                                        .font(OneBoxTypography.caption)
-                                        .foregroundColor(OneBoxColors.secureGreen)
-                                }
+                VStack(spacing: OneBoxSpacing.medium) {
+                    // File header with security message
+                    if !selectedURLs.isEmpty {
+                        HStack {
+                            VStack(alignment: .leading, spacing: OneBoxSpacing.tiny) {
+                                Text(tool == .imagesToPDF ? "Images for PDF" : "Selected Files")
+                                    .font(OneBoxTypography.cardTitle)
+                                    .foregroundColor(OneBoxColors.primaryText)
                                 
-                                Spacer()
-                                
-                                SecurityBadge(style: .minimal)
+                                Text("Ready for on-device processing")
+                                    .font(OneBoxTypography.caption)
+                                    .foregroundColor(OneBoxColors.secureGreen)
                             }
-                            .padding(.horizontal, OneBoxSpacing.medium)
+                            
+                            Spacer()
+                            
+                            SecurityBadge(style: .minimal)
                         }
-                        
-                        // Pre-flight insights banner
-                        if !preflightInsights.isEmpty {
-                            preflightInsightsBanner
-                                .padding(.horizontal, OneBoxSpacing.medium)
-                        }
-                        
-                        // Workflow hooks banner
-                        workflowHooksBanner
-                            .padding(.horizontal, OneBoxSpacing.medium)
-                        
-                        ForEach(Array(selectedURLs.enumerated()), id: \.offset) { index, url in
-                            luxuryFileCard(url: url, index: index) {
-                                selectedURLs.remove(at: index)
-                                HapticManager.shared.impact(.light)
-                                analyzeSelectedFiles() // Re-analyze after removal
-                            }
-                        }
-
-                        selectButton
+                        .padding(.horizontal, OneBoxSpacing.medium)
+                    }
+                    
+                    // Pre-flight insights banner
+                    if !preflightInsights.isEmpty {
+                        preflightInsightsBanner
                             .padding(.horizontal, OneBoxSpacing.medium)
                     }
-                    .padding(.vertical, OneBoxSpacing.medium)
+                    
+                    // Workflow hooks banner (only show if no preflight insights already show workflow option)
+                    if !preflightInsights.contains(where: { $0.actionTitle == "Create Workflow" }) {
+                        workflowHooksBanner
+                            .padding(.horizontal, OneBoxSpacing.medium)
+                    }
+                    
+                    // Header with edit button for Images to PDF
+                    if tool == .imagesToPDF && !selectedURLs.isEmpty {
+                        HStack {
+                            Spacer()
+                            
+                            Button(isEditingOrder ? "Done" : "Edit Order") {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isEditingOrder.toggle()
+                                }
+                                HapticManager.shared.selection()
+                            }
+                            .foregroundColor(OneBoxColors.primaryGold)
+                            .font(OneBoxTypography.caption)
+                        }
+                        .padding(.horizontal, OneBoxSpacing.medium)
+                    }
+                    
+                    // Use List for Image to PDF to enable drag-and-drop, ScrollView for others
+                    if tool == .imagesToPDF {
+                        List {
+                            ForEach(Array(selectedURLs.enumerated()), id: \.offset) { index, url in
+                                luxuryFileCard(url: url, index: index) {
+                                    selectedURLs.remove(at: index)
+                                    HapticManager.shared.impact(.light)
+                                    analyzeSelectedFiles() // Re-analyze after removal
+                                }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets())
+                            }
+                            .onMove(perform: isEditingOrder ? moveImages : nil)
+                        }
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
+                        .environment(\.editMode, .constant(isEditingOrder ? .active : .inactive))
+                    } else {
+                        ScrollView {
+                            VStack(spacing: OneBoxSpacing.medium) {
+                                ForEach(Array(selectedURLs.enumerated()), id: \.offset) { index, url in
+                                    luxuryFileCard(url: url, index: index) {
+                                        selectedURLs.remove(at: index)
+                                        HapticManager.shared.impact(.light)
+                                        analyzeSelectedFiles() // Re-analyze after removal
+                                    }
+                                }
+                            }
+                            .padding(.vertical, OneBoxSpacing.medium)
+                        }
+                    }
+                    
+                    selectButton
+                        .padding(.horizontal, OneBoxSpacing.medium)
                 }
             }
         }
@@ -673,15 +734,28 @@ struct InputSelectionView: View {
     private func luxuryFileCard(url: URL, index: Int, onRemove: @escaping () -> Void) -> some View {
         OneBoxCard(style: .interactive) {
             HStack(spacing: OneBoxSpacing.medium) {
-                // File type icon with ceremony
+                // File type icon with ceremony OR page number for Image to PDF
                 ZStack {
                     Circle()
                         .fill(OneBoxColors.primaryGold.opacity(0.15))
                         .frame(width: 48, height: 48)
                     
-                    Image(systemName: fileIcon(url))
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(OneBoxColors.primaryGold)
+                    if tool == .imagesToPDF {
+                        // Show page number prominently for Image to PDF
+                        ZStack {
+                            Circle()
+                                .fill(OneBoxColors.primaryGold)
+                                .frame(width: 44, height: 44)
+                            
+                            Text("\(index + 1)")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                    } else {
+                        Image(systemName: fileIcon(url))
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(OneBoxColors.primaryGold)
+                    }
                 }
                 
                 // File details
@@ -694,30 +768,29 @@ struct InputSelectionView: View {
                         
                         Spacer()
                         
-                        Text("#\(index + 1)")
-                            .font(OneBoxTypography.micro)
-                            .foregroundColor(OneBoxColors.tertiaryText)
-                            .padding(.horizontal, OneBoxSpacing.tiny)
-                            .padding(.vertical, 2)
-                            .background(OneBoxColors.surfaceGraphite)
-                            .cornerRadius(OneBoxRadius.small)
+                        if tool != .imagesToPDF {
+                            Text("#\(index + 1)")
+                                .font(OneBoxTypography.micro)
+                                .foregroundColor(OneBoxColors.tertiaryText)
+                                .padding(.horizontal, OneBoxSpacing.tiny)
+                                .padding(.vertical, 2)
+                                .background(OneBoxColors.surfaceGraphite)
+                                .cornerRadius(OneBoxRadius.small)
+                        }
                     }
                     
                     HStack(spacing: OneBoxSpacing.small) {
                         Text(fileSizeString(url))
                             .font(OneBoxTypography.caption)
                             .foregroundColor(OneBoxColors.secondaryText)
+                            .lineLimit(1)
                         
                         Spacer()
                         
-                        // Security status
+                        // Security status - simplified to just shield icon for space
                         HStack(spacing: OneBoxSpacing.tiny) {
                             Image(systemName: "shield.checkered")
                                 .font(.system(size: 12))
-                                .foregroundColor(OneBoxColors.secureGreen)
-                            
-                            Text("Secure")
-                                .font(OneBoxTypography.micro)
                                 .foregroundColor(OneBoxColors.secureGreen)
                         }
                         .padding(.horizontal, OneBoxSpacing.tiny)
@@ -727,7 +800,7 @@ struct InputSelectionView: View {
                     }
                 }
                 
-                // Remove button
+                // Remove button only
                 Button(action: onRemove) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 20))
@@ -792,17 +865,79 @@ struct InputSelectionView: View {
     }
 
     private func loadPhotos(_ photos: [PhotosPickerItem]) {
-        Task {
-            for photo in photos {
-                if let data = try? await photo.loadTransferable(type: Data.self) {
-                    let tempURL = FileManager.default.temporaryDirectory
-                        .appendingPathComponent(UUID().uuidString)
-                        .appendingPathExtension("jpg")
-                    try? data.write(to: tempURL)
-                    selectedURLs.append(tempURL)
+        Task { @MainActor in
+            var successCount = 0
+            var failureCount = 0
+            
+            // Limit concurrent photo loading to prevent memory issues
+            let maxConcurrentLoads = 3
+            
+            for photoBatch in photos.chunked(into: maxConcurrentLoads) {
+                await withTaskGroup(of: (Bool, URL?, String?).self) { group in
+                    for photo in photoBatch {
+                        group.addTask {
+                            do {
+                                guard let data = try await photo.loadTransferable(type: Data.self) else {
+                                    return (false, nil, "Failed to load photo data")
+                                }
+                                
+                                // Validate image data and format
+                                guard let image = UIImage(data: data) else {
+                                    return (false, nil, "Invalid image data")
+                                }
+                                
+                                // Check image dimensions to prevent memory issues
+                                let maxDimension: CGFloat = 8192
+                                guard image.size.width <= maxDimension && image.size.height <= maxDimension else {
+                                    return (false, nil, "Image too large (\(Int(image.size.width))x\(Int(image.size.height)))")
+                                }
+                                
+                                let fileExtension = detectImageFormat(data: data)
+                                let tempURL = FileManager.default.temporaryDirectory
+                                    .appendingPathComponent(UUID().uuidString)
+                                    .appendingPathExtension(fileExtension)
+                                try data.write(to: tempURL)
+                                return (true, tempURL, nil)
+                            } catch {
+                                return (false, nil, error.localizedDescription)
+                            }
+                        }
+                    }
+                    
+                    for await result in group {
+                        if result.0, let url = result.1 {
+                            selectedURLs.append(url)
+                            successCount += 1
+                        } else {
+                            failureCount += 1
+                            if let errorMessage = result.2 {
+                                print("Photo loading error: \(errorMessage)")
+                            }
+                        }
+                    }
                 }
             }
+            
+            // Show feedback if there were failures
+            if failureCount > 0 {
+                let message = failureCount == 1 ? "1 image failed to load" : "\(failureCount) images failed to load"
+                // Could show a banner or alert here
+                print("Photo loading: \(message). \(successCount) images loaded successfully.")
+            }
+            
+            analyzeSelectedFiles()
         }
+    }
+    
+    private func detectImageFormat(data: Data) -> String {
+        guard data.count > 8 else { return "jpg" }
+        
+        // Check image format headers
+        if data.starts(with: [0xFF, 0xD8, 0xFF]) { return "jpg" }
+        if data.starts(with: [0x89, 0x50, 0x4E, 0x47]) { return "png" }
+        if data.starts(with: [0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63]) { return "heic" }
+        
+        return "jpg" // Default fallback
     }
 
     private func handleFileImport(_ result: Result<[URL], Error>) {
@@ -1141,7 +1276,7 @@ struct ConfigurationView: View {
     
     private var hasToolSpecificSettings: Bool {
         switch tool {
-        case .imagesToPDF, .pdfCompress, .pdfSplit, .pdfWatermark, .pdfSign, .imageResize:
+        case .imagesToPDF, .pdfToImages, .pdfCompress, .pdfSplit, .pdfWatermark, .pdfSign, .imageResize:
             return true
         default:
             return false
@@ -1152,6 +1287,8 @@ struct ConfigurationView: View {
         switch tool {
         case .imagesToPDF:
             return "Convert your images to PDF with custom page sizes and orientations. Use A4 for standard documents or Letter for US formats. Portrait orientation is recommended for most documents."
+        case .pdfToImages:
+            return "Extract pages from PDF as individual images. Choose between JPEG and PNG format, and select quality from Lowest to Best. Toggle 'Select All Pages' to convert the entire PDF, or turn it off to specify custom page ranges. All converted images are automatically saved to your photo gallery."
         case .pdfCompress:
             return "Reduce your PDF file size while maintaining quality. Choose compression quality based on your needs - Maximum for archival, Medium for sharing, Low for fastest processing."
         case .pdfWatermark:
@@ -1169,6 +1306,8 @@ struct ConfigurationView: View {
             switch tool {
             case .imagesToPDF:
                 pdfSettings
+            case .pdfToImages:
+                pdfToImagesSettings
             case .pdfCompress:
                 compressionSettings
             case .pdfSplit:
@@ -1193,6 +1332,7 @@ struct ConfigurationView: View {
                 Text("Page Size")
                     .font(.subheadline)
                     .fontWeight(.medium)
+                    .foregroundColor(OneBoxColors.primaryText)
                 Picker("Page Size", selection: $settings.pageSize) {
                     ForEach(PDFPageSize.allCases, id: \.self) { size in
                         Text(size.displayName).tag(size)
@@ -1206,12 +1346,137 @@ struct ConfigurationView: View {
                 Text("Orientation")
                     .font(.subheadline)
                     .fontWeight(.medium)
+                    .foregroundColor(OneBoxColors.primaryText)
                 Picker("Orientation", selection: $settings.orientation) {
                     Text("Portrait").tag(PDFOrientation.portrait)
                     Text("Landscape").tag(PDFOrientation.landscape)
                 }
                 .pickerStyle(.segmented)
             }
+        }
+    }
+
+    private var pdfToImagesSettings: some View {
+        VStack(spacing: 16) {
+            // Image Format
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Format")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Picker("Format", selection: $settings.imageFormat) {
+                    Text("JPEG (Smaller)").tag(ImageFormat.jpeg)
+                    Text("PNG (Larger)").tag(ImageFormat.png)
+                }
+                .pickerStyle(.segmented)
+                
+                if settings.imageFormat == .png {
+                    Text("PNG format ignores quality settings and creates larger files")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+            }
+
+            // Image Quality (only for JPEG)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Quality")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Picker("Quality", selection: $settings.imageQualityPreset) {
+                    ForEach(ImageQuality.allCases, id: \.self) { quality in
+                        Text(quality.displayName).tag(quality)
+                    }
+                }
+                .pickerStyle(.menu)
+                .disabled(settings.imageFormat == .png)
+                .onChange(of: settings.imageQualityPreset) { newPreset in
+                    // Sync with old imageQuality value for backward compatibility
+                    settings.imageQuality = newPreset.compressionValue
+                }
+                
+                if settings.imageFormat == .png {
+                    Text("Quality setting not available for PNG")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            // Resolution with size estimate
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Resolution: \(Int(settings.imageResolution)) DPI")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    Spacer()
+                    
+                    Text(estimatedSizeText)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Slider(value: $settings.imageResolution, in: 72...150, step: 12)
+                
+                HStack {
+                    Text("72 DPI")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("Web Quality")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("150 DPI")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            // Select All Pages Toggle
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Select All Pages", isOn: $settings.selectAllPages)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
+                    .onChange(of: settings.selectAllPages) { isOn in
+                        if isOn {
+                            // Clear page ranges when selecting all pages
+                            settings.splitRanges = []
+                        }
+                        HapticManager.shared.selection()
+                    }
+                
+                if !settings.selectAllPages {
+                    Text("Convert specific pages only")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            // Page Selection (only show if not selecting all pages)
+            if !settings.selectAllPages {
+                PDFSplitRangeSelector(settings: $settings, pdfURL: selectedURLs.first)
+            }
+        }
+        .onAppear {
+            // Ensure quality preset is synced with quality value
+            settings.imageQuality = settings.imageQualityPreset.compressionValue
+        }
+    }
+    
+    private var estimatedSizeText: String {
+        guard let pdfURL = selectedURLs.first,
+              let pdf = PDFDocument(url: pdfURL) else {
+            return ""
+        }
+        
+        let pageCount = settings.selectAllPages ? pdf.pageCount : max(settings.splitRanges.flatMap { $0 }.count, 1)
+        let estimatedSizePerPage = Int(settings.imageResolution * settings.imageResolution * 3 * settings.imageQuality / 1024 / 1024)
+        let totalSize = estimatedSizePerPage * pageCount
+        
+        if totalSize > 1000 {
+            return "~\(totalSize / 1000)GB"
+        } else {
+            return "~\(totalSize)MB"
         }
     }
 
@@ -1319,40 +1584,69 @@ struct ConfigurationView: View {
 
     private var signatureSettings: some View {
         VStack(spacing: 16) {
-            // Info text
-            Text("The signature will be added to the last page of the PDF")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(8)
+            // Info text with better visibility
+            HStack {
+                Image(systemName: "info.circle.fill")
+                    .foregroundColor(OneBoxColors.primaryGold)
+                Text("The signature will be added to the last page of the PDF by default")
+                    .font(OneBoxTypography.caption)
+                    .foregroundColor(OneBoxColors.secondaryText)
+            }
+            .padding(OneBoxSpacing.small)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(OneBoxColors.surfaceGraphite.opacity(0.5))
+            .cornerRadius(OneBoxRadius.small)
 
             // Signature Input (Text or Drawing)
             SignatureInputView(
                 signatureText: $settings.signatureText,
                 signatureImageData: $settings.signatureImageData
             )
+            .accessibilityLabel("Signature input")
+            .accessibilityHint("Enter text or draw your signature")
+
+            // Validation feedback
+            if !isConfigurationValid {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(OneBoxColors.warningAmber)
+                    Text(validationMessage ?? "Please provide a signature")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.warningAmber)
+                }
+                .padding(OneBoxSpacing.small)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(OneBoxColors.warningAmber.opacity(0.1))
+                .cornerRadius(OneBoxRadius.small)
+                .accessibilityLabel("Validation error: \(validationMessage ?? "Please provide a signature")")
+            }
 
             // Position
             VStack(alignment: .leading, spacing: 8) {
                 Text("Position")
-                    .font(.subheadline)
+                    .font(OneBoxTypography.body)
                     .fontWeight(.medium)
+                    .foregroundColor(OneBoxColors.primaryText)
                 Picker("Position", selection: $settings.signaturePosition) {
                     ForEach(WatermarkPosition.allCases.filter { $0 != .tiled }, id: \.self) { position in
                         Text(position.displayName).tag(position)
                     }
                 }
                 .pickerStyle(.menu)
+                .accentColor(OneBoxColors.primaryGold)
+                .accessibilityLabel("Signature position")
             }
 
             // Size
             VStack(alignment: .leading, spacing: 8) {
                 Text("Size: \(Int(settings.signatureSize * 100))%")
-                    .font(.subheadline)
+                    .font(OneBoxTypography.body)
                     .fontWeight(.medium)
+                    .foregroundColor(OneBoxColors.primaryText)
                 Slider(value: $settings.signatureSize, in: 0.1...0.3, step: 0.05)
+                    .tint(OneBoxColors.primaryGold)
+                    .accessibilityLabel("Signature size")
+                    .accessibilityValue("\(Int(settings.signatureSize * 100)) percent")
             }
         }
     }
@@ -1527,7 +1821,7 @@ struct PDFSplitRangeSelector: View {
                     .fontWeight(.medium)
             }
 
-            Text("Add page ranges to create separate PDF files")
+            Text("Add page ranges to convert (e.g., 1-3, 5, 7-10)")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
@@ -1756,6 +2050,15 @@ struct PDFCompressionSettings: View {
                     settings.targetSizeMB = maxAchievableMB
                 }
             }
+        }
+    }
+}
+
+// MARK: - Array Extension for Chunking
+extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        return stride(from: 0, to: count, by: size).map {
+            Array(self[$0..<Swift.min($0 + size, count)])
         }
     }
 }

@@ -109,10 +109,11 @@ public struct JobSettings {
 
     // Image Settings
     public var imageFormat: ImageFormat = .jpeg
-    public var imageQuality: Double = 0.8
+    public var imageQuality: Double = 0.6  // Sync with medium preset
+    public var imageQualityPreset: ImageQuality = .medium
     public var maxDimension: Int?
     public var resizePercentage: Double?
-    public var imageResolution: CGFloat = 150.0  // DPI for PDF to Images
+    public var imageResolution: CGFloat = 100.0  // DPI for PDF to Images
 
     // Watermark Settings
     public var watermarkText: String?
@@ -123,6 +124,7 @@ public struct JobSettings {
 
     // PDF Split Settings
     public var splitRanges: [[Int]] = []  // Array of page ranges [[1,2,3], [4], [5]]
+    public var selectAllPages: Bool = true  // For PDF to Images - select all pages vs specific ranges
 
     // PDF Signature Settings
     public var signatureText: String?
@@ -156,9 +158,9 @@ extension JobSettings: Codable {
     enum CodingKeys: String, CodingKey {
         case pageSize, orientation, margins, backgroundColor, stripMetadata
         case pdfTitle, pdfAuthor, targetSizeMB, compressionQuality
-        case imageFormat, imageQuality, maxDimension, resizePercentage, imageResolution
+        case imageFormat, imageQuality, imageQualityPreset, maxDimension, resizePercentage, imageResolution
         case watermarkText, watermarkPosition, watermarkOpacity, watermarkSize, watermarkTileDensity
-        case splitRanges
+        case splitRanges, selectAllPages
         case signatureText, signatureImageData, signaturePosition, signatureCustomPosition, signaturePageIndex, signatureOpacity, signatureSize
         case redactionItems, redactionMode, redactionColor
         case enableSecureVault, enableZeroTrace, enableBiometricLock, enableStealthMode
@@ -179,10 +181,12 @@ extension JobSettings: Codable {
         compressionQuality = try container.decodeIfPresent(CompressionQuality.self, forKey: .compressionQuality) ?? .medium
         
         imageFormat = try container.decodeIfPresent(ImageFormat.self, forKey: .imageFormat) ?? .jpeg
-        imageQuality = try container.decodeIfPresent(Double.self, forKey: .imageQuality) ?? 0.8
+        imageQuality = try container.decodeIfPresent(Double.self, forKey: .imageQuality) ?? 0.6
+        imageQualityPreset = try container.decodeIfPresent(ImageQuality.self, forKey: .imageQualityPreset) ?? .medium
         maxDimension = try container.decodeIfPresent(Int.self, forKey: .maxDimension)
         resizePercentage = try container.decodeIfPresent(Double.self, forKey: .resizePercentage)
-        imageResolution = try container.decodeIfPresent(CGFloat.self, forKey: .imageResolution) ?? 150.0
+        imageResolution = try container.decodeIfPresent(CGFloat.self, forKey: .imageResolution) ?? 100.0
+        selectAllPages = try container.decodeIfPresent(Bool.self, forKey: .selectAllPages) ?? true
         
         watermarkText = try container.decodeIfPresent(String.self, forKey: .watermarkText)
         watermarkPosition = try container.decodeIfPresent(WatermarkPosition.self, forKey: .watermarkPosition) ?? .bottomRight
@@ -237,6 +241,7 @@ extension JobSettings: Codable {
         
         try container.encode(imageFormat, forKey: .imageFormat)
         try container.encode(imageQuality, forKey: .imageQuality)
+        try container.encode(imageQualityPreset, forKey: .imageQualityPreset)
         try container.encodeIfPresent(maxDimension, forKey: .maxDimension)
         try container.encodeIfPresent(resizePercentage, forKey: .resizePercentage)
         try container.encode(imageResolution, forKey: .imageResolution)
@@ -248,6 +253,7 @@ extension JobSettings: Codable {
         try container.encode(watermarkTileDensity, forKey: .watermarkTileDensity)
         
         try container.encode(splitRanges, forKey: .splitRanges)
+        try container.encode(selectAllPages, forKey: .selectAllPages)
         
         try container.encodeIfPresent(signatureText, forKey: .signatureText)
         try container.encodeIfPresent(signatureImageData, forKey: .signatureImageData)
@@ -553,11 +559,14 @@ actor JobProcessor {
         }
 
         let format = job.settings.imageFormat == .png ? "png" : "jpeg"
+        let quality = job.settings.imageQualityPreset.compressionValue
+        let pageRanges = job.settings.selectAllPages ? [] : job.settings.splitRanges
         let outputURLs = try await processor.pdfToImages(
             pdfURL,
             format: format,
-            quality: job.settings.imageQuality,
+            quality: quality,
             resolution: job.settings.imageResolution,
+            pageRanges: pageRanges,
             progressHandler: progressHandler
         )
         return try await applyPostProcessing(job: job, urls: outputURLs)
@@ -642,29 +651,73 @@ actor JobProcessor {
         guard let pdfURL = job.inputs.first else {
             throw JobError.invalidInput
         }
+        
+        // Validate that we have a signature before processing
+        guard (job.settings.signatureText != nil && !job.settings.signatureText!.isEmpty) || 
+              job.settings.signatureImageData != nil else {
+            throw JobError.processingFailed("Please provide a signature. Either enter text or draw a signature.")
+        }
+        
         // Use signature position directly from CommonTypes
         let signaturePos = job.settings.signaturePosition
         
         // Convert image data to UIImage if present
         let signatureImage: UIImage? = {
             if let imageData = job.settings.signatureImageData {
-                return UIImage(data: imageData)
+                guard let image = UIImage(data: imageData) else {
+                    // Invalid image data - this will be caught by signPDF, but we can provide better error here
+                    return nil
+                }
+                return image
             }
             return nil
         }()
         
-        let outputURL = try await processor.signPDF(
-            pdfURL,
-            text: job.settings.signatureText,
-            image: signatureImage,
-            position: signaturePos,
-            customPosition: job.settings.signatureCustomPosition,
-            targetPageIndex: job.settings.signaturePageIndex,
-            opacity: job.settings.signatureOpacity,
-            size: job.settings.signatureSize,
-            progressHandler: progressHandler
-        )
-        return try await applyPostProcessing(job: job, urls: [outputURL])
+        do {
+            let outputURL = try await processor.signPDF(
+                pdfURL,
+                text: job.settings.signatureText,
+                image: signatureImage,
+                position: signaturePos,
+                customPosition: job.settings.signatureCustomPosition,
+                targetPageIndex: job.settings.signaturePageIndex,
+                opacity: job.settings.signatureOpacity,
+                size: job.settings.signatureSize,
+                progressHandler: progressHandler
+            )
+            return try await applyPostProcessing(job: job, urls: [outputURL])
+        } catch let error as PDFError {
+            // Convert PDFError to user-friendly JobError messages
+            let userMessage: String
+            switch error {
+            case .invalidParameters(let message):
+                userMessage = message
+            case .invalidPDF(let name):
+                userMessage = "The PDF file '\(name)' is invalid or corrupted. Please try a different file."
+            case .invalidImage(let message):
+                userMessage = "Signature image error: \(message)"
+            case .contextCreationFailed:
+                userMessage = "Failed to create PDF. You may be running low on storage space."
+            case .writeFailed:
+                userMessage = "Unable to save the signed PDF. Please free up storage space and try again."
+            case .insufficientStorage(let neededMB):
+                userMessage = String(format: "Not enough storage space. Please free up at least %.1f MB and try again.", neededMB)
+            case .passwordProtected(let name):
+                userMessage = "The PDF '\(name)' is password-protected. Please unlock it first before signing."
+            case .corruptedPDF(let name):
+                userMessage = "The PDF '\(name)' appears to be corrupted. Please try re-downloading it."
+            case .fileNotFound(let name):
+                userMessage = "The file '\(name)' could not be found. It may have been moved or deleted."
+            case .emptyPDF(let name):
+                userMessage = "The PDF '\(name)' contains no pages and cannot be signed."
+            default:
+                userMessage = error.localizedDescription
+            }
+            throw JobError.processingFailed(userMessage)
+        } catch {
+            // Handle any other errors
+            throw JobError.processingFailed("Failed to sign PDF: \(error.localizedDescription)")
+        }
     }
 
     private func processImageResize(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {

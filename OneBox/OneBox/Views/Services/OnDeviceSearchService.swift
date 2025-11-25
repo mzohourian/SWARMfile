@@ -29,7 +29,7 @@ class OnDeviceSearchService: ObservableObject {
     func indexAllDocuments() {
         isIndexing = true
         
-        Task.detached { [weak self] in
+        Task.detached { @MainActor [weak self] in
             guard let self = self else { return }
             
             var searchableItems: [CSSearchableItem] = []
@@ -43,30 +43,29 @@ class OnDeviceSearchService: ObservableObject {
                     let pathExtension = fileURL.pathExtension.lowercased()
                     guard ["pdf", "jpg", "jpeg", "png", "heic"].contains(pathExtension) else { continue }
                     
-                    if let item = await self.createSearchableItem(for: fileURL) {
+                    if let item = self.createSearchableItem(for: fileURL) {
                         searchableItems.append(item)
                     }
                 }
             }
             
             // Index workflows (from UserDefaults)
-            if let workflowItems = await self.indexWorkflows() {
+            if let workflowItems = self.indexWorkflows() {
                 searchableItems.append(contentsOf: workflowItems)
             }
             
             // Index jobs (from JobManager)
-            if let jobItems = await self.indexJobs() {
+            if let jobItems = self.indexJobs() {
                 searchableItems.append(contentsOf: jobItems)
             }
             
             // Add to Core Spotlight index (on-device only)
-            CSSearchableIndex.default().indexSearchableItems(searchableItems) { error in
-                Task { @MainActor in
-                    self.isIndexing = false
-                    if let error = error {
-                        print("Search indexing error: \(error.localizedDescription)")
-                    }
-                }
+            do {
+                try await CSSearchableIndex.default().indexSearchableItems(searchableItems)
+                self.isIndexing = false
+            } catch {
+                self.isIndexing = false
+                print("Search indexing error: \(error.localizedDescription)")
             }
         }
     }

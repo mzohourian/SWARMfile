@@ -232,10 +232,10 @@ public class MultipeerDocumentService: NSObject, ObservableObject {
     }
     
     private func handleReceivedData(_ data: Data, from peer: MCPeerID) {
-        Task {
+        Task { @MainActor in
             // Try to decode as different message types
             if let shareNotification = try? JSONDecoder().decode(ShareNotification.self, from: data) {
-                await handleShareNotification(shareNotification, from: peer)
+                handleShareNotification(shareNotification, from: peer)
             } else if let documentRequest = try? JSONDecoder().decode(DocumentRequest.self, from: data) {
                 await handleDocumentRequest(documentRequest, from: peer)
             } else if let documentResponse = try? JSONDecoder().decode(DocumentResponse.self, from: data) {
@@ -302,19 +302,18 @@ public class MultipeerDocumentService: NSObject, ObservableObject {
         }
     }
     
+    @MainActor
     private func handleDocumentResponse(_ response: DocumentResponse, from peer: MCPeerID) async {
         // Handle response to our document request
         // This would update the appropriate transfer status
-        await MainActor.run {
-            if let transferIndex = self.activeTransfers.firstIndex(where: { 
-                $0.shareID == response.shareID && $0.fromPeer == peer.displayName 
-            }) {
-                if response.success {
-                    self.activeTransfers[transferIndex].status = .completed
-                    self.activeTransfers[transferIndex].progress = 1.0
-                } else {
-                    self.activeTransfers[transferIndex].status = .failed
-                }
+        if let transferIndex = self.activeTransfers.firstIndex(where: { 
+            $0.shareID == response.shareID && $0.fromPeer == peer.displayName 
+        }) {
+            if response.success {
+                self.activeTransfers[transferIndex].status = .completed
+                self.activeTransfers[transferIndex].progress = 1.0
+            } else {
+                self.activeTransfers[transferIndex].status = .failed
             }
         }
     }

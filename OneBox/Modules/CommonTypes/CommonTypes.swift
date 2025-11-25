@@ -143,6 +143,34 @@ public enum ImageFormat: String, Codable, CaseIterable {
     }
 }
 
+public enum ImageQuality: String, Codable, CaseIterable {
+    case lowest
+    case low
+    case medium
+    case high
+    case best
+    
+    public var displayName: String {
+        switch self {
+        case .lowest: return "Lowest"
+        case .low: return "Low" 
+        case .medium: return "Medium"
+        case .high: return "High"
+        case .best: return "Best"
+        }
+    }
+    
+    public var compressionValue: Double {
+        switch self {
+        case .lowest: return 0.1
+        case .low: return 0.3
+        case .medium: return 0.6
+        case .high: return 0.8
+        case .best: return 1.0
+        }
+    }
+}
+
 public enum WatermarkPosition: String, Codable, CaseIterable {
     case topLeft
     case topCenter

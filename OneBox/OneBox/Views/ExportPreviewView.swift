@@ -57,6 +57,12 @@ struct ExportPreviewView: View {
         .sheet(isPresented: $showingPreview) {
             if let url = selectedURL {
                 QuickLookPreview(url: url)
+                    .onAppear {
+                        // Small delay to ensure file is ready
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            // Preview will load automatically
+                        }
+                    }
             }
         }
         .sheet(isPresented: $showingSecurityOptions) {

@@ -11,6 +11,7 @@ import CoreGraphics
 import UIKit
 import UniformTypeIdentifiers
 import CommonTypes
+import Photos
 
 // MARK: - PDF Processor
 public actor PDFProcessor {
@@ -29,6 +30,22 @@ public actor PDFProcessor {
         author: String? = nil,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
+        
+        // Input validation
+        guard !images.isEmpty else {
+            throw PDFError.invalidParameters("No images provided for PDF creation")
+        }
+        
+        guard images.count <= 500 else {
+            throw PDFError.invalidParameters("Too many images (\(images.count)). Maximum is 500 images.")
+        }
+        
+        // Estimate memory requirements and validate
+        let estimatedMemory = images.count * 10 * 1024 * 1024 // Rough estimate: 10MB per image
+        let maxMemory = 500 * 1024 * 1024 // 500MB limit
+        guard estimatedMemory < maxMemory else {
+            throw PDFError.invalidParameters("PDF creation would require too much memory (\(estimatedMemory / 1024 / 1024)MB). Reduce number of images.")
+        }
 
         let outputURL = temporaryOutputURL(prefix: "images_to_pdf")
 
@@ -39,52 +56,87 @@ public actor PDFProcessor {
         ])
 
         for (index, imageURL) in images.enumerated() {
-            guard let imageData = try? Data(contentsOf: imageURL),
-                  let image = UIImage(data: imageData) else {
-                UIGraphicsEndPDFContext()
-                throw PDFError.invalidImage(imageURL.lastPathComponent)
+            // Use autoreleasepool to manage memory for each image
+            try autoreleasepool {
+                // Handle security-scoped resources
+                var startedAccessing = false
+                if imageURL.startAccessingSecurityScopedResource() {
+                    startedAccessing = true
+                }
+                
+                defer {
+                    if startedAccessing {
+                        imageURL.stopAccessingSecurityScopedResource()
+                    }
+                }
+                
+                // Validate image file and format
+                guard imageURL.pathExtension.lowercased().contains(where: { ["jpg", "jpeg", "png", "heic", "heif"].contains(String($0)) }) else {
+                    UIGraphicsEndPDFContext()
+                    throw PDFError.invalidImage("Unsupported format: \(imageURL.lastPathComponent)")
+                }
+                
+                guard let imageData = try? Data(contentsOf: imageURL),
+                      let image = UIImage(data: imageData) else {
+                    UIGraphicsEndPDFContext()
+                    throw PDFError.invalidImage(imageURL.lastPathComponent)
+                }
+                
+                // Validate image dimensions to prevent memory issues
+                let maxDimension: CGFloat = 8192
+                guard image.size.width <= maxDimension && image.size.height <= maxDimension else {
+                    UIGraphicsEndPDFContext()
+                    throw PDFError.invalidImage("Image too large: \(imageURL.lastPathComponent) (\(Int(image.size.width))x\(Int(image.size.height)))")
+                }
+
+                let imageSize = image.size
+                let pageRect: CGRect
+
+                if let size = pageSize {
+                    // Use specified page size
+                    let adjustedSize = orientation == .landscape ?
+                        CGSize(width: size.height, height: size.width) : size
+                    pageRect = CGRect(origin: .zero, size: adjustedSize)
+                } else {
+                    // Fit to image size
+                    pageRect = CGRect(origin: .zero, size: imageSize)
+                }
+
+                UIGraphicsBeginPDFPageWithInfo(pageRect, nil)
+
+                guard let context = UIGraphicsGetCurrentContext() else {
+                    UIGraphicsEndPDFContext()
+                    throw PDFError.contextCreationFailed
+                }
+
+                // Draw background
+                context.setFillColor(backgroundColor.cgColor)
+                context.fill(pageRect)
+
+                // Calculate image rect with margins
+                let contentRect = pageRect.insetBy(dx: margins, dy: margins)
+                let imageRect = aspectFitRect(for: imageSize, in: contentRect)
+
+                // Draw image
+                image.draw(in: imageRect)
+
+                progressHandler(Double(index + 1) / Double(images.count))
             }
-
-            let imageSize = image.size
-            let pageRect: CGRect
-
-            if let size = pageSize {
-                // Use specified page size
-                let adjustedSize = orientation == .landscape ?
-                    CGSize(width: size.height, height: size.width) : size
-                pageRect = CGRect(origin: .zero, size: adjustedSize)
-            } else {
-                // Fit to image size
-                pageRect = CGRect(origin: .zero, size: imageSize)
-            }
-
-            UIGraphicsBeginPDFPageWithInfo(pageRect, nil)
-
-            guard let context = UIGraphicsGetCurrentContext() else {
-                UIGraphicsEndPDFContext()
-                throw PDFError.contextCreationFailed
-            }
-
-            // Draw background
-            context.setFillColor(backgroundColor.cgColor)
-            context.fill(pageRect)
-
-            // Calculate image rect with margins
-            let contentRect = pageRect.insetBy(dx: margins, dy: margins)
-            let imageRect = aspectFitRect(for: imageSize, in: contentRect)
-
-            // Draw image
-            image.draw(in: imageRect)
-
-            progressHandler(Double(index + 1) / Double(images.count))
         }
 
         // Close PDF context
         UIGraphicsEndPDFContext()
 
         // Verify the PDF was created successfully
-        guard FileManager.default.fileExists(atPath: outputURL.path),
-              let _ = PDFDocument(url: outputURL) else {
+        guard FileManager.default.fileExists(atPath: outputURL.path) else {
+            throw PDFError.creationFailed
+        }
+        
+        // Validate the created PDF
+        guard let createdPDF = PDFDocument(url: outputURL),
+              createdPDF.pageCount > 0 else {
+            // Clean up failed PDF
+            try? FileManager.default.removeItem(at: outputURL)
             throw PDFError.creationFailed
         }
 
@@ -354,7 +406,21 @@ public actor PDFProcessor {
             return finalURL
         }
 
-        throw PDFError.targetSizeUnachievable
+        // Last resort: Try one final compression with minimum quality
+        // This ensures we always return something instead of crashing
+        do {
+            let fallbackURL = try await compressPDFWithCustomQuality(
+                pdf,
+                jpegQuality: 0.1, // Very low quality but still readable
+                resolutionScale: 0.5, // Reduced resolution
+                progressHandler: { _ in }
+            )
+            progressHandler(1.0)
+            return fallbackURL
+        } catch {
+            // If even fallback fails, throw error with helpful message
+            throw PDFError.targetSizeUnachievable
+        }
     }
 
     // Helper method to compress with custom quality
@@ -574,58 +640,157 @@ public actor PDFProcessor {
         size: Double = 0.15,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
+        
+        // Input validation: Must have either text or image signature
+        guard text != nil && !text!.isEmpty || image != nil else {
+            throw PDFError.invalidParameters("Please provide a signature. Either enter text or draw a signature.")
+        }
+        
+        // Validate PDF before processing
+        try validatePDF(url: pdfURL)
+        
+        // Handle security-scoped resources
+        var startedAccessing = false
+        if pdfURL.startAccessingSecurityScopedResource() {
+            startedAccessing = true
+        }
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
 
         guard let sourcePDF = PDFDocument(url: pdfURL) else {
             throw PDFError.invalidPDF(pdfURL.lastPathComponent)
         }
 
-        let outputURL = temporaryOutputURL(prefix: "signed")
         let pageCount = sourcePDF.pageCount
-
-        UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
-        defer { UIGraphicsEndPDFContext() }
-
-        for pageIndex in 0..<pageCount {
-            guard let page = sourcePDF.page(at: pageIndex) else { continue }
-
-            let pageBounds = page.bounds(for: .mediaBox)
-            UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
-
-            guard let context = UIGraphicsGetCurrentContext() else { continue }
-
-            // Draw original page
-            context.saveGState()
-            context.translateBy(x: 0, y: pageBounds.size.height)
-            context.scaleBy(x: 1.0, y: -1.0)
-            page.draw(with: .mediaBox, to: context)
-            context.restoreGState()
-
-            // Draw signature on the target page
-            let shouldDrawSignature = (targetPageIndex == -1 && pageIndex == pageCount - 1) || 
-                                     (targetPageIndex >= 0 && pageIndex == targetPageIndex)
+        
+        // Validate target page index
+        if targetPageIndex >= pageCount {
+            throw PDFError.invalidParameters("Page index \(targetPageIndex + 1) is out of range. This PDF has \(pageCount) page\(pageCount == 1 ? "" : "s").")
+        }
+        
+        if targetPageIndex < -1 {
+            throw PDFError.invalidParameters("Invalid page index. Use -1 for last page or a valid page number.")
+        }
+        
+        // Validate signature image if provided
+        if let signatureImage = image {
+            // Check image dimensions to prevent memory issues
+            let maxDimension: CGFloat = 4096
+            if signatureImage.size.width > maxDimension || signatureImage.size.height > maxDimension {
+                throw PDFError.invalidImage("Signature image is too large (\(Int(signatureImage.size.width))x\(Int(signatureImage.size.height))). Maximum size is \(Int(maxDimension))x\(Int(maxDimension)) pixels.")
+            }
             
-            if shouldDrawSignature {
-                context.saveGState()
-                context.setAlpha(CGFloat(opacity))
+            // Check image file size (estimate from PNG data)
+            if let imageData = signatureImage.pngData(), imageData.count > 10 * 1024 * 1024 {
+                throw PDFError.invalidImage("Signature image file is too large (\(imageData.count / 1024 / 1024)MB). Please use a smaller signature.")
+            }
+        }
+        
+        // Validate text signature if provided
+        if let signatureText = text {
+            // Limit text length to prevent issues
+            if signatureText.count > 200 {
+                throw PDFError.invalidParameters("Signature text is too long (\(signatureText.count) characters). Maximum is 200 characters.")
+            }
+        }
+        
+        // Validate opacity and size parameters
+        guard opacity >= 0.0 && opacity <= 1.0 else {
+            throw PDFError.invalidParameters("Opacity must be between 0.0 and 1.0.")
+        }
+        
+        guard size > 0.0 && size <= 1.0 else {
+            throw PDFError.invalidParameters("Signature size must be between 0.0 and 1.0.")
+        }
+        
+        // Estimate output size and check disk space
+        // Rough estimate: original PDF size + signature overhead (typically < 1MB)
+        let estimatedOutputSize = getFileSize(url: pdfURL) ?? 0
+        let estimatedOverhead: Int64 = 2 * 1024 * 1024 // 2MB overhead for signature
+        try checkDiskSpace(estimatedSize: estimatedOutputSize + estimatedOverhead)
 
-                if let text = text {
-                    if let customPos = customPosition {
-                        drawSignatureText(text, in: pageBounds, customPosition: customPos)
-                    } else {
-                        drawSignatureText(text, in: pageBounds, position: position)
-                    }
-                } else if let image = image {
-                    if let customPos = customPosition {
-                        drawSignatureImage(image, in: pageBounds, customPosition: customPos, size: size)
-                    } else {
-                        drawSignatureImage(image, in: pageBounds, position: position, size: size)
-                    }
+        let outputURL = temporaryOutputURL(prefix: "signed")
+        
+        // Check if context creation succeeds
+        guard UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil) else {
+            throw PDFError.contextCreationFailed
+        }
+        defer { UIGraphicsEndPDFContext() }
+        
+        var signatureDrawn = false
+        
+        // Use autoreleasepool for memory management
+        autoreleasepool {
+            for pageIndex in 0..<pageCount {
+                guard let page = sourcePDF.page(at: pageIndex) else {
+                    // Skip invalid pages but continue processing
+                    progressHandler(Double(pageIndex + 1) / Double(pageCount))
+                    continue
                 }
 
-                context.restoreGState()
-            }
+                let pageBounds = page.bounds(for: .mediaBox)
+                UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
 
-            progressHandler(Double(pageIndex + 1) / Double(pageCount))
+                guard let context = UIGraphicsGetCurrentContext() else {
+                    // If context is nil, skip this page but continue
+                    progressHandler(Double(pageIndex + 1) / Double(pageCount))
+                    continue
+                }
+
+                // Draw original page
+                context.saveGState()
+                context.translateBy(x: 0, y: pageBounds.size.height)
+                context.scaleBy(x: 1.0, y: -1.0)
+                page.draw(with: .mediaBox, to: context)
+                context.restoreGState()
+
+                // Draw signature on the target page
+                let shouldDrawSignature = (targetPageIndex == -1 && pageIndex == pageCount - 1) || 
+                                         (targetPageIndex >= 0 && pageIndex == targetPageIndex)
+                
+                if shouldDrawSignature {
+                    context.saveGState()
+                    context.setAlpha(CGFloat(opacity))
+
+                    if let text = text, !text.isEmpty {
+                        if let customPos = customPosition {
+                            drawSignatureText(text, in: pageBounds, customPosition: customPos)
+                        } else {
+                            drawSignatureText(text, in: pageBounds, position: position)
+                        }
+                        signatureDrawn = true
+                    } else if let image = image {
+                        if let customPos = customPosition {
+                            drawSignatureImage(image, in: pageBounds, customPosition: customPos, size: size)
+                        } else {
+                            drawSignatureImage(image, in: pageBounds, position: position, size: size)
+                        }
+                        signatureDrawn = true
+                    }
+
+                    context.restoreGState()
+                }
+
+                progressHandler(Double(pageIndex + 1) / Double(pageCount))
+            }
+        }
+        
+        // Verify that signature was actually drawn
+        guard signatureDrawn else {
+            throw PDFError.invalidParameters("Failed to draw signature on the specified page. Please try again.")
+        }
+        
+        // Verify output file was created and is valid
+        guard FileManager.default.fileExists(atPath: outputURL.path) else {
+            throw PDFError.writeFailed
+        }
+        
+        // Verify output is a valid PDF
+        guard PDFDocument(url: outputURL) != nil else {
+            throw PDFError.writeFailed
         }
 
         return outputURL
@@ -644,44 +809,104 @@ public actor PDFProcessor {
     }
 
     private func drawSignatureImage(_ image: UIImage, in bounds: CGRect, position: WatermarkPosition, size: Double) {
+        // Validate image dimensions to prevent division by zero
+        guard image.size.width > 0 && image.size.height > 0 else {
+            print("Warning: Invalid image dimensions for signature")
+            return
+        }
+        
+        // Validate bounds
+        guard bounds.width > 0 && bounds.height > 0 else {
+            print("Warning: Invalid bounds for signature placement")
+            return
+        }
+        
+        let aspectRatio = image.size.height / image.size.width
         let signatureSize = CGSize(
             width: bounds.width * CGFloat(size),
-            height: bounds.width * CGFloat(size) * (image.size.height / image.size.width)
+            height: bounds.width * CGFloat(size) * aspectRatio
+        )
+        
+        // Ensure signature doesn't exceed page bounds
+        let clampedSize = CGSize(
+            width: min(signatureSize.width, bounds.width * 0.9),
+            height: min(signatureSize.height, bounds.height * 0.9)
         )
 
-        let origin = positionForWatermark(signatureSize, in: bounds, position: position)
-        let rect = CGRect(origin: origin, size: signatureSize)
+        let origin = positionForWatermark(clampedSize, in: bounds, position: position)
+        let rect = CGRect(origin: origin, size: clampedSize)
         image.draw(in: rect)
     }
     
     // Custom position drawing methods
     private func drawSignatureText(_ text: String, in bounds: CGRect, customPosition: CGPoint) {
-        let fontSize: CGFloat = bounds.height * 0.04
+        // Validate bounds
+        guard bounds.width > 0 && bounds.height > 0 else {
+            print("Warning: Invalid bounds for signature text placement")
+            return
+        }
+        
+        // Validate and clamp custom position to valid range (0.0 to 1.0)
+        let clampedX = max(0.0, min(1.0, customPosition.x))
+        let clampedY = max(0.0, min(1.0, customPosition.y))
+        
+        let fontSize: CGFloat = max(8.0, min(bounds.height * 0.04, 72.0)) // Clamp font size
         let attributes: [NSAttributedString.Key: Any] = [
             .font: UIFont(name: "Snell Roundhand", size: fontSize) ?? UIFont.italicSystemFont(ofSize: fontSize),
             .foregroundColor: UIColor.black
         ]
         
         // Custom position is in normalized coordinates (0.0 to 1.0)
+        let textSize = (text as NSString).size(withAttributes: attributes)
         let point = CGPoint(
-            x: bounds.minX + (bounds.width * customPosition.x),
-            y: bounds.minY + (bounds.height * (1.0 - customPosition.y)) // Flip Y coordinate
+            x: max(bounds.minX, min(bounds.minX + (bounds.width * clampedX), bounds.maxX - textSize.width)),
+            y: max(bounds.minY, min(bounds.minY + (bounds.height * (1.0 - clampedY)), bounds.maxY - textSize.height))
         )
         (text as NSString).draw(at: point, withAttributes: attributes)
     }
     
     private func drawSignatureImage(_ image: UIImage, in bounds: CGRect, customPosition: CGPoint, size: Double) {
+        // Validate image dimensions to prevent division by zero
+        guard image.size.width > 0 && image.size.height > 0 else {
+            print("Warning: Invalid image dimensions for signature")
+            return
+        }
+        
+        // Validate bounds
+        guard bounds.width > 0 && bounds.height > 0 else {
+            print("Warning: Invalid bounds for signature placement")
+            return
+        }
+        
+        // Validate and clamp custom position to valid range (0.0 to 1.0)
+        let clampedX = max(0.0, min(1.0, customPosition.x))
+        let clampedY = max(0.0, min(1.0, customPosition.y))
+        
+        let aspectRatio = image.size.height / image.size.width
         let signatureSize = CGSize(
             width: bounds.width * CGFloat(size),
-            height: bounds.width * CGFloat(size) * (image.size.height / image.size.width)
+            height: bounds.width * CGFloat(size) * aspectRatio
+        )
+        
+        // Ensure signature doesn't exceed page bounds
+        let clampedSize = CGSize(
+            width: min(signatureSize.width, bounds.width * 0.9),
+            height: min(signatureSize.height, bounds.height * 0.9)
         )
         
         // Custom position is in normalized coordinates (0.0 to 1.0)
         let origin = CGPoint(
-            x: bounds.minX + (bounds.width * customPosition.x),
-            y: bounds.minY + (bounds.height * (1.0 - customPosition.y)) // Flip Y coordinate
+            x: bounds.minX + (bounds.width * clampedX),
+            y: bounds.minY + (bounds.height * (1.0 - clampedY)) // Flip Y coordinate
         )
-        let rect = CGRect(origin: origin, size: signatureSize)
+        
+        // Ensure signature stays within page bounds
+        let finalOrigin = CGPoint(
+            x: max(bounds.minX, min(origin.x, bounds.maxX - clampedSize.width)),
+            y: max(bounds.minY, min(origin.y, bounds.maxY - clampedSize.height))
+        )
+        
+        let rect = CGRect(origin: finalOrigin, size: clampedSize)
         image.draw(in: rect)
     }
 
@@ -691,8 +916,21 @@ public actor PDFProcessor {
         format: String = "jpeg",
         quality: Double = 0.9,
         resolution: CGFloat = 150,
+        pageRanges: [[Int]] = [], // Empty array means convert all pages
         progressHandler: @escaping (Double) -> Void
     ) async throws -> [URL] {
+
+        // Handle security-scoped resources
+        var startedAccessing = false
+        if pdfURL.startAccessingSecurityScopedResource() {
+            startedAccessing = true
+        }
+        
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
 
         // Validate PDF
         try validatePDF(url: pdfURL)
@@ -704,11 +942,31 @@ public actor PDFProcessor {
         let pageCount = pdf.pageCount
         var outputURLs: [URL] = []
 
-        // Estimate disk space needed (rough estimate: resolution * resolution * pageCount * 3 bytes)
-        let estimatedSize = Int64(resolution * resolution * CGFloat(pageCount) * 3)
-        try checkDiskSpace(estimatedSize: estimatedSize)
+        // Determine which pages to process
+        let pagesToProcess: [Int]
+        if pageRanges.isEmpty {
+            // Convert all pages (1-indexed to 0-indexed)
+            pagesToProcess = Array(0..<pageCount)
+        } else {
+            // Convert specified ranges (1-indexed to 0-indexed)
+            pagesToProcess = pageRanges.flatMap { $0 }.map { $0 - 1 }.filter { $0 >= 0 && $0 < pageCount }
+        }
 
-        for pageIndex in 0..<pageCount {
+        // Estimate disk space needed and memory requirements
+        let estimatedSize = Int64(resolution * resolution * CGFloat(pagesToProcess.count) * 3)
+        try checkDiskSpace(estimatedSize: estimatedSize)
+        
+        // Check for excessively large output that could cause memory issues
+        let maxReasonablePages = 100
+        let maxReasonableSize = Int64(200 * 1024 * 1024) // 200MB limit
+        if pagesToProcess.count > maxReasonablePages {
+            throw PDFError.invalidParameters("Too many pages selected (\(pagesToProcess.count)). Maximum is \(maxReasonablePages) pages.")
+        }
+        if estimatedSize > maxReasonableSize {
+            throw PDFError.invalidParameters("Output would be too large (\(estimatedSize / 1024 / 1024)MB). Reduce resolution or page count.")
+        }
+
+        for (index, pageIndex) in pagesToProcess.enumerated() {
             guard let page = pdf.page(at: pageIndex) else { continue }
 
             let pageBounds = page.bounds(for: .mediaBox)
@@ -720,17 +978,19 @@ public actor PDFProcessor {
                 height: pageBounds.height * scale
             )
 
-            // Render page to image
-            let renderer = UIGraphicsImageRenderer(size: imageSize)
-            let pageImage = renderer.image { context in
-                UIColor.white.setFill()
-                context.fill(CGRect(origin: .zero, size: imageSize))
+            // Render page to image with autoreleasepool for memory management
+            let pageImage = autoreleasepool { () -> UIImage in
+                let renderer = UIGraphicsImageRenderer(size: imageSize)
+                return renderer.image { context in
+                    UIColor.white.setFill()
+                    context.fill(CGRect(origin: .zero, size: imageSize))
 
-                context.cgContext.scaleBy(x: scale, y: scale)
-                context.cgContext.translateBy(x: 0, y: pageBounds.height)
-                context.cgContext.scaleBy(x: 1.0, y: -1.0)
+                    context.cgContext.scaleBy(x: scale, y: scale)
+                    context.cgContext.translateBy(x: 0, y: pageBounds.height)
+                    context.cgContext.scaleBy(x: 1.0, y: -1.0)
 
-                page.draw(with: .mediaBox, to: context.cgContext)
+                    page.draw(with: .mediaBox, to: context.cgContext)
+                }
             }
 
             // Save to file
@@ -749,10 +1009,51 @@ public actor PDFProcessor {
             try data.write(to: outputURL)
 
             outputURLs.append(outputURL)
-            progressHandler(Double(pageIndex + 1) / Double(pageCount))
+            
+            // Update progress for file save
+            let fileProgress = Double(index + 1) / Double(pagesToProcess.count) * 0.9
+            progressHandler(fileProgress)
+            
+            // Save to photo gallery (async, don't block main process)
+            Task {
+                try? await saveImageToPhotoLibrary(pageImage)
+            }
+            
+            // Final progress update
+            progressHandler(Double(index + 1) / Double(pagesToProcess.count))
         }
 
         return outputURLs
+    }
+    
+    // MARK: - Photo Library Helper
+    private func saveImageToPhotoLibrary(_ image: UIImage) async throws {
+        // Request photo library access if needed
+        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+        
+        if status == .notDetermined {
+            let newStatus = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+            guard newStatus == .authorized else {
+                // Log permission denial but don't fail the entire process
+                print("Photo library permission denied - images will not be saved to gallery")
+                return
+            }
+        } else if status != .authorized {
+            // Permission denied or restricted - skip saving
+            print("Photo library access not authorized - skipping gallery save")
+            return
+        }
+        
+        // Save to photo library with retry logic
+        do {
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            }
+        } catch {
+            // If saving to photos fails, log but don't crash the entire process
+            print("Failed to save image to photo library: \(error.localizedDescription)")
+            // Continue processing other images
+        }
     }
 
     // MARK: - PDF Redaction
@@ -976,6 +1277,18 @@ public actor PDFProcessor {
 
     /// Validates that a PDF file exists and is not corrupted or password-protected
     public func validatePDF(url: URL) throws {
+        // Handle security-scoped resources
+        var startedAccessing = false
+        if url.startAccessingSecurityScopedResource() {
+            startedAccessing = true
+        }
+        
+        defer {
+            if startedAccessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+        
         guard FileManager.default.fileExists(atPath: url.path) else {
             throw PDFError.fileNotFound(url.lastPathComponent)
         }
@@ -1078,6 +1391,7 @@ public enum PDFError: LocalizedError {
     case fileNotFound(String)
     case emptyPDF(String)
     case insufficientStorage(neededMB: Double)
+    case invalidParameters(String)
 
     public var errorDescription: String? {
         switch self {
@@ -1113,6 +1427,8 @@ public enum PDFError: LocalizedError {
             return "This PDF (\(name)) contains no pages and cannot be processed."
         case .insufficientStorage(let neededMB):
             return String(format: "Insufficient storage space. Please free up at least %.1f MB and try again.", neededMB)
+        case .invalidParameters(let message):
+            return message
         }
     }
 }

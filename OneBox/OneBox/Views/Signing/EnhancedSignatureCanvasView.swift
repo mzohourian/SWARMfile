@@ -230,8 +230,10 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         canvasView.delaysContentTouches = false
         canvasView.canCancelContentTouches = false
         
-        // CRITICAL for real devices: Set content size
-        canvasView.contentSize = CGSize(width: 1000, height: 500)
+        // CRITICAL for real devices: Ensure proper layout
+        // Don't set contentSize directly - let it be determined by the frame
+        // But ensure the view has a proper frame
+        canvasView.frame = CGRect(x: 0, y: 0, width: 1000, height: 500)
         
         // Set up delegate
         canvasView.delegate = context.coordinator
@@ -253,7 +255,7 @@ struct EnhancedSignatureCanvasWrapper: UIViewRepresentable {
         uiView.canCancelContentTouches = false
         
         // Update reference if needed
-        if canvasViewRef !== uiView {
+        if canvasViewRef != uiView {
             DispatchQueue.main.async {
                 canvasViewRef = uiView
             }

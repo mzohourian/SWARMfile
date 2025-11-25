@@ -433,6 +433,7 @@ The app uses MVVM (Model-View-ViewModel), which means:
 **What is Partial:**
 ⚠️ Some advanced features may need additional testing
 ⚠️ Swift 6 concurrency warnings (non-blocking, but should be addressed eventually)
+⚠️ **Sign PDF drawing canvas**: Works perfectly on simulator but touch input not registering on real iPhone 15 Pro Max (iOS 18.1). Multiple troubleshooting attempts made - may be iOS 18-specific PencilKit issue or requires different approach.
 
 **What is Planned:**
 - OCR / Searchable PDF
@@ -450,8 +451,21 @@ The app uses MVVM (Model-View-ViewModel), which means:
 
 ## Recent Changes
 
-**Most Recent (Today - Sign PDF Redesign):**
-1. **Complete Sign PDF Feature Redesign:**
+**Most Recent (Today - Sign PDF Touch Input Fixes):**
+1. **PencilKit Touch Input Troubleshooting on Real Devices:**
+   - Identified issue: Drawing works on simulator but not on real iPhone 15 Pro Max (iOS 18.1)
+   - Removed `TouchableCanvasView` wrapper class that may have been blocking touches
+   - Simplified implementation to use `PKCanvasView` directly via `UIViewRepresentable`
+   - Made canvas first responder in `makeUIView`, `updateUIView`, and `onAppear` with delays
+   - Removed VStack wrapper around canvas that may have interfered with touch events
+   - Added tap gesture diagnostic to verify if touches reach the view
+   - Added `contentShape(Rectangle())` to ensure entire canvas area is tappable
+   - Added canvas reconfiguration in `onAppear` with 0.2s delay to ensure layout is complete
+   - Set `delaysContentTouches = false` and `canCancelContentTouches = false` on canvas
+   - All changes committed to `feature/claude-documentation` branch
+   - **Status**: Issue persists - drawing works on simulator but not on real device. Diagnostic tap gesture added to help identify if touches are reaching the view.
+
+2. **Previous Session - Complete Sign PDF Feature Redesign:**
    - Created comprehensive audit report identifying 15 critical issues and 8 UX problems
    - Fixed all critical issues (memory crashes, validation, error handling)
    - Built new interactive signing system with:
@@ -461,7 +475,9 @@ The app uses MVVM (Model-View-ViewModel), which means:
      - Drag-to-move signatures when selected
      - Auto-detect signature fields using Vision framework
      - Multi-page support with navigation
+     - Signature persistence (saved signatures can be reused across pages)
    - Created 5 new files: `InteractiveSignPDFView.swift`, `EnhancedSignatureCanvasView.swift`, `InteractivePDFPageView.swift`, `SignatureFieldDetectionService.swift`, `SignaturePlacement.swift`
+   - Created `SignatureManager.swift` for saving/loading signatures
    - Integrated new view into `ToolFlowView.swift`
    - Fixed all compilation errors (Button syntax, gesture handling, font initialization, scope issues)
    - Enhanced error handling in `CorePDF.signPDF()` and `JobEngine.processPDFSign()`
@@ -580,11 +596,17 @@ The app uses MVVM (Model-View-ViewModel), which means:
 ## Next Steps
 
 **Immediate Priorities:**
-1. **Test new Sign PDF feature end-to-end** - Verify all functionality works (drawing, placement, resize, field detection, multi-page)
-2. **Update CorePDF.signPDF() for multiple signatures** - Currently processes one signature at a time; update to accept array of SignaturePlacement and process all at once
-3. Address Swift 6 concurrency warnings (non-blocking but good to fix)
-4. Test all features end-to-end to ensure everything works as expected
-5. Consider adding unit tests for new features (OnDeviceSearchService, WorkflowAutomationView, SignatureFieldDetectionService)
+1. **Fix Sign PDF drawing on real devices** - Resolve PencilKit touch input issue on iPhone 15 Pro Max (iOS 18.1). Current status: Works on simulator, not on real device. Next steps:
+   - Test diagnostic tap gesture to verify if touches reach the view
+   - If taps are detected but drawing doesn't work: Try alternative PencilKit configuration or different drawing approach
+   - If taps are not detected: Investigate sheet presentation or view hierarchy blocking touches
+   - Consider using fullScreenCover instead of sheet for signature canvas
+   - Research iOS 18-specific PencilKit issues and workarounds
+2. **Test new Sign PDF feature end-to-end** - Once drawing is fixed, verify all functionality works (drawing, placement, resize, field detection, multi-page)
+3. **Update CorePDF.signPDF() for multiple signatures** - Currently processes one signature at a time; update to accept array of SignaturePlacement and process all at once
+4. Address Swift 6 concurrency warnings (non-blocking but good to fix)
+5. Test all features end-to-end to ensure everything works as expected
+6. Consider adding unit tests for new features (OnDeviceSearchService, WorkflowAutomationView, SignatureFieldDetectionService)
 
 **Short-Term (Next Session):**
 1. User testing and feedback collection

@@ -100,10 +100,14 @@ class CustomDrawingView: UIView {
 // MARK: - SwiftUI Wrapper
 struct CustomDrawingCanvasWrapper: UIViewRepresentable {
     @Binding var hasDrawing: Bool
+    @Binding var canvasRef: CustomDrawingView?
     let onDrawingChanged: (Bool) -> Void
     
     func makeUIView(context: Context) -> CustomDrawingView {
         let view = CustomDrawingView()
+        DispatchQueue.main.async {
+            canvasRef = view
+        }
         return view
     }
     

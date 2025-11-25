@@ -39,18 +39,28 @@ struct EnhancedSignatureCanvasView: View {
                     .padding(.top, OneBoxSpacing.large)
                     .padding(.horizontal, OneBoxSpacing.medium)
                     
-                    // Large Drawing Canvas - simplified to avoid touch blocking
-                    EnhancedSignatureCanvasWrapper(canvasViewRef: $canvasViewRef) { hasDrawing in
-                        self.hasDrawing = hasDrawing
+                    // Large Drawing Canvas - Use custom drawing on real devices
+                    if useCustomDrawing {
+                        CustomDrawingCanvasWrapper(hasDrawing: $hasDrawing, canvasRef: $customCanvasRef) { hasDrawing in
+                            self.hasDrawing = hasDrawing
+                        }
+                        .background(Color.white)
+                        .cornerRadius(OneBoxRadius.large)
+                        .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+                        .frame(height: 500)
+                        .padding(.horizontal, OneBoxSpacing.medium)
+                        .padding(.vertical, OneBoxSpacing.large)
+                    } else {
+                        EnhancedSignatureCanvasWrapper(canvasViewRef: $canvasViewRef) { hasDrawing in
+                            self.hasDrawing = hasDrawing
+                        }
+                        .background(Color.white)
+                        .cornerRadius(OneBoxRadius.large)
+                        .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+                        .frame(height: 500)
+                        .padding(.horizontal, OneBoxSpacing.medium)
+                        .padding(.vertical, OneBoxSpacing.large)
                     }
-                    .background(Color.white)
-                    .cornerRadius(OneBoxRadius.large)
-                    .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
-                    .frame(height: 500) // Large, usable size
-                    .padding(.horizontal, OneBoxSpacing.medium)
-                    .padding(.vertical, OneBoxSpacing.large)
-                    .contentShape(Rectangle()) // Ensure entire area is tappable
-                    // Removed simultaneous gesture - may interfere with PencilKit's own gestures
                     
                     // Controls
                     HStack(spacing: OneBoxSpacing.large) {

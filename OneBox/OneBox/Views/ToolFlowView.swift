@@ -61,6 +61,10 @@ struct ToolFlowView: View {
                         tool: tool,
                         selectedURLs: $selectedURLs,
                         onContinue: {
+                            print("🔵 ToolFlowView: onContinue called")
+                            print("🔵 ToolFlowView: tool = \(tool)")
+                            print("🔵 ToolFlowView: selectedURLs.count = \(selectedURLs.count)")
+                            
                             if tool == .pdfOrganize {
                                 // Page Organizer uses a custom interactive flow
                                 if let url = selectedURLs.first {

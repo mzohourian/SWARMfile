@@ -39,18 +39,19 @@ struct EnhancedSignatureCanvasView: View {
                     
                     // Large Drawing Canvas
                     ZStack {
-                        // Background
+                        // Background - ensure it doesn't block touches
                         RoundedRectangle(cornerRadius: OneBoxRadius.large)
                             .fill(Color.white)
                             .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+                            .allowsHitTesting(false) // Don't block touches to canvas
                         
-                        // Drawing Canvas - ensure it's on top and can receive touches
+                        // Drawing Canvas - MUST be on top and receive all touches
                         EnhancedSignatureCanvasWrapper(canvasViewRef: $canvasViewRef) { hasDrawing in
                             self.hasDrawing = hasDrawing
                         }
                         .padding(OneBoxSpacing.medium)
-                        .contentShape(Rectangle()) // Ensure entire area is tappable
                         .allowsHitTesting(true) // Explicitly enable hit testing
+                        .zIndex(1) // Ensure it's on top
                     }
                     .frame(height: 500) // Large, usable size
                     .padding(.horizontal, OneBoxSpacing.medium)

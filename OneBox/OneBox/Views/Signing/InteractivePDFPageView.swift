@@ -204,6 +204,7 @@ struct SignaturePlacementOverlay: View {
     @State private var currentPosition: CGPoint
     @State private var lastMagnification: CGFloat = 1.0
     @State private var dragOffset: CGSize = .zero
+    @State private var lastScale: CGFloat = 1.0
     
     init(placement: SignaturePlacement, pageBounds: CGRect, geometry: GeometryProxy, isSelected: Bool, onTap: @escaping () -> Void, onUpdate: @escaping (SignaturePlacement) -> Void) {
         self.placement = placement
@@ -214,13 +215,18 @@ struct SignaturePlacementOverlay: View {
         self.onUpdate = onUpdate
         _currentSize = State(initialValue: placement.size)
         _currentPosition = State(initialValue: placement.position)
+        _lastScale = State(initialValue: 1.0)
     }
     
     var body: some View {
-        let normalizedPos = currentPosition
+        // Use placement position as base, then apply drag offset
+        let baseScreenPos = CGPoint(
+            x: placement.position.x * geometry.size.width,
+            y: placement.position.y * geometry.size.height
+        )
         let screenPos = CGPoint(
-            x: normalizedPos.x * geometry.size.width + dragOffset.width,
-            y: normalizedPos.y * geometry.size.height + dragOffset.height
+            x: baseScreenPos.x + dragOffset.width,
+            y: baseScreenPos.y + dragOffset.height
         )
         
         // Signature preview
@@ -263,35 +269,43 @@ struct SignaturePlacementOverlay: View {
             DragGesture()
                 .onChanged { value in
                     if isSelected {
+                        // Update drag offset for visual feedback
                         dragOffset = value.translation
                     }
                 }
                 .onEnded { value in
                     if isSelected {
-                        // Update position
-                        let normalizedX = (screenPos.x - dragOffset.width) / geometry.size.width
-                        let normalizedY = (screenPos.y - dragOffset.height) / geometry.size.height
+                        // Calculate final screen position
+                        let finalScreenX = baseScreenPos.x + value.translation.width
+                        let finalScreenY = baseScreenPos.y + value.translation.height
+                        
+                        // Convert to normalized coordinates
                         let newPosition = CGPoint(
-                            x: max(0.0, min(1.0, normalizedX)),
-                            y: max(0.0, min(1.0, normalizedY))
+                            x: max(0.0, min(1.0, finalScreenX / geometry.size.width)),
+                            y: max(0.0, min(1.0, finalScreenY / geometry.size.height))
                         )
                         
                         var updated = placement
                         updated.position = newPosition
                         onUpdate(updated)
                         
+                        // Update current position to match
                         currentPosition = newPosition
                         dragOffset = .zero
                     }
                 }
         )
-        .gesture(
+        .simultaneousGesture(
             MagnificationGesture()
                 .onChanged { value in
                     if isSelected {
-                        let scale = lastMagnification * value
-                        let newWidth = placement.size.width * scale
-                        let newHeight = placement.size.height * scale
+                        // Calculate scale relative to base size
+                        let baseWidth = placement.size.width / lastScale
+                        let baseHeight = placement.size.height / lastScale
+                        let scale = value
+                        
+                        let newWidth = baseWidth * scale
+                        let newHeight = baseHeight * scale
                         
                         // Clamp size
                         let minSize: CGFloat = 50
@@ -302,12 +316,30 @@ struct SignaturePlacementOverlay: View {
                         )
                     }
                 }
-                .onEnded { _ in
+                .onEnded { finalValue in
                     if isSelected {
+                        // Calculate final scale
+                        let baseWidth = placement.size.width / lastScale
+                        let baseHeight = placement.size.height / lastScale
+                        let finalWidth = baseWidth * finalValue
+                        let finalHeight = baseHeight * finalValue
+                        
+                        // Clamp and update
+                        let minSize: CGFloat = 50
+                        let maxSize: CGFloat = 400
+                        let finalSize = CGSize(
+                            width: max(minSize, min(maxSize, finalWidth)),
+                            height: max(minSize, min(maxSize, finalHeight))
+                        )
+                        
                         var updated = placement
-                        updated.size = currentSize
+                        updated.size = finalSize
                         onUpdate(updated)
-                        lastMagnification = 1.0
+                        
+                        // Update tracking variables
+                        lastScale = finalValue
+                        lastMagnification = finalSize.width / (placement.size.width / lastScale)
+                        currentSize = finalSize
                     }
                 }
         )

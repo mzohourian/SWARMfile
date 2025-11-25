@@ -154,6 +154,12 @@ struct InteractiveSignPDFView: View {
                 print("🔵 InteractiveSignPDF: pdfDocument is nil: \(pdfDocument == nil)")
                 print("🔵 InteractiveSignPDF: isLoadingPDF: \(isLoadingPDF)")
                 print("🔵 InteractiveSignPDF: loadError: \(loadError ?? "nil")")
+                
+                // Load saved signature if available and not already set
+                if currentSignatureData == nil, let saved = SignatureManager.shared.getSavedSignature() {
+                    currentSignatureData = saved
+                    print("🔵 InteractiveSignPDF: Loaded saved signature")
+                }
             }
         }
     }
@@ -382,7 +388,14 @@ struct InteractiveSignPDFView: View {
     }
     
     private func handlePageTap(at point: CGPoint, in pageBounds: CGRect) {
-        guard let signatureData = currentSignatureData else {
+        // Use current signature or load saved one
+        let signatureToUse: SignatureData
+        if let current = currentSignatureData {
+            signatureToUse = current
+        } else if let saved = SignatureManager.shared.getSavedSignature() {
+            signatureToUse = saved
+            currentSignatureData = saved // Keep it available
+        } else {
             // No signature ready - show alert or create one
             return
         }
@@ -392,12 +405,12 @@ struct InteractiveSignPDFView: View {
             pageIndex: currentPageIndex,
             position: point,
             size: placementSize,
-            signatureData: signatureData
+            signatureData: signatureToUse
         )
         
         signaturePlacements.append(placement)
         selectedPlacement = placement
-        currentSignatureData = nil // Reset for next placement
+        // Don't clear currentSignatureData - keep it for reuse
         isPlacingSignature = false
         
         HapticManager.shared.notification(.success)

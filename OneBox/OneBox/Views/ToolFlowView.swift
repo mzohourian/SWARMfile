@@ -75,9 +75,13 @@ struct ToolFlowView: View {
                             } else if tool == .pdfSign {
                                 // Sign PDF uses interactive flow
                                 if !selectedURLs.isEmpty {
+                                    print("🔵 ToolFlowView: Setting showInteractiveSigning = true")
+                                    print("🔵 ToolFlowView: selectedURLs.count = \(selectedURLs.count)")
+                                    print("🔵 ToolFlowView: First URL = \(selectedURLs.first?.absoluteString ?? "nil")")
                                     showInteractiveSigning = true
                                 } else {
                                     // No file selected - should not happen, but handle gracefully
+                                    print("❌ ToolFlowView: No URLs selected for PDF signing")
                                     return
                                 }
                             } else {
@@ -162,10 +166,33 @@ struct ToolFlowView: View {
                     .environmentObject(paymentsManager)
             }
             .fullScreenCover(isPresented: $showInteractiveSigning) {
-                if let pdfURL = selectedURLs.first {
-                    InteractiveSignPDFView(pdfURL: pdfURL)
-                        .environmentObject(jobManager)
+                Group {
+                    if let pdfURL = selectedURLs.first {
+                        InteractiveSignPDFView(pdfURL: pdfURL)
+                            .environmentObject(jobManager)
+                            .onAppear {
+                                print("🔵 ToolFlowView: fullScreenCover presenting InteractiveSignPDFView with URL: \(pdfURL)")
+                            }
+                    } else {
+                        // Fallback view if URL is missing
+                        VStack {
+                            Text("Error: No PDF selected")
+                                .foregroundColor(OneBoxColors.primaryText)
+                            Button("Dismiss") {
+                                showInteractiveSigning = false
+                            }
+                            .foregroundColor(OneBoxColors.primaryGold)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(OneBoxColors.primaryGraphite)
+                        .onAppear {
+                            print("❌ ToolFlowView: fullScreenCover triggered but selectedURLs.first is nil!")
+                        }
+                    }
                 }
+            }
+            .onChange(of: showInteractiveSigning) { oldValue, newValue in
+                print("🔵 ToolFlowView: showInteractiveSigning changed from \(oldValue) to \(newValue)")
             }
             .fullScreenCover(isPresented: $showRedactionView) {
                 if let url = selectedURLs.first {

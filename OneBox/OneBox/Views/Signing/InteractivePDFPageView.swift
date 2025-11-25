@@ -299,13 +299,10 @@ struct SignaturePlacementOverlay: View {
             MagnificationGesture()
                 .onChanged { value in
                     if isSelected {
-                        // Calculate scale relative to base size
-                        let baseWidth = placement.size.width / lastScale
-                        let baseHeight = placement.size.height / lastScale
+                        // Calculate scale relative to original placement size
                         let scale = value
-                        
-                        let newWidth = baseWidth * scale
-                        let newHeight = baseHeight * scale
+                        let newWidth = placement.size.width * scale
+                        let newHeight = placement.size.height * scale
                         
                         // Clamp size
                         let minSize: CGFloat = 50
@@ -318,11 +315,9 @@ struct SignaturePlacementOverlay: View {
                 }
                 .onEnded { finalValue in
                     if isSelected {
-                        // Calculate final scale
-                        let baseWidth = placement.size.width / lastScale
-                        let baseHeight = placement.size.height / lastScale
-                        let finalWidth = baseWidth * finalValue
-                        let finalHeight = baseHeight * finalValue
+                        // Calculate final size based on original placement size
+                        let finalWidth = placement.size.width * finalValue
+                        let finalHeight = placement.size.height * finalValue
                         
                         // Clamp and update
                         let minSize: CGFloat = 50
@@ -337,9 +332,8 @@ struct SignaturePlacementOverlay: View {
                         onUpdate(updated)
                         
                         // Update tracking variables
-                        lastScale = finalValue
-                        lastMagnification = finalSize.width / (placement.size.width / lastScale)
                         currentSize = finalSize
+                        lastScale = finalValue
                     }
                 }
         )

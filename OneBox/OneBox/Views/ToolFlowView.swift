@@ -260,8 +260,7 @@ struct ToolFlowView: View {
     }
     
     func proceedWithProcessing() {
-
-        // Create job
+        // Create job immediately (non-blocking)
         let jobType: JobType
         switch tool {
         case .imagesToPDF: jobType = .imagesToPDF
@@ -287,11 +286,55 @@ struct ToolFlowView: View {
             await jobManager.submitJob(job)
         }
         paymentsManager.consumeExport()
-
         step = .processing
-
-        // Monitor job progress
         observeJobCompletion(job)
+        
+        // Validate file sizes in background (non-blocking, for warnings only)
+        Task.detached(priority: .utility) {
+            var hasLargeFileWarning = false
+            var validationErrors: [String] = []
+            
+            // Determine operation type for memory validation
+            let operationType: OperationType
+            switch tool {
+            case .pdfCompress, .pdfWatermark, .pdfSign, .pdfRedact:
+                operationType = .pdfCompress
+            case .pdfMerge:
+                operationType = .pdfMerge
+            case .pdfSplit, .pdfToImages, .pdfOrganize:
+                operationType = .pdfRead
+            case .imagesToPDF, .imageResize:
+                operationType = .imageProcess
+            }
+            
+            // Validate each file (quick check, don't block)
+            for url in selectedURLs {
+                if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+                   let fileSize = attributes[.size] as? Int64 {
+                    let validation = await MainActor.run {
+                        MemoryManager.shared.validateFileSize(fileSize: fileSize, operationType: operationType)
+                    }
+                    
+                    if !validation.canProcess {
+                        validationErrors.append("\(url.lastPathComponent): \(validation.recommendation)")
+                    } else if validation.warningLevel == .high || validation.warningLevel == .critical {
+                        hasLargeFileWarning = true
+                    }
+                }
+            }
+            
+            // Only show errors if critical (processing will fail anyway)
+            if !validationErrors.isEmpty {
+                await MainActor.run {
+                    // Log warning but don't block - processing will fail with better error from CorePDF
+                    print("⚠️ ToolFlowView: Memory validation warning: \(validationErrors.joined(separator: ", "))")
+                }
+            } else if hasLargeFileWarning {
+                await MainActor.run {
+                    print("⚠️ ToolFlowView: Large file warning - proceeding with caution")
+                }
+            }
+        }
     }
     
     func proceedWithExportAfterComplimentary() {

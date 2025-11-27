@@ -102,10 +102,12 @@ class CustomDrawingView: UIView {
         guard !paths.isEmpty else { return }
         paths.removeLast()
         setNeedsDisplay()
+        // Notify that drawing has changed
+        NotificationCenter.default.post(name: NSNotification.Name("CustomDrawingChanged"), object: nil)
     }
     
     var hasDrawing: Bool {
-        return !paths.isEmpty || !path.isEmpty
+        return !paths.isEmpty || !path.bounds.isEmpty
     }
 }
 

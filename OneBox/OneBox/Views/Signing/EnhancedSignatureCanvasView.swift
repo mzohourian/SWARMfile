@@ -64,22 +64,7 @@ struct EnhancedSignatureCanvasView: View {
                     
                     // Controls
                     HStack(spacing: OneBoxSpacing.large) {
-                        // Undo Button
-                        Button(action: {
-                            undoLastStroke()
-                        }) {
-                            HStack {
-                                Image(systemName: "arrow.uturn.backward")
-                                Text("Undo")
-                            }
-                            .font(OneBoxTypography.body)
-                            .foregroundColor(OneBoxColors.primaryText)
-                            .padding(.horizontal, OneBoxSpacing.medium)
-                            .padding(.vertical, OneBoxSpacing.small)
-                            .background(OneBoxColors.surfaceGraphite)
-                            .cornerRadius(OneBoxRadius.medium)
-                        }
-                        .disabled(!hasDrawing)
+                        Spacer()
                         
                         // Clear Button
                         Button(action: {
@@ -117,6 +102,8 @@ struct EnhancedSignatureCanvasView: View {
                             .cornerRadius(OneBoxRadius.medium)
                         }
                         .disabled(!hasDrawing)
+                        
+                        Spacer()
                     }
                     .padding(.horizontal, OneBoxSpacing.medium)
                     .padding(.bottom, OneBoxSpacing.large)
@@ -282,25 +269,23 @@ struct EnhancedSignatureCanvasView: View {
     }
     
     private func clearCanvas() {
-        guard let canvasView = canvasViewRef else { return }
-        canvasView.drawing = PKDrawing()
-        signatureData = nil
-        hasDrawing = false
-        HapticManager.shared.impact(.medium)
+        if useCustomDrawing {
+            // Use custom drawing view
+            guard let customView = customCanvasRef else { return }
+            customView.clear()
+            signatureData = nil
+            hasDrawing = false
+            HapticManager.shared.impact(.medium)
+        } else {
+            // Use PencilKit
+            guard let canvasView = canvasViewRef else { return }
+            canvasView.drawing = PKDrawing()
+            signatureData = nil
+            hasDrawing = false
+            HapticManager.shared.impact(.medium)
+        }
     }
     
-    private func undoLastStroke() {
-        guard let canvasView = canvasViewRef else { return }
-        let strokes = canvasView.drawing.strokes
-        guard !strokes.isEmpty else { return }
-        
-        var newDrawing = canvasView.drawing
-        newDrawing.strokes.removeLast()
-        canvasView.drawing = newDrawing
-        
-        hasDrawing = !canvasView.drawing.bounds.isEmpty
-        HapticManager.shared.impact(.light)
-    }
 }
 
 // MARK: - Canvas View Wrapper

@@ -18,12 +18,14 @@ struct InteractivePDFPageView: View {
     let onTap: (CGPoint) -> Void
     let onPlacementTap: (SignaturePlacement) -> Void
     let onPlacementUpdate: ((SignaturePlacement) -> Void)?
+    let selectedPlacement: SignaturePlacement? // Pass from parent
     
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
     @State private var lastScale: CGFloat = 1.0
     @State private var lastOffset: CGSize = .zero
-    @State private var selectedPlacement: SignaturePlacement?
+    @State private var viewSize: CGSize = .zero
+    @State private var initialFitScale: CGFloat = 1.0 // Store the initial fit scale
     
     var body: some View {
         GeometryReader { geometry in
@@ -37,6 +39,36 @@ struct InteractivePDFPageView: View {
                 )
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .clipped()
+                .onAppear {
+                    // Store view size and calculate initial scale with a small delay
+                    // to ensure geometry is fully laid out
+                    viewSize = geometry.size
+                    DispatchQueue.main.async {
+                        if self.viewSize != .zero {
+                            self.calculateInitialScale(viewSize: self.viewSize)
+                        }
+                    }
+                }
+                .onChange(of: geometry.size) { newSize in
+                    // Recalculate when view size changes
+                    viewSize = newSize
+                    if viewSize != .zero && viewSize.width > 0 && viewSize.height > 0 {
+                        calculateInitialScale(viewSize: newSize)
+                    }
+                }
+                .onChange(of: pageIndex) { _ in
+                    // Reset zoom and recalculate when page changes
+                    // This ensures each page starts at the correct fit scale
+                    if viewSize != .zero && viewSize.width > 0 && viewSize.height > 0 {
+                        // Reset zoom state first
+                        scale = 1.0
+                        lastScale = 1.0
+                        offset = .zero
+                        lastOffset = .zero
+                        // Then recalculate for new page
+                        calculateInitialScale(viewSize: viewSize)
+                    }
+                }
                 
                 // Detected Signature Fields Overlay
                 ForEach(detectedFields) { field in
@@ -49,9 +81,10 @@ struct InteractivePDFPageView: View {
                         placement: placement,
                         pageBounds: pageBounds,
                         geometry: geometry,
+                        pdfScale: scale,
+                        pdfOffset: offset,
                         isSelected: selectedPlacement?.id == placement.id,
                         onTap: {
-                            selectedPlacement = placement
                             onPlacementTap(placement)
                         },
                         onUpdate: { updated in
@@ -61,40 +94,134 @@ struct InteractivePDFPageView: View {
                 }
             }
             .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onEnded { value in
-                        let normalizedPoint = normalizePoint(value.location, in: geometry.size)
-                        onTap(normalizedPoint)
-                        HapticManager.shared.impact(.light)
+                // Pan gesture for page navigation (only when zoomed in and no signature selected)
+                DragGesture(minimumDistance: 10)
+                    .onChanged { value in
+                        // Only pan if zoomed in (scale > initial fit scale) and no signature is selected
+                        if scale > initialFitScale * 1.1 && selectedPlacement == nil {
+                            offset = CGSize(
+                                width: lastOffset.width + value.translation.width,
+                                height: lastOffset.height + value.translation.height
+                            )
+                        }
+                    }
+                    .onEnded { _ in
+                        if scale > initialFitScale * 1.1 && selectedPlacement == nil {
+                            lastOffset = offset
+                        }
                     }
             )
             .gesture(
+                // Tap gesture for signature placement (only when at fit scale or close to it)
+                DragGesture(minimumDistance: 0)
+                    .onEnded { value in
+                        // Check if tap is on a signature (if so, let signature handle it via onTapGesture)
+                        let tapPoint = value.location
+                        var tappedOnSignature = false
+                        for placement in placements {
+                            let screenPos = CGPoint(
+                                x: placement.position.x * geometry.size.width,
+                                y: placement.position.y * geometry.size.height
+                            )
+                            let scaledWidth = max(150, placement.size.width * scale)
+                            let scaledHeight = max(80, placement.size.height * scale)
+                            let sigRect = CGRect(
+                                x: screenPos.x - scaledWidth / 2,
+                                y: screenPos.y - scaledHeight / 2,
+                                width: scaledWidth,
+                                height: scaledHeight
+                            )
+                            if sigRect.contains(tapPoint) {
+                                tappedOnSignature = true
+                                break
+                            }
+                        }
+                        
+                        if !tappedOnSignature {
+                            // If a signature is selected, deselect it first, then allow placement
+                            // This allows users to easily place multiple signatures
+                            if selectedPlacement != nil {
+                                // Deselect by tapping the same placement (parent handles toggle)
+                                // We'll create a dummy placement to trigger deselection
+                                // Actually, we should just allow placement even with selection
+                                // The new placement will become the selected one
+                            }
+                            
+                            // Allow tap-to-place when scale is reasonable (within 50% threshold)
+                            // This makes it easier to place signatures even when slightly zoomed
+                            let scaleThreshold = abs(scale - initialFitScale) / initialFitScale
+                            if scaleThreshold < 0.5 {
+                                let normalizedPoint = normalizePoint(value.location, in: geometry.size)
+                                onTap(normalizedPoint)
+                                HapticManager.shared.impact(.light)
+                            }
+                        }
+                    }
+            )
+            .simultaneousGesture(
+                // Page zoom gesture (only when no signature is selected)
+                // Use simultaneousGesture so it doesn't block other gestures
                 MagnificationGesture()
                     .onChanged { value in
-                        scale = lastScale * value
+                        // Only zoom page if no signature is selected
+                        if selectedPlacement == nil {
+                            let newScale = lastScale * value
+                            scale = min(max(newScale, 0.1), 5.0) // Clamp immediately for responsive feedback
+                        }
                     }
-                    .onEnded { _ in
-                        lastScale = scale
-                        // Clamp scale
-                        scale = min(max(scale, 0.5), 3.0)
-                        lastScale = scale
+                    .onEnded { value in
+                        // Only zoom page if no signature is selected
+                        if selectedPlacement == nil {
+                            let finalScale = lastScale * value
+                            // Allow zooming out below initial scale, but clamp to reasonable limits
+                            scale = min(max(finalScale, 0.1), 5.0) // Allow zoom out to 0.1x, zoom in to 5x
+                            lastScale = scale
+                            lastOffset = offset // Update last offset when zoom ends
+                        }
                     }
             )
         }
     }
     
-    private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
-        // Account for scale and offset
-        let adjustedPoint = CGPoint(
-            x: (point.x - offset.width) / scale,
-            y: (point.y - offset.height) / scale
-        )
+    private func calculateInitialScale(viewSize: CGSize) {
+        guard viewSize.width > 0 && viewSize.height > 0 else { return }
+        guard pageBounds.width > 0 && pageBounds.height > 0 else { return }
         
-        // Normalize to 0.0-1.0
-        return CGPoint(
-            x: max(0.0, min(1.0, adjustedPoint.x / size.width)),
-            y: max(0.0, min(1.0, adjustedPoint.y / size.height))
-        )
+        let pageSize = pageBounds.size
+        
+        // Calculate scale to fit page within view (with padding)
+        let padding: CGFloat = 20 // Small padding around edges
+        let availableWidth = max(1, viewSize.width - (padding * 2))
+        let availableHeight = max(1, viewSize.height - (padding * 2))
+        
+        let scaleX = availableWidth / pageSize.width
+        let scaleY = availableHeight / pageSize.height
+        
+        // Use the smaller scale to ensure page fits completely
+        let fitScale = min(scaleX, scaleY)
+        
+        // Set initial scale (clamp to reasonable range - always fit, never zoom in)
+        let initialScale = min(max(fitScale, 0.1), 1.0) // Allow zoom out if needed, but never zoom in
+        scale = initialScale
+        lastScale = initialScale
+        initialFitScale = initialScale // Store for later comparison
+        
+        // Center the page (no offset needed when fitting)
+        offset = .zero
+        lastOffset = .zero
+        
+        print("🔵 InteractivePDFPageView: Calculated initial scale: \(initialScale) for page size: \(pageSize), view size: \(viewSize)")
+    }
+    
+    private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
+        // Simplified: Convert screen tap point directly to normalized coordinates (0.0-1.0)
+        // This matches the simplified coordinate system used in SignaturePlacementOverlay
+        // No need to account for PDF scale/offset since we're using screen-relative coordinates
+        
+        let normalizedX = max(0.0, min(1.0, point.x / size.width))
+        let normalizedY = max(0.0, min(1.0, point.y / size.height))
+        
+        return CGPoint(x: normalizedX, y: normalizedY)
     }
 }
 
@@ -109,20 +236,36 @@ struct PDFPageViewRepresentable: UIViewRepresentable {
         let view = PDFPageView()
         view.page = page
         view.pageBounds = pageBounds
+        view.scale = scale
+        view.offset = offset
         return view
     }
     
     func updateUIView(_ uiView: PDFPageView, context: Context) {
-        uiView.page = page
-        uiView.pageBounds = pageBounds
-        uiView.transform = CGAffineTransform(scaleX: scale, y: scale)
-            .translatedBy(x: offset.width, y: offset.height)
+        // Only update if values actually changed to avoid unnecessary redraws
+        if uiView.page !== page {
+            uiView.page = page
+        }
+        if uiView.pageBounds != pageBounds {
+            uiView.pageBounds = pageBounds
+        }
+        if uiView.scale != scale {
+            uiView.scale = scale
+        }
+        if uiView.offset != offset {
+            uiView.offset = offset
+        }
+        uiView.setNeedsDisplay()
     }
 }
 
 class PDFPageView: UIView {
     var page: PDFPage? {
         didSet {
+            // Clear previous content when page changes
+            if oldValue !== page {
+                layer.contents = nil
+            }
             setNeedsDisplay()
         }
     }
@@ -133,19 +276,66 @@ class PDFPageView: UIView {
         }
     }
     
+    var scale: CGFloat = 1.0 {
+        didSet {
+            setNeedsDisplay()
+        }
+    }
+    
+    var offset: CGSize = .zero {
+        didSet {
+            setNeedsDisplay()
+        }
+    }
+    
     override func draw(_ rect: CGRect) {
-        guard let page = page else { return }
+        guard let page = page else {
+            // Clear the view if no page
+            UIColor.clear.setFill()
+            UIRectFill(rect)
+            return
+        }
+        
+        // Clear the background first to prevent previous page showing through
+        backgroundColor?.setFill()
+        UIRectFill(rect)
         
         let context = UIGraphicsGetCurrentContext()!
         context.saveGState()
         
-        // Draw PDF page
-        context.translateBy(x: 0, y: bounds.height)
-        context.scaleBy(x: 1.0, y: -1.0)
+        // Calculate scaled page dimensions
+        let scaledWidth = pageBounds.width * scale
+        let scaledHeight = pageBounds.height * scale
         
+        // Calculate the drawing rect (centered with offset)
+        let drawRect = CGRect(
+            x: offset.width + (bounds.width - scaledWidth) / 2,
+            y: offset.height + (bounds.height - scaledHeight) / 2,
+            width: scaledWidth,
+            height: scaledHeight
+        )
+        
+        // Set up coordinate system for PDF drawing
+        // PDF coordinate system has origin at bottom-left, so we need to flip
+        context.translateBy(x: drawRect.origin.x, y: drawRect.origin.y + drawRect.height)
+        context.scaleBy(x: scale, y: -scale) // Negative Y to flip coordinate system
+        
+        // Draw the PDF page
         page.draw(with: .mediaBox, to: context)
         
         context.restoreGState()
+    }
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        isOpaque = false
+    }
+    
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        backgroundColor = .clear
+        isOpaque = false
     }
 }
 
@@ -196,6 +386,8 @@ struct SignaturePlacementOverlay: View {
     let placement: SignaturePlacement
     let pageBounds: CGRect
     let geometry: GeometryProxy
+    let pdfScale: CGFloat
+    let pdfOffset: CGSize
     let isSelected: Bool
     let onTap: () -> Void
     let onUpdate: (SignaturePlacement) -> Void
@@ -206,10 +398,12 @@ struct SignaturePlacementOverlay: View {
     @State private var dragOffset: CGSize = .zero
     @State private var lastScale: CGFloat = 1.0
     
-    init(placement: SignaturePlacement, pageBounds: CGRect, geometry: GeometryProxy, isSelected: Bool, onTap: @escaping () -> Void, onUpdate: @escaping (SignaturePlacement) -> Void) {
+    init(placement: SignaturePlacement, pageBounds: CGRect, geometry: GeometryProxy, pdfScale: CGFloat, pdfOffset: CGSize, isSelected: Bool, onTap: @escaping () -> Void, onUpdate: @escaping (SignaturePlacement) -> Void) {
         self.placement = placement
         self.pageBounds = pageBounds
         self.geometry = geometry
+        self.pdfScale = pdfScale
+        self.pdfOffset = pdfOffset
         self.isSelected = isSelected
         self.onTap = onTap
         self.onUpdate = onUpdate
@@ -219,7 +413,8 @@ struct SignaturePlacementOverlay: View {
     }
     
     var body: some View {
-        // Use placement position as base, then apply drag offset
+        // Simplified: Use normalized position directly on screen (0.0-1.0 maps to screen)
+        // This is simpler and should work regardless of PDF scale
         let baseScreenPos = CGPoint(
             x: placement.position.x * geometry.size.width,
             y: placement.position.y * geometry.size.height
@@ -229,27 +424,60 @@ struct SignaturePlacementOverlay: View {
             y: baseScreenPos.y + dragOffset.height
         )
         
-        // Signature preview
+        // Signature size - use placement size directly (it's already in screen pixels)
+        // Scale it with PDF scale so it matches the PDF zoom level
+        // Use larger minimum sizes for better visibility (especially when PDF is scaled down)
+        // Don't scale down too much - keep signature visible even when PDF is small
+        let baseWidth = currentSize.width
+        let baseHeight = currentSize.height
+        // Use a minimum scale factor to keep signatures visible even when PDF is zoomed out
+        let effectiveScale = max(pdfScale, 0.5) // Don't scale below 50% of original
+        let scaledWidth = baseWidth * effectiveScale
+        let scaledHeight = baseHeight * effectiveScale
+        let scaledSignatureWidth = max(120, scaledWidth) // Minimum 120px width
+        let scaledSignatureHeight = max(80, scaledHeight) // Minimum 80px height
+        
         ZStack {
-            if case .image(let data) = placement.signatureData,
-               let image = UIImage(data: data) {
-                Image(uiImage: image)
-                    .resizable()
-                    .renderingMode(.original) // Preserve transparency
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: currentSize.width, height: currentSize.height)
+            if case .image(let data) = placement.signatureData {
+                if let image = UIImage(data: data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .renderingMode(.original) // Preserve transparency
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: scaledSignatureWidth, height: scaledSignatureHeight)
+                } else {
+                    // Fallback if image fails to load
+                    Rectangle()
+                        .fill(Color.red.opacity(0.5))
+                        .frame(width: scaledSignatureWidth, height: scaledSignatureHeight)
+                        .overlay(
+                            Text("Image Error")
+                                .font(.caption)
+                                .foregroundColor(.white)
+                        )
+                }
             } else if case .text(let text) = placement.signatureData {
                 Text(text)
-                    .font(UIFont(name: "Snell Roundhand", size: min(24, currentSize.height * 0.3)) != nil ? Font.custom("Snell Roundhand", size: min(24, currentSize.height * 0.3)) : Font.system(.body).italic())
+                    .font(UIFont(name: "Snell Roundhand", size: min(24, scaledSignatureHeight * 0.3)) != nil ? Font.custom("Snell Roundhand", size: min(24, scaledSignatureHeight * 0.3)) : Font.system(.body).italic())
                     .foregroundColor(.black)
-                    .frame(width: currentSize.width, height: currentSize.height)
+                    .frame(width: scaledSignatureWidth, height: scaledSignatureHeight)
+            } else {
+                // Fallback for unknown signature type
+                Rectangle()
+                    .fill(Color.blue.opacity(0.5))
+                    .frame(width: scaledSignatureWidth, height: scaledSignatureHeight)
+                    .overlay(
+                        Text("Signature")
+                            .font(.caption)
+                            .foregroundColor(.white)
+                    )
             }
             
             // Selection indicator with resize handles
             if isSelected {
                 RoundedRectangle(cornerRadius: 4)
                     .stroke(OneBoxColors.primaryGold, lineWidth: 2)
-                    .frame(width: currentSize.width + 10, height: currentSize.height + 10)
+                    .frame(width: scaledSignatureWidth + 10, height: scaledSignatureHeight + 10)
                 
                 // Resize handles (corners)
                 ForEach(0..<4) { index in
@@ -276,11 +504,11 @@ struct SignaturePlacementOverlay: View {
                 }
                 .onEnded { value in
                     if isSelected {
-                        // Calculate final screen position
+                        // Calculate final screen position: base position + final translation
                         let finalScreenX = baseScreenPos.x + value.translation.width
                         let finalScreenY = baseScreenPos.y + value.translation.height
                         
-                        // Convert to normalized coordinates
+                        // Convert back to normalized coordinates (0.0-1.0)
                         let newPosition = CGPoint(
                             x: max(0.0, min(1.0, finalScreenX / geometry.size.width)),
                             y: max(0.0, min(1.0, finalScreenY / geometry.size.height))
@@ -297,6 +525,8 @@ struct SignaturePlacementOverlay: View {
                 }
         )
         .simultaneousGesture(
+            // Signature resize gesture (works when signature is selected)
+            // Use simultaneousGesture so it doesn't block page zoom when signature is not selected
             MagnificationGesture()
                 .onChanged { value in
                     if isSelected {
@@ -305,9 +535,9 @@ struct SignaturePlacementOverlay: View {
                         let newWidth = placement.size.width * scale
                         let newHeight = placement.size.height * scale
                         
-                        // Clamp size
-                        let minSize: CGFloat = 50
-                        let maxSize: CGFloat = 400
+                        // Clamp size - larger range for better usability
+                        let minSize: CGFloat = 80
+                        let maxSize: CGFloat = 800
                         currentSize = CGSize(
                             width: max(minSize, min(maxSize, newWidth)),
                             height: max(minSize, min(maxSize, newHeight))
@@ -320,9 +550,9 @@ struct SignaturePlacementOverlay: View {
                         let finalWidth = placement.size.width * finalValue
                         let finalHeight = placement.size.height * finalValue
                         
-                        // Clamp and update
-                        let minSize: CGFloat = 50
-                        let maxSize: CGFloat = 400
+                        // Clamp and update - larger range for better usability
+                        let minSize: CGFloat = 80
+                        let maxSize: CGFloat = 800
                         let finalSize = CGSize(
                             width: max(minSize, min(maxSize, finalWidth)),
                             height: max(minSize, min(maxSize, finalHeight))
@@ -341,8 +571,10 @@ struct SignaturePlacementOverlay: View {
     }
     
     private func resizeHandlePosition(for index: Int) -> CGPoint {
-        let halfWidth = currentSize.width / 2 + 5
-        let halfHeight = currentSize.height / 2 + 5
+        let scaledWidth = currentSize.width * pdfScale
+        let scaledHeight = currentSize.height * pdfScale
+        let halfWidth = scaledWidth / 2 + 5
+        let halfHeight = scaledHeight / 2 + 5
         
         switch index {
         case 0: return CGPoint(x: -halfWidth, y: -halfHeight) // Top-left

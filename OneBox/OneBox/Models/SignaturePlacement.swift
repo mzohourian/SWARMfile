@@ -20,6 +20,13 @@ enum SignatureData: Codable, Equatable {
         case .image: return "Drawn Signature"
         }
     }
+    
+    var isImage: Bool {
+        if case .image = self {
+            return true
+        }
+        return false
+    }
 }
 
 // MARK: - Signature Placement

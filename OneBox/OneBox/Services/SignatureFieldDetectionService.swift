@@ -33,9 +33,38 @@ class SignatureFieldDetectionService {
     /// Detects signature fields on a single PDF page
     private func detectSignatureFields(in page: PDFPage, pageIndex: Int) async -> [DetectedSignatureField] {
         var fields: [DetectedSignatureField] = []
+        let pageBounds = page.bounds(for: .mediaBox)
+        
+        // STEP 1: Check for actual PDF form field annotations (most reliable)
+        let annotations = page.annotations
+        for annotation in annotations {
+            // Check if this is a widget annotation (form field)
+            if annotation.type == "Widget" {
+                // Check if it's a signature field
+                if let fieldName = annotation.fieldName?.lowercased(),
+                   (fieldName.contains("signature") || fieldName.contains("sign")) {
+                    // This is an actual PDF form signature field
+                    let annotationBounds = annotation.bounds
+                    let field = DetectedSignatureField(
+                        id: UUID(),
+                        pageIndex: pageIndex,
+                        bounds: annotationBounds,
+                        confidence: 0.95, // Very high confidence for actual form fields
+                        label: annotation.fieldName ?? "Signature Field"
+                    )
+                    fields.append(field)
+                    continue
+                }
+            }
+        }
+        
+        // STEP 2: Use Vision framework to detect signature lines and related text
+        // Only proceed if we haven't found form fields (to avoid duplicates)
+        guard fields.isEmpty else {
+            return fields
+        }
         
         // Get page thumbnail for Vision processing
-        let pageBounds = page.bounds(for: .mediaBox)
         let thumbnailSize = CGSize(width: 612, height: 792) // Standard PDF size
         let pageImage = page.thumbnail(of: thumbnailSize, for: .mediaBox)
         guard let cgImage = pageImage.cgImage else {
@@ -49,35 +78,35 @@ class SignatureFieldDetectionService {
         textRequest.recognitionLevel = .accurate
         textRequest.usesLanguageCorrection = true
         
-        // Detect rectangles that might be signature fields
+        // Detect rectangles (for signature boxes)
         let rectangleRequest = VNDetectRectanglesRequest()
-        rectangleRequest.minimumAspectRatio = 0.1
-        rectangleRequest.maximumAspectRatio = 10.0
-        rectangleRequest.minimumSize = 0.01
-        rectangleRequest.maximumObservations = 30
+        rectangleRequest.minimumAspectRatio = 2.0 // Signature fields are typically wide (width > 2x height)
+        rectangleRequest.maximumAspectRatio = 20.0
+        rectangleRequest.minimumSize = 0.05 // Larger minimum size to avoid small boxes
+        rectangleRequest.maximumObservations = 10 // Fewer observations for better quality
         
         let handler = VNImageRequestHandler(ciImage: ciImage, options: [:])
         
         do {
             try handler.perform([textRequest, rectangleRequest])
             
-            // Extract text labels
+            // Extract signature-related text labels with high confidence
             var detectedLabels: [(String, CGRect, Double)] = []
             if let textResults = textRequest.results {
                 for observation in textResults {
-                    guard let topCandidate = observation.topCandidates(1).first else { continue }
+                    guard let topCandidate = observation.topCandidates(1).first,
+                          topCandidate.confidence > 0.7 else { continue } // Only high-confidence text
                     
-                    let text = topCandidate.string.lowercased()
+                    let text = topCandidate.string.lowercased().trimmingCharacters(in: .whitespaces)
                     let boundingBox = observation.boundingBox
-                    let confidence = topCandidate.confidence
+                    let confidence = Double(topCandidate.confidence)
                     
-                    // Check if text is signature-related
-                    if text.contains("signature") || 
-                       text.contains("sign") || 
-                       text.contains("sign here") ||
-                       text.contains("signature:") ||
-                       text.contains("signature line") {
-                        
+                    // More specific signature-related keywords
+                    let signatureKeywords = ["signature", "sign here", "signature:", "signature line", 
+                                           "signature block", "signature field", "sign below"]
+                    let isSignatureText = signatureKeywords.contains { text.contains($0) }
+                    
+                    if isSignatureText {
                         // Convert normalized coordinates to PDF coordinates
                         let pdfBounds = CGRect(
                             x: boundingBox.origin.x * pageBounds.width,
@@ -86,17 +115,19 @@ class SignatureFieldDetectionService {
                             height: boundingBox.height * pageBounds.height
                         )
                         
-                        detectedLabels.append((text, pdfBounds, Double(confidence)))
+                        detectedLabels.append((text, pdfBounds, confidence))
                     }
                 }
             }
             
-            // Process rectangles as potential signature fields
-            let rectangleResults = rectangleRequest.results
-            if let rectangles = rectangleResults {
+            // Process rectangles - only accept those that look like signature fields
+            if let rectangles = rectangleRequest.results {
                 for observation in rectangles {
                     let boundingBox = observation.boundingBox
                     let confidence = Double(observation.confidence)
+                    
+                    // Only process high-confidence rectangles
+                    guard confidence > 0.7 else { continue }
                     
                     // Convert normalized coordinates to PDF coordinates
                     let pdfBounds = CGRect(
@@ -106,19 +137,31 @@ class SignatureFieldDetectionService {
                         height: boundingBox.height * pageBounds.height
                     )
                     
+                    // Signature fields are typically:
+                    // - Wide (width > 2x height)
+                    // - Height between 20-80 points
+                    // - Width between 100-400 points
+                    let aspectRatio = pdfBounds.width / pdfBounds.height
+                    let isValidSignatureField = aspectRatio > 2.0 &&
+                                              pdfBounds.height >= 20 &&
+                                              pdfBounds.height <= 80 &&
+                                              pdfBounds.width >= 100 &&
+                                              pdfBounds.width <= 400
+                    
+                    if !isValidSignatureField {
+                        continue
+                    }
+                    
                     // Check if rectangle is near signature-related text
-                    let nearbyLabel = findNearestSignatureLabel(for: pdfBounds, in: detectedLabels)
+                    let nearbyLabel = findNearestSignatureLabel(for: pdfBounds, in: detectedLabels, maxDistance: 50)
                     
-                    // Determine if this is likely a signature field
-                    let isSignatureField = nearbyLabel != nil || 
-                                          (pdfBounds.width > 100 && pdfBounds.height > 20 && pdfBounds.height < 100)
-                    
-                    if isSignatureField {
+                    // Only add if near signature text (high confidence) or very high rectangle confidence
+                    if nearbyLabel != nil || confidence > 0.85 {
                         let field = DetectedSignatureField(
                             id: UUID(),
                             pageIndex: pageIndex,
                             bounds: pdfBounds,
-                            confidence: confidence * (nearbyLabel != nil ? 0.9 : 0.6), // Higher confidence if near label
+                            confidence: nearbyLabel != nil ? 0.85 : confidence * 0.8,
                             label: nearbyLabel
                         )
                         fields.append(field)
@@ -126,40 +169,38 @@ class SignatureFieldDetectionService {
                 }
             }
             
-            // Also create fields directly from signature-related text labels
+            // Create fields from signature-related text labels only if no rectangle found nearby
             for (label, bounds, confidence) in detectedLabels {
-                // Look for nearby rectangle
-                var hasNearbyRectangle = false
-                if let rectangles = rectangleResults {
-                    hasNearbyRectangle = rectangles.contains { rect in
-                        let rectBounds = CGRect(
-                            x: rect.boundingBox.origin.x * pageBounds.width,
-                            y: (1 - rect.boundingBox.origin.y - rect.boundingBox.height) * pageBounds.height,
-                            width: rect.boundingBox.width * pageBounds.width,
-                            height: rect.boundingBox.height * pageBounds.height
-                        )
-                        return rectBounds.intersects(bounds.insetBy(dx: -20, dy: -20))
-                    }
+                // Check if we already have a field near this label
+                let hasNearbyField = fields.contains { field in
+                    let distance = sqrt(
+                        pow(field.bounds.midX - bounds.midX, 2) +
+                        pow(field.bounds.midY - bounds.midY, 2)
+                    )
+                    return distance < 100
                 }
                 
-                if !hasNearbyRectangle {
-                    // Create a signature field based on text position
-                    // Typical signature field size
+                if !hasNearbyField && confidence > 0.8 {
+                    // Create a signature field below the label
                     let signatureFieldBounds = CGRect(
                         x: bounds.minX,
-                        y: bounds.maxY + 5, // Below the label
-                        width: 200, // Default width
-                        height: 50  // Default height
+                        y: bounds.maxY + 10, // Below the label
+                        width: min(250, pageBounds.width - bounds.minX - 20), // Reasonable width
+                        height: 50  // Standard signature height
                     )
                     
-                    let field = DetectedSignatureField(
-                        id: UUID(),
-                        pageIndex: pageIndex,
-                        bounds: signatureFieldBounds,
-                        confidence: confidence * 0.7,
-                        label: label.capitalized
-                    )
-                    fields.append(field)
+                    // Ensure bounds are within page
+                    if signatureFieldBounds.maxX <= pageBounds.maxX &&
+                       signatureFieldBounds.maxY <= pageBounds.maxY {
+                        let field = DetectedSignatureField(
+                            id: UUID(),
+                            pageIndex: pageIndex,
+                            bounds: signatureFieldBounds,
+                            confidence: confidence * 0.75,
+                            label: label.capitalized
+                        )
+                        fields.append(field)
+                    }
                 }
             }
             
@@ -167,10 +208,11 @@ class SignatureFieldDetectionService {
             print("Signature field detection error: \(error.localizedDescription)")
         }
         
-        return fields
+        // Filter to only high-confidence fields (0.75+)
+        return fields.filter { $0.confidence >= 0.75 }
     }
     
-    private func findNearestSignatureLabel(for bounds: CGRect, in labels: [(String, CGRect, Double)]) -> String? {
+    private func findNearestSignatureLabel(for bounds: CGRect, in labels: [(String, CGRect, Double)], maxDistance: CGFloat = 50) -> String? {
         var nearestLabel: String?
         var nearestDistance = CGFloat.greatestFiniteMagnitude
         
@@ -180,8 +222,8 @@ class SignatureFieldDetectionService {
             let labelCenter = CGPoint(x: labelBounds.midX, y: labelBounds.midY)
             let distance = sqrt(pow(fieldCenter.x - labelCenter.x, 2) + pow(fieldCenter.y - labelCenter.y, 2))
             
-            // Consider labels within 100 points
-            if distance < nearestDistance && distance < 100 {
+            // Consider labels within maxDistance (default 50 points for tighter matching)
+            if distance < nearestDistance && distance < maxDistance {
                 nearestDistance = distance
                 nearestLabel = label.capitalized
             }

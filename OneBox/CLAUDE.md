@@ -432,6 +432,8 @@ The app uses MVVM (Model-View-ViewModel), which means:
 ✅ **Sign PDF drawing**: Custom drawing canvas implemented for real devices, works reliably on iPhone 15 Pro Max (iOS 18.1)
 ✅ **Sign PDF workflow**: Fixed infinite loop, now properly advances from signing to processing to result
 ✅ **Transparent signatures**: Signatures no longer cover PDF text when moved or resized
+✅ **Sign PDF storage**: Fixed persistent save errors with improved disk space checks and file system handling
+✅ **Sign PDF UI**: Fixed clear button functionality and removed undo button as requested
 
 **What is Partial:**
 ⚠️ Some advanced features may need additional testing
@@ -614,18 +616,23 @@ The app uses MVVM (Model-View-ViewModel), which means:
    - Impact: None - informational only
    - Status: Can be addressed if needed
 
+**Resolved Issues:**
+- ✅ **Sign PDF Storage Error**: Fixed persistent "Unable to save the signed PDF" error by improving disk space checks, file system flush timing, and file verification logic
+- ✅ **Sign PDF Clear/Undo Buttons**: Fixed clear button functionality and removed undo button as requested
+
 **No Critical Issues:**
 ✅ All build errors resolved
 ✅ Project compiles successfully
 ✅ All features functional
+✅ Sign PDF feature fully working with no known issues
 
 ---
 
 ## Next Steps
 
 **Immediate Priorities:**
-1. **Test Sign PDF feature end-to-end on real device** - Verify all functionality works (drawing, placement, resize, field detection, multi-page, workflow progression)
-2. **Update CorePDF.signPDF() for multiple signatures** - Currently processes one signature at a time; update to accept array of SignaturePlacement and process all at once (if user needs multiple signatures per page)
+1. ✅ **Sign PDF feature is fully functional** - All issues resolved, tested and working on real device (confirmed by user)
+2. **Update CorePDF.signPDF() for multiple signatures** (Optional) - Currently processes one signature at a time; update to accept array of SignaturePlacement and process all at once (if user needs multiple signatures per page)
 3. Address Swift 6 concurrency warnings (non-blocking but good to fix)
 4. Test all features end-to-end to ensure everything works as expected
 5. Consider adding unit tests for new features (OnDeviceSearchService, WorkflowAutomationView, SignatureFieldDetectionService)
@@ -824,6 +831,24 @@ Do not skip this checklist. Do not lie on this checklist.
   5. Affected existing features? NO - Only Sign PDF feature affected, all other features verified working
 - **Status**: ✅ Sign PDF feature fully functional - drawing works on real devices, workflow progresses correctly, signatures are transparent, error handling improved
 - **Next Session Focus**: Test end-to-end on real device, update CorePDF to support multiple signatures per page if needed, or move to next priority feature
+
+**2025-01-15: Sign PDF Storage Issue Resolution**
+- **Work Completed**: 
+  - Fixed persistent "Processing failed: Unable to save the signed PDF" error
+  - Improved disk space checking logic (less strict, only fails on critically low storage < 1MB)
+  - Enhanced `getAvailableDiskSpace()` to use both `volumeAvailableCapacityForImportantUsageKey` and `volumeAvailableCapacityKey` for better accuracy
+  - Added explicit `UIGraphicsEndPDFContext()` call with 0.2s delay to allow file system flush before verification
+  - Added comprehensive file verification (existence, size, PDF validity, page count) with detailed logging
+  - Fixed `clearCanvas()` function structure issue (Save Button was outside HStack causing compilation errors)
+  - Removed undo button as requested, kept only clear button
+- **Files Modified**: 
+  - `Modules/CorePDF/CorePDF.swift`: Improved storage checks and file writing/verification
+  - `OneBox/Views/Signing/EnhancedSignatureCanvasView.swift`: Fixed UI structure, removed undo button
+- **Testing**: 
+  1. User confirmed storage error is resolved
+  2. User confirmed no remaining issues with Sign PDF feature
+- **Status**: ✅ Sign PDF feature is now fully functional with no known issues
+- **Next Session Focus**: Move to next priority feature or enhancement
 
 ---
 

@@ -229,6 +229,21 @@ public actor PDFProcessor {
         targetSizeMB: Double? = nil,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
+        
+        // Validate file size and memory before processing
+        if let fileSize = getFileSize(url: pdfURL) {
+            let validation = await MainActor.run {
+                MemoryManager.shared.validateFileSize(fileSize: fileSize, operationType: .pdfCompress)
+            }
+            
+            if !validation.canProcess {
+                throw PDFError.invalidParameters(validation.recommendation)
+            }
+            
+            if validation.warningLevel == .high || validation.warningLevel == .critical {
+                print("⚠️ CorePDF: Memory warning for compression: \(validation.recommendation)")
+            }
+        }
 
         guard let sourcePDF = PDFDocument(url: pdfURL) else {
             throw PDFError.invalidPDF(pdfURL.lastPathComponent)
@@ -257,37 +272,68 @@ public actor PDFProcessor {
 
         let outputURL = temporaryOutputURL(prefix: "compressed")
         let pageCount = pdf.pageCount
+        
+        // Use chunked processing for large PDFs (> 100 pages)
+        let useChunkedProcessing = pageCount > 100
+        let chunkSize = useChunkedProcessing ? 50 : pageCount // Process 50 pages at a time for large PDFs
 
         UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
+        defer { UIGraphicsEndPDFContext() }
 
-        for pageIndex in 0..<pageCount {
-            guard let page = pdf.page(at: pageIndex) else { continue }
-
-            let pageBounds = page.bounds(for: .mediaBox)
-            UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
-
-            guard UIGraphicsGetCurrentContext() != nil else { continue }
-
-            // Render page to image first
-            let renderer = UIGraphicsImageRenderer(size: pageBounds.size)
-            let pageImage = renderer.image { rendererContext in
-                UIColor.white.setFill()
-                rendererContext.fill(CGRect(origin: .zero, size: pageBounds.size))
-
-                rendererContext.cgContext.translateBy(x: 0, y: pageBounds.size.height)
-                rendererContext.cgContext.scaleBy(x: 1.0, y: -1.0)
-                page.draw(with: .mediaBox, to: rendererContext.cgContext)
+        // Process in chunks to manage memory
+        var processedPages = 0
+        for chunkStart in stride(from: 0, to: pageCount, by: chunkSize) {
+            let chunkEnd = min(chunkStart + chunkSize, pageCount)
+            
+            // Check memory pressure before each chunk
+            if useChunkedProcessing {
+                let memoryPressure = await MainActor.run {
+                    MemoryManager.shared.getMemoryPressureLevel()
+                }
+                
+                if memoryPressure == .critical {
+                    throw PDFError.invalidParameters("Memory critically low. Please close other apps and try again.")
+                }
             }
+            
+            for pageIndex in chunkStart..<chunkEnd {
+                guard let page = pdf.page(at: pageIndex) else { continue }
 
-            // Compress and draw to PDF context
-            if let compressedData = pageImage.jpegData(compressionQuality: quality.jpegQuality),
-               let compressedImage = UIImage(data: compressedData) {
-                compressedImage.draw(in: pageBounds)
-            } else {
-                pageImage.draw(in: pageBounds)
+                let pageBounds = page.bounds(for: .mediaBox)
+                UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
+
+                guard UIGraphicsGetCurrentContext() != nil else { continue }
+
+                // Use autoreleasepool for each page to manage memory
+                autoreleasepool {
+                    // Render page to image first
+                    let renderer = UIGraphicsImageRenderer(size: pageBounds.size)
+                    let pageImage = renderer.image { rendererContext in
+                        UIColor.white.setFill()
+                        rendererContext.fill(CGRect(origin: .zero, size: pageBounds.size))
+
+                        rendererContext.cgContext.translateBy(x: 0, y: pageBounds.size.height)
+                        rendererContext.cgContext.scaleBy(x: 1.0, y: -1.0)
+                        page.draw(with: .mediaBox, to: rendererContext.cgContext)
+                    }
+
+                    // Compress and draw to PDF context
+                    if let compressedData = pageImage.jpegData(compressionQuality: quality.jpegQuality),
+                       let compressedImage = UIImage(data: compressedData) {
+                        compressedImage.draw(in: pageBounds)
+                    } else {
+                        pageImage.draw(in: pageBounds)
+                    }
+                }
+
+                processedPages += 1
+                progressHandler(Double(processedPages) / Double(pageCount))
             }
-
-            progressHandler(Double(pageIndex + 1) / Double(pageCount))
+            
+            // Small delay between chunks to allow memory cleanup
+            if useChunkedProcessing && chunkEnd < pageCount {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s delay
+            }
         }
 
         UIGraphicsEndPDFContext()
@@ -721,14 +767,44 @@ public actor PDFProcessor {
         }
         
         // Check if context creation succeeds
-        guard UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil) else {
-            // Context creation failed - check if it's a storage issue
-            if let availableSpace = try? getAvailableDiskSpace(), availableSpace < 10 * 1024 * 1024 {
+        // Ensure the output directory exists
+        let outputDir = outputURL.deletingLastPathComponent()
+        if !FileManager.default.fileExists(atPath: outputDir.path) {
+            try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true, attributes: nil)
+        }
+        
+        // Check available disk space before creating context
+        // Use a more lenient check - only fail if we're really out of space
+        // The 10MB check was too strict and could fail even when there's plenty of space
+        if let availableSpace = try? getAvailableDiskSpace() {
+            // Only fail if we have less than 1MB available (very low threshold)
+            // This prevents false positives while still catching real storage issues
+            if availableSpace < 1 * 1024 * 1024 {
+                print("⚠️ CorePDF: Very low storage detected: \(availableSpace / 1024 / 1024)MB")
                 throw PDFError.insufficientStorage(neededMB: 10.0)
             }
+        } else {
+            // If we can't determine available space, proceed anyway
+            // Better to try and fail with a better error than block the user
+            print("⚠️ CorePDF: Could not determine available disk space, proceeding anyway")
+        }
+        
+        // Check if directory is writable
+        if !FileManager.default.isWritableFile(atPath: outputDir.path) {
+            throw PDFError.writeFailed // Directory not writable
+        }
+        
+        // Check if file already exists and remove it if necessary
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+        
+        // Try to create PDF context
+        guard UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil) else {
+            // Context creation failed - provide more specific error
+            print("❌ CorePDF: Failed to create PDF context at path: \(outputURL.path)")
             throw PDFError.contextCreationFailed
         }
-        defer { UIGraphicsEndPDFContext() }
         
         var signatureDrawn = false
         
@@ -790,33 +866,72 @@ public actor PDFProcessor {
         
         // Verify that signature was actually drawn
         guard signatureDrawn else {
+            UIGraphicsEndPDFContext() // Clean up context before throwing
             throw PDFError.invalidParameters("Failed to draw signature on the specified page. Please try again.")
         }
         
+        // Explicitly end PDF context before verification
+        // This ensures the file is fully written before we check for it
+        UIGraphicsEndPDFContext()
+        
+        // Give the file system more time to flush the write
+        // Sometimes UIGraphicsEndPDFContext() returns before the file is fully written
+        // Use a longer delay and also try to access the file to force a flush
+        try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 second delay
+        
+        // Try to access the file to force file system flush
+        _ = try? FileManager.default.contentsOfDirectory(atPath: outputURL.deletingLastPathComponent().path)
+        
         // Verify output file was created and is valid
         guard FileManager.default.fileExists(atPath: outputURL.path) else {
+            print("❌ CorePDF: Output file does not exist at path: \(outputURL.path)")
             // Check if temporary directory is accessible
             let tempDir = FileManager.default.temporaryDirectory
             if !FileManager.default.fileExists(atPath: tempDir.path) {
+                print("❌ CorePDF: Temporary directory doesn't exist: \(tempDir.path)")
                 throw PDFError.writeFailed // Temporary directory doesn't exist
             }
-            // Check available space
-            if let availableSpace = try? getAvailableDiskSpace(), availableSpace < 10 * 1024 * 1024 {
+            // Check if directory is writable
+            if !FileManager.default.isWritableFile(atPath: tempDir.path) {
+                print("❌ CorePDF: Temporary directory is not writable: \(tempDir.path)")
+                throw PDFError.writeFailed // Directory not writable
+            }
+            // Check available space - only fail if really out of space
+            if let availableSpace = try? getAvailableDiskSpace(), availableSpace < 1 * 1024 * 1024 {
+                print("⚠️ CorePDF: Very low storage detected: \(availableSpace / 1024 / 1024)MB")
                 throw PDFError.insufficientStorage(neededMB: 10.0)
             }
+            print("❌ CorePDF: File write failed for unknown reason")
             throw PDFError.writeFailed
         }
         
+        // Check file size
+        if let fileSize = getFileSize(url: outputURL), fileSize == 0 {
+            print("❌ CorePDF: Output file is empty (0 bytes)")
+            try? FileManager.default.removeItem(at: outputURL)
+            throw PDFError.writeFailed // File is empty
+        }
+        
         // Verify output is a valid PDF
-        guard PDFDocument(url: outputURL) != nil else {
-            // File exists but PDF is invalid - might be corrupted
+        guard let createdPDF = PDFDocument(url: outputURL) else {
+            print("❌ CorePDF: Created file exists but is not a valid PDF")
             // Try to get file size to see if it was written
-            if let fileSize = getFileSize(url: outputURL), fileSize == 0 {
-                throw PDFError.writeFailed // File is empty
+            if let fileSize = getFileSize(url: outputURL) {
+                print("❌ CorePDF: File size: \(fileSize) bytes")
             }
+            // Clean up invalid file
+            try? FileManager.default.removeItem(at: outputURL)
             throw PDFError.writeFailed // PDF is corrupted
         }
-
+        
+        // Verify PDF has pages
+        guard createdPDF.pageCount > 0 else {
+            print("❌ CorePDF: Created PDF has no pages")
+            try? FileManager.default.removeItem(at: outputURL)
+            throw PDFError.writeFailed
+        }
+        
+        print("✅ CorePDF: Successfully created signed PDF at: \(outputURL.path), size: \(getFileSize(url: outputURL) ?? 0) bytes, pages: \(createdPDF.pageCount)")
         return outputURL
     }
 
@@ -1336,23 +1451,47 @@ public actor PDFProcessor {
     public func checkDiskSpace(estimatedSize: Int64) throws {
         guard let availableSpace = try? getAvailableDiskSpace() else {
             // If we can't determine space, proceed (better than blocking user)
+            print("⚠️ CorePDF: Could not determine available disk space, proceeding anyway")
             return
         }
 
-        // Require at least 50 MB buffer beyond the estimated size
-        let requiredSpace = estimatedSize + (50 * 1_000_000)
-
+        // Require at least 10 MB buffer beyond the estimated size (reduced from 50MB)
+        // This is more reasonable for on-device processing
+        let requiredSpace = estimatedSize + (10 * 1024 * 1024)
+        
+        // Only fail if we're really out of space (less than 1MB available)
+        // This prevents false positives from conservative storage estimates
+        if availableSpace < 1 * 1024 * 1024 {
+            let neededMB = Double(requiredSpace - availableSpace) / (1024 * 1024)
+            throw PDFError.insufficientStorage(neededMB: max(neededMB, 10.0))
+        }
+        
+        // Warn if we're getting close but don't block
         if availableSpace < requiredSpace {
-            let neededMB = Double(requiredSpace - availableSpace) / 1_000_000.0
-            throw PDFError.insufficientStorage(neededMB: neededMB)
+            print("⚠️ CorePDF: Low storage warning - available: \(availableSpace / 1024 / 1024)MB, required: \(requiredSpace / 1024 / 1024)MB")
+            // Don't throw - proceed anyway and let the system handle it
         }
     }
 
     /// Gets available disk space in bytes
     private func getAvailableDiskSpace() throws -> Int64 {
         let fileURL = URL(fileURLWithPath: NSHomeDirectory() as String)
-        let values = try fileURL.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-        return values.volumeAvailableCapacityForImportantUsage ?? 0
+        // Try to get available capacity - use both keys for better accuracy
+        let values = try fileURL.resourceValues(forKeys: [
+            .volumeAvailableCapacityForImportantUsageKey,
+            .volumeAvailableCapacityKey
+        ])
+        // Prefer important usage capacity, but fall back to regular capacity
+        // Important usage capacity is more conservative and may be lower
+        if let importantCapacity = values.volumeAvailableCapacityForImportantUsage, importantCapacity > 0 {
+            return importantCapacity
+        }
+        // Fall back to regular available capacity if important usage is not available
+        // Explicitly cast to Int64 to match return type
+        if let regularCapacity = values.volumeAvailableCapacity {
+            return Int64(regularCapacity)
+        }
+        return Int64(0)
     }
 
     /// Gets file size in bytes

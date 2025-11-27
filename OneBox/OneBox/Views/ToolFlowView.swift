@@ -431,6 +431,8 @@ struct InputSelectionView: View {
     @State private var preflightInsights: [PreflightInsight] = []
     @State private var showingWorkflowHooks = false
     @State private var isEditingOrder = false
+    @State private var errorMessage: String?
+    @State private var showError = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -469,6 +471,13 @@ struct InputSelectionView: View {
         }
         .sheet(isPresented: $showingWorkflowHooks) {
             WorkflowHooksView(selectedURLs: selectedURLs, tool: tool)
+        }
+        .alert("Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            if let errorMessage = errorMessage {
+                Text(errorMessage)
+            }
         }
     }
     
@@ -948,7 +957,14 @@ struct InputSelectionView: View {
     }
 
     private var maxSelectionCount: Int? {
-        allowsMultipleSelection ? nil : 1
+        if !allowsMultipleSelection {
+            return 1
+        }
+        // Limit image selection to prevent memory crashes
+        if tool == .imageResize || tool == .imagesToPDF {
+            return 100 // Reasonable limit for batch processing
+        }
+        return nil
     }
 
     private var photosFilter: PHPickerFilter {
@@ -991,6 +1007,22 @@ struct InputSelectionView: View {
 
     private func loadPhotos(_ photos: [PhotosPickerItem]) {
         Task { @MainActor in
+            // Check if adding these photos would exceed the limit
+            let maxAllowed = maxSelectionCount ?? Int.max
+            let currentCount = selectedURLs.count
+            let newPhotosCount = photos.count
+            
+            if currentCount + newPhotosCount > maxAllowed {
+                let remaining = maxAllowed - currentCount
+                if remaining > 0 {
+                    errorMessage = "You can only select up to \(maxAllowed) images. \(currentCount) already selected. Please select \(remaining) or fewer images."
+                } else {
+                    errorMessage = "You have already selected the maximum of \(maxAllowed) images. Please remove some images before adding more."
+                }
+                showError = true
+                return
+            }
+            
             var successCount = 0
             var failureCount = 0
             
@@ -1046,8 +1078,10 @@ struct InputSelectionView: View {
             // Show feedback if there were failures
             if failureCount > 0 {
                 let message = failureCount == 1 ? "1 image failed to load" : "\(failureCount) images failed to load"
-                // Could show a banner or alert here
                 print("Photo loading: \(message). \(successCount) images loaded successfully.")
+                // Show user-friendly error message
+                errorMessage = "\(message). \(successCount) image\(successCount == 1 ? "" : "s") loaded successfully."
+                showError = true
             }
             
             analyzeSelectedFiles()
@@ -1612,19 +1646,62 @@ struct ConfigurationView: View {
     private var imageSettings: some View {
         VStack(spacing: 16) {
             // Format
-            Picker("Format", selection: $settings.imageFormat) {
-                Text("JPEG").tag(ImageFormat.jpeg)
-                Text("PNG").tag(ImageFormat.png)
-                Text("HEIC").tag(ImageFormat.heic)
-            }
-            .pickerStyle(.segmented)
-
-            // Quality
             VStack(alignment: .leading, spacing: 8) {
-                Text("Quality: \(Int(settings.imageQuality * 100))%")
+                Text("Format")
                     .font(.subheadline)
                     .fontWeight(.medium)
-                Slider(value: $settings.imageQuality, in: 0.1...1.0, step: 0.1)
+                    .foregroundColor(OneBoxColors.primaryText)
+                Picker("Format", selection: $settings.imageFormat) {
+                    Text("JPEG").tag(ImageFormat.jpeg)
+                    Text("PNG").tag(ImageFormat.png)
+                    Text("HEIC").tag(ImageFormat.heic)
+                }
+                .pickerStyle(.segmented)
+                
+                // Show format-specific info
+                if settings.imageFormat == .png {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("PNG is lossless - quality setting does not apply")
+                            .font(.caption)
+                            .foregroundColor(OneBoxColors.secondaryText)
+                        Text("⚠️ Converting from JPEG to PNG will create larger files")
+                            .font(.caption)
+                            .foregroundColor(OneBoxColors.criticalRed.opacity(0.8))
+                    }
+                    .padding(.top, 4)
+                } else if settings.imageFormat == .heic {
+                    Text("HEIC provides better compression than JPEG")
+                        .font(.caption)
+                        .foregroundColor(OneBoxColors.secondaryText)
+                        .padding(.top, 4)
+                }
+            }
+
+            // Quality (only for lossy formats: JPEG and HEIC)
+            if settings.imageFormat != .png {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Quality: \(Int(settings.imageQuality * 100))%")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(OneBoxColors.primaryText)
+                    Slider(value: $settings.imageQuality, in: 0.1...1.0, step: 0.1)
+                        .tint(OneBoxColors.primaryGold)
+                }
+            } else {
+                // Show info for PNG instead of quality slider
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Compression")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(OneBoxColors.primaryText)
+                    Text("PNG uses lossless compression. Quality setting is not available.")
+                        .font(.caption)
+                        .foregroundColor(OneBoxColors.secondaryText)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(OneBoxColors.primaryGraphite.opacity(0.3))
+                        .cornerRadius(OneBoxRadius.small)
+                }
             }
 
             // Max Dimension
@@ -1633,15 +1710,25 @@ struct ConfigurationView: View {
                     Text("Max Size: \(maxDim)px")
                         .font(.subheadline)
                         .fontWeight(.medium)
+                        .foregroundColor(OneBoxColors.primaryText)
                     Slider(value: Binding(
                         get: { Double(maxDim) },
                         set: { settings.maxDimension = Int($0) }
                     ), in: 512...4096, step: 256)
+                        .tint(OneBoxColors.primaryGold)
                 }
             } else {
                 Button("Set Max Size") {
                     settings.maxDimension = 2048
                 }
+                .foregroundColor(OneBoxColors.primaryGold)
+            }
+            
+            // Show image count if images are selected
+            if !selectedURLs.isEmpty {
+                Text("\(selectedURLs.count) image\(selectedURLs.count == 1 ? "" : "s") selected")
+                    .font(.caption)
+                    .foregroundColor(OneBoxColors.secondaryText)
             }
         }
     }

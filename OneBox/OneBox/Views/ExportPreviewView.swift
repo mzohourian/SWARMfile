@@ -9,6 +9,7 @@ import SwiftUI
 import UIComponents
 import QuickLook
 import PDFKit
+import Photos
 
 struct ExportPreviewView: View {
     let outputURLs: [URL]
@@ -22,6 +23,9 @@ struct ExportPreviewView: View {
     @State private var exportProgress: Double = 0
     @State private var isExporting = false
     @State private var showingSecurityOptions = false
+    @State private var isSavingToPhotos = false
+    @State private var saveToPhotosError: String?
+    @State private var showSaveError = false
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
@@ -68,6 +72,16 @@ struct ExportPreviewView: View {
         .sheet(isPresented: $showingSecurityOptions) {
             SecurityOptionsView { options in
                 applySecurityOptions(options)
+            }
+        }
+        .alert("Error Saving to Photos", isPresented: $showSaveError) {
+            Button("OK", role: .cancel) {
+                // Dismiss view even if there was an error
+                dismiss()
+            }
+        } message: {
+            if let error = saveToPhotosError {
+                Text(error)
             }
         }
         .onAppear {
@@ -380,9 +394,14 @@ struct ExportPreviewView: View {
                     confirmExport()
                 }
                 
-                OneBoxButton("Save & Export Later", icon: "bookmark.fill", style: .secondary) {
+                OneBoxButton(
+                    isSavingToPhotos ? "Saving to Photos..." : "Save & Export Later",
+                    icon: isSavingToPhotos ? "hourglass" : "bookmark.fill",
+                    style: .secondary
+                ) {
                     saveForLater()
                 }
+                .disabled(isSavingToPhotos)
                 
                 Button(action: {
                     onCancel()
@@ -677,9 +696,132 @@ struct ExportPreviewView: View {
     }
     
     private func saveForLater() {
-        // Save export for later
-        HapticManager.shared.notification(.success)
-        dismiss()
+        // Check if there are any image files to save
+        let imageURLs = outputURLs.filter { url in
+            let ext = url.pathExtension.lowercased()
+            return ["jpg", "jpeg", "png", "heic", "heif"].contains(ext)
+        }
+        
+        // If there are images, save them to photo gallery
+        if !imageURLs.isEmpty {
+            saveImagesToPhotoLibrary(imageURLs: imageURLs)
+        } else {
+            // No images to save, just dismiss
+            HapticManager.shared.notification(.success)
+            dismiss()
+        }
+    }
+    
+    private func saveImagesToPhotoLibrary(imageURLs: [URL]) {
+        isSavingToPhotos = true
+        saveToPhotosError = nil
+        
+        Task {
+            do {
+                // Request photo library permission
+                let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+                let authStatus: PHAuthorizationStatus
+                
+                if status == .notDetermined {
+                    authStatus = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+                } else {
+                    authStatus = status
+                }
+                
+                guard authStatus == .authorized || authStatus == .limited else {
+                    await MainActor.run {
+                        saveToPhotosError = "Photo library access denied. Please enable photo access in Settings to save images."
+                        showSaveError = true
+                        isSavingToPhotos = false
+                    }
+                    return
+                }
+                
+                // Save each image
+                var successCount = 0
+                var failureCount = 0
+                
+                for url in imageURLs {
+                    // Ensure file is accessible (handle security-scoped resources and temp files)
+                    var startedAccessing = false
+                    if url.startAccessingSecurityScopedResource() {
+                        startedAccessing = true
+                    }
+                    
+                    defer {
+                        if startedAccessing {
+                            url.stopAccessingSecurityScopedResource()
+                        }
+                    }
+                    
+                    // Check if file exists
+                    guard FileManager.default.fileExists(atPath: url.path) else {
+                        print("⚠️ ExportPreviewView: File does not exist: \(url.path)")
+                        failureCount += 1
+                        continue
+                    }
+                    
+                    // Load image using CGImageSource (better for file access)
+                    var image: UIImage?
+                    
+                    if let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
+                       let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) {
+                        image = UIImage(cgImage: cgImage)
+                    } else {
+                        // Fallback to Data method
+                        if let imageData = try? Data(contentsOf: url) {
+                            image = UIImage(data: imageData)
+                        }
+                    }
+                    
+                    guard let finalImage = image else {
+                        print("⚠️ ExportPreviewView: Failed to load image from: \(url.lastPathComponent)")
+                        failureCount += 1
+                        continue
+                    }
+                    
+                    // Save to photo library
+                    do {
+                        try await PHPhotoLibrary.shared().performChanges {
+                            PHAssetChangeRequest.creationRequestForAsset(from: finalImage)
+                        }
+                        successCount += 1
+                        print("✅ ExportPreviewView: Successfully saved \(url.lastPathComponent) to photo library")
+                    } catch {
+                        print("❌ ExportPreviewView: Failed to save image \(url.lastPathComponent): \(error.localizedDescription)")
+                        failureCount += 1
+                    }
+                }
+                
+                await MainActor.run {
+                    isSavingToPhotos = false
+                    
+                    if failureCount > 0 {
+                        if successCount > 0 {
+                            saveToPhotosError = "Saved \(successCount) image\(successCount == 1 ? "" : "s"). \(failureCount) failed to save."
+                        } else {
+                            saveToPhotosError = "Failed to save images to photo library. The files may have been moved or deleted. Please try using the Share button instead."
+                        }
+                        showSaveError = true
+                    } else if successCount > 0 {
+                        // Success - show feedback and dismiss
+                        HapticManager.shared.notification(.success)
+                        print("✅ ExportPreviewView: Successfully saved \(successCount) image\(successCount == 1 ? "" : "s") to photo library")
+                        dismiss()
+                    } else {
+                        // No images found
+                        saveToPhotosError = "No image files found to save."
+                        showSaveError = true
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isSavingToPhotos = false
+                    saveToPhotosError = "Failed to save images: \(error.localizedDescription)"
+                    showSaveError = true
+                }
+            }
+        }
     }
     
     private func startExportProgress() {

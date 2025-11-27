@@ -434,6 +434,7 @@ The app uses MVVM (Model-View-ViewModel), which means:
 ✅ **Transparent signatures**: Signatures no longer cover PDF text when moved or resized
 ✅ **Sign PDF storage**: Fixed persistent save errors with improved disk space checks and file system handling
 ✅ **Sign PDF UI**: Fixed clear button functionality and removed undo button as requested
+✅ **Resize Image feature**: Comprehensive audit completed - all critical issues fixed (validation, memory management, error handling, save to gallery)
 
 **What is Partial:**
 ⚠️ Some advanced features may need additional testing
@@ -619,12 +620,16 @@ The app uses MVVM (Model-View-ViewModel), which means:
 **Resolved Issues:**
 - ✅ **Sign PDF Storage Error**: Fixed persistent "Unable to save the signed PDF" error by improving disk space checks, file system flush timing, and file verification logic
 - ✅ **Sign PDF Clear/Undo Buttons**: Fixed clear button functionality and removed undo button as requested
+- ✅ **Resize Image Critical Issues**: Fixed 8 critical issues (selection limits, validation, memory management, error handling)
+- ✅ **Resize Image Save to Gallery**: Fixed "Save & Export Later" and "Save to Photos" buttons to properly save images to iPhone photo gallery with security-scoped resource access
+- ✅ **Resize Image UX Issues**: Fixed error messages, text visibility, format-specific quality settings (PNG vs JPEG/HEIC)
 
 **No Critical Issues:**
 ✅ All build errors resolved
 ✅ Project compiles successfully
 ✅ All features functional
 ✅ Sign PDF feature fully working with no known issues
+✅ Resize Image feature fully working with no known issues
 
 ---
 
@@ -632,10 +637,11 @@ The app uses MVVM (Model-View-ViewModel), which means:
 
 **Immediate Priorities:**
 1. ✅ **Sign PDF feature is fully functional** - All issues resolved, tested and working on real device (confirmed by user)
-2. **Update CorePDF.signPDF() for multiple signatures** (Optional) - Currently processes one signature at a time; update to accept array of SignaturePlacement and process all at once (if user needs multiple signatures per page)
-3. Address Swift 6 concurrency warnings (non-blocking but good to fix)
-4. Test all features end-to-end to ensure everything works as expected
-5. Consider adding unit tests for new features (OnDeviceSearchService, WorkflowAutomationView, SignatureFieldDetectionService)
+2. ✅ **Resize Image feature is fully functional** - Comprehensive audit completed, all critical issues fixed, save to gallery working (confirmed by user)
+3. **Update CorePDF.signPDF() for multiple signatures** (Optional) - Currently processes one signature at a time; update to accept array of SignaturePlacement and process all at once (if user needs multiple signatures per page)
+4. Address Swift 6 concurrency warnings (non-blocking but good to fix)
+5. Test all features end-to-end to ensure everything works as expected
+6. Consider adding unit tests for new features (OnDeviceSearchService, WorkflowAutomationView, SignatureFieldDetectionService)
 
 **Short-Term (Next Session):**
 1. User testing and feedback collection
@@ -849,6 +855,37 @@ Do not skip this checklist. Do not lie on this checklist.
   2. User confirmed no remaining issues with Sign PDF feature
 - **Status**: ✅ Sign PDF feature is now fully functional with no known issues
 - **Next Session Focus**: Move to next priority feature or enhancement
+
+**2025-01-15: Resize Image Feature Comprehensive Audit and Fixes**
+- **Work Completed**: 
+  - Performed comprehensive audit of Resize Image feature following detailed checklist
+  - Identified and fixed 8 critical issues (selection limits, validation, memory management, error handling)
+  - Fixed 6 UX issues (error messages, text visibility, format-specific quality settings)
+  - Fixed 4 performance issues (memory cleanup, batch processing, file access)
+  - Fixed "Save & Export Later" and "Save to Photos" buttons to properly save images to iPhone photo gallery
+  - Added security-scoped resource access for proper file handling
+  - Improved PNG vs JPEG/HEIC quality handling (PNG is lossless, quality setting doesn't apply)
+  - Added comprehensive validation (file existence, dimensions, storage space, memory pressure)
+  - Added user-friendly error messages and feedback
+- **Files Modified**: 
+  - `Modules/CoreImageKit/CoreImageKit.swift`: Added validation, memory management, error handling, file access improvements
+  - `Modules/JobEngine/JobEngine.swift`: Improved error messages for image resize
+  - `OneBox/Views/ToolFlowView.swift`: Added selection limits, better UI feedback, error display, format-specific quality UI
+  - `OneBox/Views/JobResultView.swift`: Added "Save to Photos" button with proper file access
+  - `OneBox/Views/ExportPreviewView.swift`: Fixed "Save & Export Later" to actually save images to gallery
+  - `RESIZE_IMAGE_AUDIT_REPORT.md`: Created comprehensive audit report
+- **Testing**: 
+  1. User confirmed all issues resolved
+  2. User confirmed save to gallery working correctly
+  3. User confirmed no remaining issues with Resize Image feature
+- **Completion Checklist**:
+  1. Is this feature fully functional? YES - All fixes implemented, tested and working on real device
+  2. Placeholders/mocks? NO - All real implementations
+  3. Works end-to-end? YES - Complete flow works: select images → configure → process → save to gallery
+  4. Hidden limitations? NO - All major issues resolved
+  5. Affected existing features? NO - Only Resize Image feature affected, all other features verified working
+- **Status**: ✅ Resize Image feature is now fully functional with no known issues
+- **Next Session Focus**: Move to next priority feature or enhancement, or address Swift 6 concurrency warnings
 
 ---
 

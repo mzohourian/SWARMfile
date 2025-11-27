@@ -7,6 +7,7 @@ import SwiftUI
 import JobEngine
 import UIComponents
 import QuickLook
+import Photos
 
 struct JobResultView: View {
     let job: Job
@@ -16,6 +17,9 @@ struct JobResultView: View {
     @State private var showShareSheet = false
     @State private var showPreview = false
     @State private var previewURL: URL?
+    @State private var isSavingToPhotos = false
+    @State private var saveToPhotosError: String?
+    @State private var showSaveError = false
 
     var body: some View {
         NavigationStack {
@@ -172,6 +176,17 @@ struct JobResultView: View {
 
     private var actionsSection: some View {
         VStack(spacing: 12) {
+            // Show "Save to Photos" button for image jobs
+            if isImageJob {
+                PrimaryButton(
+                    isSavingToPhotos ? "Saving..." : "Save to Photos",
+                    icon: isSavingToPhotos ? "hourglass" : "photo.badge.plus"
+                ) {
+                    saveImagesToPhotoLibrary()
+                }
+                .disabled(isSavingToPhotos)
+            }
+            
             PrimaryButton("Share & Save", icon: "square.and.arrow.up") {
                 showShareSheet = true
             }
@@ -194,6 +209,134 @@ struct JobResultView: View {
             }
             .font(.subheadline)
             .foregroundColor(.accentColor)
+        }
+        .alert("Error Saving to Photos", isPresented: $showSaveError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            if let error = saveToPhotosError {
+                Text(error)
+            }
+        }
+    }
+    
+    private var isImageJob: Bool {
+        job.type == .imageResize || job.type == .pdfToImages
+    }
+    
+    private func saveImagesToPhotoLibrary() {
+        isSavingToPhotos = true
+        saveToPhotosError = nil
+        
+        Task {
+            do {
+                // Request photo library permission
+                let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+                let authStatus: PHAuthorizationStatus
+                
+                if status == .notDetermined {
+                    authStatus = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+                } else {
+                    authStatus = status
+                }
+                
+                guard authStatus == .authorized || authStatus == .limited else {
+                    await MainActor.run {
+                        saveToPhotosError = "Photo library access denied. Please enable photo access in Settings to save images."
+                        showSaveError = true
+                        isSavingToPhotos = false
+                    }
+                    return
+                }
+                
+                // Save each image
+                var successCount = 0
+                var failureCount = 0
+                
+                for url in job.outputURLs {
+                    // Check if it's an image file
+                    let ext = url.pathExtension.lowercased()
+                    guard ["jpg", "jpeg", "png", "heic", "heif"].contains(ext) else {
+                        continue
+                    }
+                    
+                    // Ensure file is accessible (handle security-scoped resources and temp files)
+                    var startedAccessing = false
+                    if url.startAccessingSecurityScopedResource() {
+                        startedAccessing = true
+                    }
+                    
+                    defer {
+                        if startedAccessing {
+                            url.stopAccessingSecurityScopedResource()
+                        }
+                    }
+                    
+                    // Check if file exists
+                    guard FileManager.default.fileExists(atPath: url.path) else {
+                        print("⚠️ JobResultView: File does not exist: \(url.path)")
+                        failureCount += 1
+                        continue
+                    }
+                    
+                    // Load image using CGImageSource (better for file access)
+                    var image: UIImage?
+                    
+                    if let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
+                       let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) {
+                        image = UIImage(cgImage: cgImage)
+                    } else {
+                        // Fallback to Data method
+                        if let imageData = try? Data(contentsOf: url) {
+                            image = UIImage(data: imageData)
+                        }
+                    }
+                    
+                    guard let finalImage = image else {
+                        print("⚠️ JobResultView: Failed to load image from: \(url.lastPathComponent)")
+                        failureCount += 1
+                        continue
+                    }
+                    
+                    // Save to photo library
+                    do {
+                        try await PHPhotoLibrary.shared().performChanges {
+                            PHAssetChangeRequest.creationRequestForAsset(from: finalImage)
+                        }
+                        successCount += 1
+                        print("✅ JobResultView: Successfully saved \(url.lastPathComponent) to photo library")
+                    } catch {
+                        print("❌ JobResultView: Failed to save image \(url.lastPathComponent): \(error.localizedDescription)")
+                        failureCount += 1
+                    }
+                }
+                
+                await MainActor.run {
+                    isSavingToPhotos = false
+                    
+                    if failureCount > 0 {
+                        if successCount > 0 {
+                            saveToPhotosError = "Saved \(successCount) image\(successCount == 1 ? "" : "s"). \(failureCount) failed to save."
+                        } else {
+                            saveToPhotosError = "Failed to save images to photo library. The files may have been moved or deleted. Please try using the Share button instead."
+                        }
+                        showSaveError = true
+                    } else if successCount > 0 {
+                        // Success - show feedback
+                        HapticManager.shared.notification(.success)
+                        print("✅ JobResultView: Successfully saved \(successCount) image\(successCount == 1 ? "" : "s") to photo library")
+                    } else {
+                        // No images found
+                        saveToPhotosError = "No image files found to save."
+                        showSaveError = true
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isSavingToPhotos = false
+                    saveToPhotosError = "Failed to save images: \(error.localizedDescription)"
+                    showSaveError = true
+                }
+            }
         }
     }
 

@@ -722,19 +722,52 @@ actor JobProcessor {
     }
 
     private func processImageResize(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
+        // Validate inputs
+        guard !job.inputs.isEmpty else {
+            throw JobError.invalidInput
+        }
+        
+        // Check if inputs exceed reasonable limit
+        if job.inputs.count > 100 {
+            throw JobError.processingFailed("Too many images selected (\(job.inputs.count)). Maximum is 100 images per batch. Please select fewer images.")
+        }
+        
         let processor = ImageProcessor()
         // Use image format directly from CommonTypes
         let imageFormat = job.settings.imageFormat
         
-        let outputURLs = try await processor.processImages(
-            job.inputs,
-            format: imageFormat,
-            quality: job.settings.imageQuality,
-            maxDimension: job.settings.maxDimension,
-            stripEXIF: job.settings.stripMetadata,
-            progressHandler: progressHandler
-        )
-        return try await applyPostProcessing(job: job, urls: outputURLs)
+        do {
+            let outputURLs = try await processor.processImages(
+                job.inputs,
+                format: imageFormat,
+                quality: job.settings.imageQuality,
+                maxDimension: job.settings.maxDimension,
+                stripEXIF: job.settings.stripMetadata,
+                progressHandler: progressHandler
+            )
+            return try await applyPostProcessing(job: job, urls: outputURLs)
+        } catch let error as ImageError {
+            // Convert ImageError to user-friendly messages
+            let userMessage: String
+            switch error {
+            case .invalidImage(let name):
+                userMessage = "Invalid or corrupted image: \(name). Please choose a different image."
+            case .resizeFailed:
+                userMessage = "Failed to resize image. The image may be too large or in an unsupported format."
+            case .encodingFailed:
+                userMessage = "Failed to save resized image. Please check available storage space."
+            case .insufficientStorage(let neededMB):
+                userMessage = "Not enough storage space. Please free up at least \(String(format: "%.1f", neededMB))MB and try again."
+            case .invalidParameters(let message):
+                userMessage = "Invalid settings: \(message). Please adjust your settings and try again."
+            default:
+                userMessage = "Failed to process images: \(error.localizedDescription)"
+            }
+            throw JobError.processingFailed(userMessage)
+        } catch {
+            // Handle other errors
+            throw JobError.processingFailed("Failed to resize images: \(error.localizedDescription)")
+        }
     }
     
     private func processPDFRedact(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {

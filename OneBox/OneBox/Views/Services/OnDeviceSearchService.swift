@@ -29,9 +29,7 @@ class OnDeviceSearchService: ObservableObject {
     func indexAllDocuments() {
         isIndexing = true
         
-        Task.detached { @MainActor [weak self] in
-            guard let self = self else { return }
-            
+        Task {
             var searchableItems: [CSSearchableItem] = []
             
             // Index documents

@@ -290,7 +290,7 @@ struct ToolFlowView: View {
         observeJobCompletion(job)
         
         // Validate file sizes in background (non-blocking, for warnings only)
-        Task.detached(priority: .utility) {
+        Task(priority: .utility) {
             var hasLargeFileWarning = false
             var validationErrors: [String] = []
             

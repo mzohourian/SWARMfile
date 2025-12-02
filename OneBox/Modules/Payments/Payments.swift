@@ -136,14 +136,14 @@ public class PaymentsManager: ObservableObject {
 
     // MARK: - Transaction Listener
     private func listenForTransactions() -> Task<Void, Never> {
-        return Task.detached { @MainActor in
+        return Task {
             for await result in Transaction.updates {
-                guard let transaction = try? self.checkVerified(result) else {
+                guard let transaction = try? checkVerified(result) else {
                     continue
                 }
 
                 await transaction.finish()
-                await self.updatePurchasedProducts()
+                await updatePurchasedProducts()
             }
         }
     }

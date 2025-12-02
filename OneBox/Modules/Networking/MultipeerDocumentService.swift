@@ -231,18 +231,16 @@ public class MultipeerDocumentService: NSObject, ObservableObject {
         return (peerName: String(components[0]), shareID: String(components[1]))
     }
     
-    private func handleReceivedData(_ data: Data, from peer: MCPeerID) {
-        Task { @MainActor in
-            // Try to decode as different message types
-            if let shareNotification = try? JSONDecoder().decode(ShareNotification.self, from: data) {
-                handleShareNotification(shareNotification, from: peer)
-            } else if let documentRequest = try? JSONDecoder().decode(DocumentRequest.self, from: data) {
-                await handleDocumentRequest(documentRequest, from: peer)
-            } else if let documentResponse = try? JSONDecoder().decode(DocumentResponse.self, from: data) {
-                await handleDocumentResponse(documentResponse, from: peer)
-            } else {
-                print("Failed to decode received data as any known message type")
-            }
+    private func handleReceivedData(_ data: Data, from peer: MCPeerID) async {
+        // Try to decode as different message types
+        if let shareNotification = try? JSONDecoder().decode(ShareNotification.self, from: data) {
+            await handleShareNotification(shareNotification, from: peer)
+        } else if let documentRequest = try? JSONDecoder().decode(DocumentRequest.self, from: data) {
+            await handleDocumentRequest(documentRequest, from: peer)
+        } else if let documentResponse = try? JSONDecoder().decode(DocumentResponse.self, from: data) {
+            await handleDocumentResponse(documentResponse, from: peer)
+        } else {
+            print("Failed to decode received data as any known message type")
         }
     }
     
@@ -262,43 +260,45 @@ public class MultipeerDocumentService: NSObject, ObservableObject {
     }
     
     private func handleDocumentRequest(_ request: DocumentRequest, from peer: MCPeerID) async {
-        documentsQueue.sync {
-            guard let sharedDoc = self.sharedDocuments[request.shareID] else {
-                // Send error response
-                let errorResponse = DocumentResponse(
-                    shareID: request.shareID,
-                    success: false,
-                    data: nil,
-                    errorMessage: "Document not found"
-                )
-                
-                Task { @MainActor in
-                    do {
-                        let responseData = try JSONEncoder().encode(errorResponse)
-                        try self.session.send(responseData, toPeers: [peer], with: .reliable)
-                    } catch {
-                        print("Failed to send error response: \(error)")
-                    }
-                }
-                return
-            }
-            
-            // Send document data
-            let response = DocumentResponse(
+        let documentToSend = documentsQueue.sync {
+            self.sharedDocuments[request.shareID]
+        }
+        
+        guard let sharedDoc = documentToSend else {
+            // Send error response
+            let errorResponse = DocumentResponse(
                 shareID: request.shareID,
-                success: true,
-                data: sharedDoc.encryptedDocument.encryptedData,
-                errorMessage: nil
+                success: false,
+                data: nil,
+                errorMessage: "Document not found"
             )
             
-            Task { @MainActor in
-                do {
-                    let responseData = try JSONEncoder().encode(response)
+            do {
+                let responseData = try JSONEncoder().encode(errorResponse)
+                try await MainActor.run {
                     try self.session.send(responseData, toPeers: [peer], with: .reliable)
-                } catch {
-                    print("Failed to send document response: \(error)")
                 }
+            } catch {
+                print("Failed to send error response: \(error)")
             }
+            return
+        }
+        
+        // Send document data
+        let response = DocumentResponse(
+            shareID: request.shareID,
+            success: true,
+            data: sharedDoc.encryptedDocument.encryptedData,
+            errorMessage: nil
+        )
+        
+        do {
+            let responseData = try JSONEncoder().encode(response)
+            try await MainActor.run {
+                try self.session.send(responseData, toPeers: [peer], with: .reliable)
+            }
+        } catch {
+            print("Failed to send document response: \(error)")
         }
     }
     
@@ -354,19 +354,22 @@ extension MultipeerDocumentService: MCSessionDelegate {
     }
     
     nonisolated public func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {
-        Task { @MainActor in
-            // Update transfer progress
-            if let transferIndex = activeTransfers.firstIndex(where: { $0.fromPeer == peerID.displayName }) {
-                activeTransfers[transferIndex].progress = progress.fractionCompleted
+        Task {
+            await MainActor.run {
+                // Update transfer progress
+                if let transferIndex = activeTransfers.firstIndex(where: { $0.fromPeer == peerID.displayName }) {
+                    activeTransfers[transferIndex].progress = progress.fractionCompleted
+                }
             }
         }
     }
     
     nonisolated public func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {
-        Task { @MainActor in
-            if let transferIndex = activeTransfers.firstIndex(where: { $0.fromPeer == peerID.displayName }) {
-                if error != nil {
-                    activeTransfers[transferIndex].status = .failed
+        Task {
+            await MainActor.run {
+                if let transferIndex = activeTransfers.firstIndex(where: { $0.fromPeer == peerID.displayName }) {
+                    if error != nil {
+                        activeTransfers[transferIndex].status = .failed
                 } else {
                     activeTransfers[transferIndex].status = .completed
                     activeTransfers[transferIndex].progress = 1.0

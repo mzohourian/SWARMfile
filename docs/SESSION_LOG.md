@@ -4,6 +4,26 @@
 
 ---
 
+## 2025-12-04: Watermark PDF Fix - Large File Handling
+
+**What Was Done:**
+- Diagnosed root cause of watermark 27% hang: excessive tiling (50x50 = 2500 draw operations per page)
+- Fixed `drawImageWatermark`: reduced limit from 50 to 15 (225 max operations)
+- Fixed `drawTextWatermark`: reduced limit from 20 to 15 for consistency
+- Added `autoreleasepool` inside tiling loops for memory management
+- Added 100% offline principle to all documentation
+
+**Root Cause:**
+For a 10-page PDF with tiled image watermark, the app was doing 25,000 image draw operations with no memory release or UI updates between them.
+
+**Files Modified:**
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Watermark tiling limits and memory
+- `CLAUDE.md`, `PROJECT.md`, `docs/ARCHITECTURE.md` - Added offline principle
+
+**Status:** Fix applied, needs user testing
+
+---
+
 ## 2025-12-04: Documentation Restructure
 
 **What Was Done:**

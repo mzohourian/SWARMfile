@@ -638,7 +638,7 @@ public actor PDFProcessor {
 
     private func drawTextWatermark(_ text: String, in bounds: CGRect, position: WatermarkPosition, tileDensity: Double) {
         print("🎨 CorePDF: Drawing text watermark '\(text)' at position \(position)")
-        
+
         let fontSize: CGFloat = bounds.height * 0.05
         let attributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: fontSize, weight: .bold),
@@ -650,7 +650,7 @@ public actor PDFProcessor {
 
         if position == .tiled {
             print("🎨 CorePDF: Drawing tiled watermark with density \(tileDensity)")
-            
+
             // Calculate spacing for tiled watermarks based on density
             let spacingMultiplier = 2.0 + (1.0 - tileDensity) * 3.0 // Higher density = smaller spacing
             let horizontalSpacing = textSize.width * CGFloat(spacingMultiplier)
@@ -662,26 +662,30 @@ public actor PDFProcessor {
                 return
             }
 
-            // Calculate how many fit, ensuring at least 1 and capping to prevent memory issues
-            let cols = max(1, min(20, Int(ceil(bounds.width / horizontalSpacing)))) // Reduced cap to 20 cols
-            let rows = max(1, min(20, Int(ceil(bounds.height / verticalSpacing)))) // Reduced cap to 20 rows
-            
-            print("🎨 CorePDF: Tiling \(rows) rows x \(cols) cols (spacing: h=\(horizontalSpacing), v=\(verticalSpacing))")
+            // FIXED: Reduced cap to 15 for consistency with image watermarks
+            // 15x15 = 225 max operations per page
+            let cols = max(1, min(15, Int(ceil(bounds.width / horizontalSpacing))))
+            let rows = max(1, min(15, Int(ceil(bounds.height / verticalSpacing))))
+
+            print("🎨 CorePDF: Tiling \(rows) rows x \(cols) cols")
 
             for row in 0..<rows {
-                for col in 0..<cols {
-                    let x = bounds.minX + CGFloat(col) * horizontalSpacing + textSize.width * 0.5
-                    let y = bounds.minY + CGFloat(row) * verticalSpacing + textSize.height * 0.5
-                    (text as NSString).draw(at: CGPoint(x: x, y: y), withAttributes: attributes)
+                // Use autoreleasepool for each row to manage memory
+                autoreleasepool {
+                    for col in 0..<cols {
+                        let x = bounds.minX + CGFloat(col) * horizontalSpacing + textSize.width * 0.5
+                        let y = bounds.minY + CGFloat(row) * verticalSpacing + textSize.height * 0.5
+                        (text as NSString).draw(at: CGPoint(x: x, y: y), withAttributes: attributes)
+                    }
                 }
             }
-            
-            print("🎨 CorePDF: Completed tiled watermark")
+
+            print("✅ CorePDF: Completed tiled text watermark")
         } else {
             print("🎨 CorePDF: Drawing single position watermark at \(position)")
             let point = positionForWatermark(textSize, in: bounds, position: position)
             (text as NSString).draw(at: point, withAttributes: attributes)
-            print("🎨 CorePDF: Completed single watermark")
+            print("✅ CorePDF: Completed single watermark")
         }
     }
 
@@ -691,7 +695,7 @@ public actor PDFProcessor {
             print("⚠️ CorePDF: Invalid image dimensions for watermark")
             return
         }
-        
+
         let aspectRatio = image.size.height / image.size.width
         let watermarkSize = CGSize(
             width: bounds.width * CGFloat(size),
@@ -703,24 +707,32 @@ public actor PDFProcessor {
             let spacingMultiplier = 1.0 + (1.0 - tileDensity) * 2.0 // Higher density = smaller spacing
             let horizontalSpacing = watermarkSize.width * CGFloat(spacingMultiplier)
             let verticalSpacing = watermarkSize.height * CGFloat(spacingMultiplier)
-            
+
             // Prevent excessive tiling that could cause memory issues
             guard horizontalSpacing > 0 && verticalSpacing > 0 else {
                 print("⚠️ CorePDF: Invalid spacing for tiled watermark")
                 return
             }
-            
-            let rows = max(1, min(50, Int(bounds.height / verticalSpacing) + 1)) // Cap at 50 rows
-            let cols = max(1, min(50, Int(bounds.width / horizontalSpacing) + 1)) // Cap at 50 cols
+
+            // FIXED: Reduced from 50 to 15 to prevent memory issues and freezing
+            // 15x15 = 225 max operations per page (vs 2500 before)
+            let rows = max(1, min(15, Int(bounds.height / verticalSpacing) + 1))
+            let cols = max(1, min(15, Int(bounds.width / horizontalSpacing) + 1))
+
+            print("🎨 CorePDF: Drawing tiled image watermark - \(rows) rows x \(cols) cols")
 
             for row in 0..<rows {
-                for col in 0..<cols {
-                    let x = bounds.minX + CGFloat(col) * horizontalSpacing
-                    let y = bounds.minY + CGFloat(row) * verticalSpacing
-                    let rect = CGRect(origin: CGPoint(x: x, y: y), size: watermarkSize)
-                    image.draw(in: rect)
+                // Use autoreleasepool for each row to manage memory
+                autoreleasepool {
+                    for col in 0..<cols {
+                        let x = bounds.minX + CGFloat(col) * horizontalSpacing
+                        let y = bounds.minY + CGFloat(row) * verticalSpacing
+                        let rect = CGRect(origin: CGPoint(x: x, y: y), size: watermarkSize)
+                        image.draw(in: rect)
+                    }
                 }
             }
+            print("✅ CorePDF: Completed tiled image watermark")
         } else {
             let origin = positionForWatermark(watermarkSize, in: bounds, position: position)
             let rect = CGRect(origin: origin, size: watermarkSize)

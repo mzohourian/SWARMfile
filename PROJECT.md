@@ -3,9 +3,21 @@
 **Last Updated:** 2025-12-04
 
 ## What This Is
-**OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. No cloud uploads, no tracking. Think of it as a Swiss Army knife for documents that respects your privacy.
+**OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
 
 **Target Users:** Anyone who works with PDFs and images on iPhone/iPad and cares about privacy.
+
+## Core Principle - 100% OFFLINE
+
+| Requirement | Status |
+|-------------|--------|
+| Works in airplane mode | REQUIRED |
+| No cloud services | REQUIRED |
+| No API calls | REQUIRED |
+| No internet needed | REQUIRED |
+| All processing on-device | REQUIRED |
+
+The app uses only the device's local storage, RAM, and CPU. Large files should be handled via streaming/chunking, not by loading everything into memory.
 
 ---
 

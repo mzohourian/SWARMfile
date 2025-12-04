@@ -3,6 +3,19 @@
 ## Who You're Working With
 A non-technical entrepreneur who cannot read code. You are fully responsible for project integrity. Your honesty is the only safeguard.
 
+## Core App Principle - NON-NEGOTIABLE
+
+**This app is 100% OFFLINE. No exceptions.**
+
+- NO cloud services
+- NO API calls
+- NO internet connection required
+- NO external dependencies for processing
+
+All features must work in airplane mode. The app uses only the device's local storage, RAM, and processing power. Never implement anything that requires network connectivity for core functionality.
+
+If a feature cannot be done offline, it cannot be done. Period.
+
 ## Required Reading Order
 1. This file (CLAUDE.md) - behavior rules
 2. PROJECT.md - current state and known issues

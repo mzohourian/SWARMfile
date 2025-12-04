@@ -107,12 +107,33 @@ class JobManager: ObservableObject {
 - **Button syntax:** Use `Button(action: {}) { Text("") }` not `Button("")`
 - **Picker syntax:** Use `Picker(selection:label:)` format
 
-## Privacy Principles
+## Core Principle - 100% OFFLINE (NON-NEGOTIABLE)
 
-- All processing on-device
-- No cloud uploads for core features
-- No tracking or analytics
-- Data stored locally (UserDefaults, FileManager)
+**This app must work in airplane mode. No exceptions.**
+
+| Rule | Description |
+|------|-------------|
+| No cloud | Never upload user files anywhere |
+| No APIs | Never call external services |
+| No internet | Core features need zero connectivity |
+| Local only | Use device storage, RAM, CPU only |
+
+### Large File Handling
+
+Files should be processed using streaming/chunking, NOT by loading entirely into memory:
+
+| Bad | Good |
+|-----|------|
+| Load entire PDF into RAM | Process page-by-page |
+| Hold all images at once | Process one, release, next |
+| Create full copy in memory | Stream to disk as you go |
+
+This ensures the app can handle large files (100MB+ PDFs, hundreds of images) without freezing or crashing.
+
+### Data Storage
+- UserDefaults for settings
+- FileManager for documents
+- Core Spotlight for on-device search (no cloud index)
 
 ---
 

@@ -430,8 +430,8 @@ final class CorePDFPerformanceTests: XCTestCase {
                         let startTime = CFAbsoluteTimeGetCurrent()
                         
                         if testCase.type == "text" {
-                            _ = try await processor.addWatermark(
-                                to: testCase.pdf,
+                            _ = try await processor.watermarkPDF(
+                                testCase.pdf,
                                 text: "CONFIDENTIAL",
                                 position: .center,
                                 progressHandler: { _ in }
@@ -439,17 +439,13 @@ final class CorePDFPerformanceTests: XCTestCase {
                         } else {
                             // Create watermark image
                             let watermarkImage = createTestImage(width: 200, height: 100, index: 0)
-                            let watermarkURL = FileManager.default.temporaryDirectory.appendingPathComponent("watermark.png")
-                            try watermarkImage.pngData()?.write(to: watermarkURL)
                             
-                            _ = try await processor.addWatermark(
-                                to: testCase.pdf,
-                                imageURL: watermarkURL,
+                            _ = try await processor.watermarkPDF(
+                                testCase.pdf,
+                                image: watermarkImage,
                                 position: .bottomRight,
                                 progressHandler: { _ in }
                             )
-                            
-                            try? FileManager.default.removeItem(at: watermarkURL)
                         }
                         
                         let duration = CFAbsoluteTimeGetCurrent() - startTime

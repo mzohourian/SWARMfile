@@ -437,6 +437,7 @@ The app uses MVVM (Model-View-ViewModel), which means:
 ✅ **Resize Image feature**: Comprehensive audit completed - all critical issues fixed (validation, memory management, error handling, save to gallery)
 
 **What is Partial:**
+⚠️ **Watermark PDF feature hangs at 27%** - Critical issue preventing completion
 ⚠️ Some advanced features may need additional testing
 ⚠️ Swift 6 concurrency warnings (non-blocking, but should be addressed eventually)
 
@@ -456,7 +457,34 @@ The app uses MVVM (Model-View-ViewModel), which means:
 
 ## Recent Changes
 
-**Most Recent (Today - Sign PDF Complete Fixes):**
+**Most Recent (Today - Watermark PDF Button and Progress Fixes):**
+1. **Fixed "Begin Secure Processing" Button Not Responding:**
+   - Issue: Button clicks weren't registering, preventing watermark processing from starting
+   - Root cause: ToolFlowView.swift was calling `HapticManager.shared` without importing HapticManager
+   - Fix: Replaced all HapticManager calls with direct UIKit feedback generators
+   - Added `import UIKit` to support feedback generators
+   - Fixed multiple buttons throughout the interface, not just watermark processing
+
+2. **Fixed Watermark PDF Infinite Loading at 100%:**
+   - Issue: App got stuck at "100% Complete" without transitioning to result screen
+   - Root cause: Timing gap where `progress = 1.0` but `status` still `.running`
+   - Fix: Added detection in `observeJobCompletion()` for progress>=1.0 with .running status
+   - Added 1-second grace period for status to update to `.success`
+   - Now properly transitions from processing to export preview
+
+3. **Added Comprehensive Watermark Debugging:**
+   - Added detailed logging for each page processing step
+   - Improved memory management with autoreleasepool per page  
+   - Added async yielding to prevent main thread blocking
+   - Reduced tiling limits from 50x50 to 20x20 to prevent performance issues
+   - Enhanced error handling and progress tracking throughout watermark pipeline
+
+4. **New Issue Identified:**
+   - Watermark PDF now hangs at 27% instead of previous issues
+   - Suggests underlying performance/memory issue in watermark drawing
+   - Debugging logs now in place to identify exact hang location
+
+**Previous Session (Sign PDF Complete Fixes):**
 1. **Fixed Sign PDF Workflow Infinite Loop:**
    - Issue: After signing and clicking "Done", workflow would loop back to input selection instead of proceeding to processing/result
    - Fix: Added `onJobSubmitted` callback to `InteractiveSignPDFViewWrapper` that properly advances workflow to processing step
@@ -535,7 +563,11 @@ The app uses MVVM (Model-View-ViewModel), which means:
 10. Fixed 31+ build errors and 15+ warnings
 11. Ensured iOS 16 compatibility throughout
 
-**Files Modified in Recent Sessions:**
+**Files Modified Today:**
+- `OneBox/Views/ToolFlowView.swift` - Fixed "Begin Secure Processing" button and infinite loading issues
+- `Modules/CorePDF/CorePDF.swift` - Added comprehensive watermark debugging and performance improvements
+
+**Files Modified in Previous Sessions:**
 - `OneBox/Views/Signing/InteractiveSignPDFView.swift` - NEW: Main interactive signing view
 - `OneBox/Views/Signing/EnhancedSignatureCanvasView.swift` - NEW: Large drawing canvas
 - `OneBox/Views/Signing/InteractivePDFPageView.swift` - NEW: PDF viewer with gestures
@@ -605,6 +637,15 @@ The app uses MVVM (Model-View-ViewModel), which means:
 
 ## Known Issues
 
+**Critical Issues:**
+1. **Watermark PDF Hangs at 27%** (High Priority)
+   - Location: CorePDF watermark processing function
+   - Impact: Prevents watermark feature from completing
+   - Status: Under investigation with debugging logs added
+   - Previous behavior: Hung at 54%, then 100% infinite loading
+   - Current behavior: Now hangs at 27% after debugging improvements
+   - Root cause: Likely memory/performance issue in graphics operations or tiled watermark drawing
+
 **Non-Critical Warnings:**
 1. **Swift 6 Concurrency Warnings** (3 warnings)
    - Location: `MultipeerDocumentService.swift` and `OnDeviceSearchService.swift`
@@ -636,12 +677,14 @@ The app uses MVVM (Model-View-ViewModel), which means:
 ## Next Steps
 
 **Immediate Priorities:**
-1. ✅ **Sign PDF feature is fully functional** - All issues resolved, tested and working on real device (confirmed by user)
-2. ✅ **Resize Image feature is fully functional** - Comprehensive audit completed, all critical issues fixed, save to gallery working (confirmed by user)
-3. **Update CorePDF.signPDF() for multiple signatures** (Optional) - Currently processes one signature at a time; update to accept array of SignaturePlacement and process all at once (if user needs multiple signatures per page)
+1. **🔥 CRITICAL: Fix Watermark PDF hanging at 27%** - This is blocking the watermark feature completely
+   - Investigate which specific page/operation causes the 27% hang using the new debug logs
+   - Likely causes: memory pressure, infinite loops in tiled drawing, graphics context issues
+   - Previous attempts: Fixed 100% infinite loading, improved memory management, but issue persists
+2. ✅ **Sign PDF feature is fully functional** - All issues resolved, tested and working on real device (confirmed by user)
+3. ✅ **Resize Image feature is fully functional** - Comprehensive audit completed, all critical issues fixed, save to gallery working (confirmed by user)
 4. Address Swift 6 concurrency warnings (non-blocking but good to fix)
 5. Test all features end-to-end to ensure everything works as expected
-6. Consider adding unit tests for new features (OnDeviceSearchService, WorkflowAutomationView, SignatureFieldDetectionService)
 
 **Short-Term (Next Session):**
 1. User testing and feedback collection
@@ -856,6 +899,25 @@ Do not skip this checklist. Do not lie on this checklist.
 - **Status**: ✅ Sign PDF feature is now fully functional with no known issues
 - **Next Session Focus**: Move to next priority feature or enhancement
 
+**2025-12-04: Watermark PDF Button and Progress Fixes**
+- **Work Completed**: 
+  - Fixed "Begin Secure Processing" button not responding (replaced HapticManager calls with UIKit)
+  - Fixed watermark infinite loading at 100% (added progress completion detection)
+  - Added comprehensive debugging to watermark processing function
+  - Improved memory management and performance for watermark feature
+- **Files Modified**: 
+  - `OneBox/Views/ToolFlowView.swift`: Fixed button interactions and infinite loading
+  - `Modules/CorePDF/CorePDF.swift`: Added debugging and performance improvements
+- **New Issue Identified**: Watermark PDF now hangs at 27% - requires investigation with new debug logs
+- **Completion Checklist**:
+  1. Is this feature fully functional? PARTIAL - Button works but watermark hangs at 27%
+  2. Placeholders/mocks? NO - All real implementations
+  3. Works end-to-end? NO - Watermark processing hangs at 27%
+  4. Hidden limitations? YES - Critical hang at 27% prevents completion
+  5. Affected existing features? NO - Only watermark feature affected
+- **Status**: ⚠️ Critical issue identified - watermark hangs at 27%
+- **Next Session Focus**: Investigate and fix the 27% hang using debug logs
+
 **2025-01-15: Resize Image Feature Comprehensive Audit and Fixes**
 - **Work Completed**: 
   - Performed comprehensive audit of Resize Image feature following detailed checklist
@@ -890,4 +952,6 @@ Do not skip this checklist. Do not lie on this checklist.
 ---
 
 *This document is the single source of truth for project continuity. Update it after every session.*
+
+*Last updated: 2025-12-04*
 

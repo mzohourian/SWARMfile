@@ -346,17 +346,29 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
     public func encryptFile(at sourceURL: URL, password: String) throws -> URL {
         let encryptedURL = sourceURL.appendingPathExtension("encrypted")
         
-        guard let sourceData = try? Data(contentsOf: sourceURL),
-              let passwordData = password.data(using: .utf8) else {
+        guard let sourceData = try? Data(contentsOf: sourceURL) else {
             throw PrivacyError.encryptionFailed
         }
         
-        // Use AES encryption
-        let key = SymmetricKey(data: SHA256.hash(data: passwordData).compactMap { $0 })
+        // Generate random salt for each encryption
+        var salt = Data(count: 16) // 128-bit salt
+        let result = salt.withUnsafeMutableBytes {
+            SecRandomCopyBytes(kSecRandomDefault, 16, $0.bindMemory(to: UInt8.self).baseAddress!)
+        }
+        guard result == errSecSuccess else {
+            throw PrivacyError.encryptionFailed
+        }
+        
+        // Derive key using PBKDF2 (secure key derivation)
+        let key = try deriveKey(from: password, salt: salt)
         
         do {
             let encryptedData = try AES.GCM.seal(sourceData, using: key)
-            let finalData = encryptedData.combined!
+            
+            // Prepend salt to encrypted data for decryption
+            var finalData = salt
+            finalData.append(encryptedData.combined!)
+            
             try finalData.write(to: encryptedURL)
             
             logAuditEvent(.fileEncrypted(sourceURL.lastPathComponent))
@@ -364,6 +376,74 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
             return encryptedURL
         } catch {
             throw PrivacyError.encryptionFailed
+        }
+    }
+    
+    /// Securely derives encryption key from password using PBKDF2
+    private func deriveKey(from password: String, salt: Data) throws -> SymmetricKey {
+        guard let passwordData = password.data(using: .utf8) else {
+            throw PrivacyError.encryptionFailed
+        }
+        
+        let iterations: Int = 100_000 // NIST recommended minimum
+        let keyLength: Int = 32 // 256-bit key
+        
+        var derivedKey = Data(count: keyLength)
+        let result = derivedKey.withUnsafeMutableBytes { derivedKeyBytes in
+            passwordData.withUnsafeBytes { passwordBytes in
+                salt.withUnsafeBytes { saltBytes in
+                    CCKeyDerivationPBKDF(
+                        CCPBKDFAlgorithm(kCCPBKDF2),
+                        passwordBytes.bindMemory(to: Int8.self).baseAddress!,
+                        passwordData.count,
+                        saltBytes.bindMemory(to: UInt8.self).baseAddress!,
+                        salt.count,
+                        CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
+                        UInt32(iterations),
+                        derivedKeyBytes.bindMemory(to: UInt8.self).baseAddress!,
+                        keyLength
+                    )
+                }
+            }
+        }
+        
+        guard result == kCCSuccess else {
+            throw PrivacyError.encryptionFailed
+        }
+        
+        return SymmetricKey(data: derivedKey)
+    }
+    
+    public func decryptFile(at encryptedURL: URL, password: String) throws -> URL {
+        let decryptedURL = encryptedURL.deletingPathExtension() // Remove .encrypted
+        
+        guard let encryptedData = try? Data(contentsOf: encryptedURL) else {
+            throw PrivacyError.decryptionFailed
+        }
+        
+        // Encrypted file format: [16-byte salt][AES-GCM encrypted data]
+        guard encryptedData.count > 16 else {
+            throw PrivacyError.decryptionFailed
+        }
+        
+        // Extract salt from beginning of file
+        let salt = encryptedData.prefix(16)
+        let actualEncryptedData = encryptedData.dropFirst(16)
+        
+        // Derive key using same PBKDF2 parameters
+        let key = try deriveKey(from: password, salt: Data(salt))
+        
+        do {
+            let sealedBox = try AES.GCM.SealedBox(combined: actualEncryptedData)
+            let decryptedData = try AES.GCM.open(sealedBox, using: key)
+            
+            try decryptedData.write(to: decryptedURL)
+            
+            logAuditEvent(.fileDecrypted(decryptedURL.lastPathComponent))
+            
+            return decryptedURL
+        } catch {
+            throw PrivacyError.decryptionFailed
         }
     }
     
@@ -664,6 +744,7 @@ public enum PrivacyAuditEvent: Codable {
     case documentSanitized(String, String) // Changed to store summary instead of full report
     case forensicsReportGenerated(String) // Changed to store summary instead of full report
     case fileEncrypted(String)
+    case fileDecrypted(String)
     case airplaneModeDetected
     case auditTrailCleared
     
@@ -721,6 +802,9 @@ public enum PrivacyAuditEvent: Codable {
         case "fileEncrypted":
             let fileName = try container.decode(String.self, forKey: .value1)
             self = .fileEncrypted(fileName)
+        case "fileDecrypted":
+            let fileName = try container.decode(String.self, forKey: .value1)
+            self = .fileDecrypted(fileName)
         case "airplaneModeDetected":
             self = .airplaneModeDetected
         case "auditTrailCleared":
@@ -772,6 +856,9 @@ public enum PrivacyAuditEvent: Codable {
         case .fileEncrypted(let fileName):
             try container.encode("fileEncrypted", forKey: .type)
             try container.encode(fileName, forKey: .value1)
+        case .fileDecrypted(let fileName):
+            try container.encode("fileDecrypted", forKey: .type)
+            try container.encode(fileName, forKey: .value1)
         case .airplaneModeDetected:
             try container.encode("airplaneModeDetected", forKey: .type)
         case .auditTrailCleared:
@@ -807,6 +894,8 @@ public enum PrivacyAuditEvent: Codable {
             return "File forensics report generated - \(summary)"
         case .fileEncrypted(let fileName):
             return "File encrypted: \(fileName)"
+        case .fileDecrypted(let fileName):
+            return "File decrypted: \(fileName)"
         case .airplaneModeDetected:
             return "Airplane mode detected - Maximum privacy active"
         case .auditTrailCleared:
@@ -819,6 +908,7 @@ public enum PrivacyError: LocalizedError {
     case biometricNotAvailable
     case biometricAuthenticationFailed
     case encryptionFailed
+    case decryptionFailed
     case secureVaultNotEnabled
     case sanitizationFailed(String)
     
@@ -830,6 +920,8 @@ public enum PrivacyError: LocalizedError {
             return "Biometric authentication failed"
         case .encryptionFailed:
             return "Failed to encrypt file"
+        case .decryptionFailed:
+            return "Failed to decrypt file - check password"
         case .secureVaultNotEnabled:
             return "Secure Vault mode is not enabled"
         case .sanitizationFailed(let message):

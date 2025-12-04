@@ -6,7 +6,9 @@
 //
 
 import Foundation
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Manages memory monitoring and provides utilities for safe large file processing
 @MainActor
@@ -215,14 +217,16 @@ public class MemoryManager {
     // MARK: - Private Helpers
     
     private func setupMemoryWarningObserver() {
+        #if canImport(UIKit)
         memoryWarningObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { _ in
             // Memory warning received - could trigger cleanup if needed
             print("⚠️ MemoryManager: Memory warning received")
         }
+        #endif
     }
     
     private func generateRecommendation(

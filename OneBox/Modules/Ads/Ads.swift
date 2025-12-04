@@ -8,6 +8,7 @@
 import SwiftUI
 
 // MARK: - Ad Banner View
+@available(iOS 14.0, macOS 11.0, *)
 public struct AdBannerView: View {
     @State private var isVisible = true
 
@@ -47,7 +48,7 @@ public struct AdBannerView: View {
                     }
                 }
                 .padding()
-                .background(Color(.secondarySystemGroupedBackground))
+                .background(Color.gray.opacity(0.1))
                 .cornerRadius(12)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
@@ -59,6 +60,7 @@ public struct AdBannerView: View {
 }
 
 // MARK: - Ad Manager
+@available(iOS 14.0, macOS 11.0, *)
 public class AdManager: ObservableObject {
     public static let shared = AdManager()
 
@@ -86,6 +88,7 @@ public class AdManager: ObservableObject {
 }
 
 #if DEBUG
+@available(iOS 14.0, macOS 11.0, *)
 struct AdBannerView_Previews: PreviewProvider {
     static var previews: some View {
         VStack {

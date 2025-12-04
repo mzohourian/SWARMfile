@@ -13,6 +13,7 @@ import JobEngine
 import UIComponents
 import PDFKit
 import Foundation
+import UIKit
 
 // Wrapper for URL to make it Identifiable
 struct IdentifiableURL: Identifiable {
@@ -209,13 +210,15 @@ struct ToolFlowView: View {
         if step == .selectInput {
             Button("Cancel") {
                 dismiss()
-                HapticManager.shared.impact(.light)
+                let generator = UIImpactFeedbackGenerator(style: .light)
+                generator.impactOccurred()
             }
             .foregroundColor(OneBoxColors.primaryText)
         } else if step == .configure {
             Button(action: {
                 step = .selectInput
-                HapticManager.shared.impact(.light)
+                let generator = UIImpactFeedbackGenerator(style: .light)
+                generator.impactOccurred()
             }) {
                 HStack(spacing: OneBoxSpacing.tiny) {
                     Image(systemName: "chevron.left")
@@ -361,6 +364,18 @@ struct ToolFlowView: View {
                             step = .selectInput // Go back to input selection
                         }
                         break
+                    } else if updatedJob.progress >= 1.0 && updatedJob.status == .running {
+                        // Handle case where progress reaches 100% but status hasn't updated yet
+                        // Wait a bit longer for status to update to .success
+                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1.0s additional wait
+                        if let finalJob = jobManager.jobs.first(where: { $0.id == job.id }),
+                           finalJob.status == .success {
+                            await MainActor.run {
+                                currentJob = finalJob
+                                step = .exportPreview
+                            }
+                            break
+                        }
                     }
                 }
 
@@ -549,7 +564,8 @@ struct InputSelectionView: View {
     
     private func moveImages(from source: IndexSet, to destination: Int) {
         selectedURLs.move(fromOffsets: source, toOffset: destination)
-        HapticManager.shared.impact(.light)
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
     }
     
     private func analyzeSelectedFiles() {
@@ -756,7 +772,8 @@ struct InputSelectionView: View {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     isEditingOrder.toggle()
                                 }
-                                HapticManager.shared.selection()
+                                let generator = UISelectionFeedbackGenerator()
+                                generator.selectionChanged()
                             }
                             .foregroundColor(OneBoxColors.primaryGold)
                             .font(OneBoxTypography.caption)
@@ -770,7 +787,8 @@ struct InputSelectionView: View {
                             ForEach(Array(selectedURLs.enumerated()), id: \.offset) { index, url in
                                 luxuryFileCard(url: url, index: index) {
                                     selectedURLs.remove(at: index)
-                                    HapticManager.shared.impact(.light)
+                                    let generator = UIImpactFeedbackGenerator(style: .light)
+                generator.impactOccurred()
                                     analyzeSelectedFiles() // Re-analyze after removal
                                 }
                                 .listRowBackground(Color.clear)
@@ -788,7 +806,8 @@ struct InputSelectionView: View {
                                 ForEach(Array(selectedURLs.enumerated()), id: \.offset) { index, url in
                                     luxuryFileCard(url: url, index: index) {
                                         selectedURLs.remove(at: index)
-                                        HapticManager.shared.impact(.light)
+                                        let generator = UIImpactFeedbackGenerator(style: .light)
+                generator.impactOccurred()
                                         analyzeSelectedFiles() // Re-analyze after removal
                                     }
                                 }
@@ -815,7 +834,8 @@ struct InputSelectionView: View {
             } else {
                 showFilePicker = true
             }
-            HapticManager.shared.impact(.medium)
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
         }
     }
     
@@ -830,7 +850,8 @@ struct InputSelectionView: View {
             } else {
                 showFilePicker = true
             }
-            HapticManager.shared.selection()
+            let generator = UISelectionFeedbackGenerator()
+            generator.selectionChanged()
         }
     }
 
@@ -860,7 +881,8 @@ struct InputSelectionView: View {
                 isDisabled: selectedURLs.isEmpty
             ) {
                 onContinue()
-                HapticManager.shared.notification(.success)
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
             }
         }
     }
@@ -1218,7 +1240,8 @@ struct ConfigurationView: View {
                     
                     Button(action: {
                         showContextualHelp = true
-                        HapticManager.shared.selection()
+                        let generator = UISelectionFeedbackGenerator()
+            generator.selectionChanged()
                     }) {
                         Image(systemName: "questionmark.circle")
                             .font(.system(size: 20))
@@ -1279,7 +1302,8 @@ struct ConfigurationView: View {
             VStack(spacing: OneBoxSpacing.medium) {
                 Button {
                     showAdvanced.toggle()
-                    HapticManager.shared.selection()
+                    let generator = UISelectionFeedbackGenerator()
+            generator.selectionChanged()
                 } label: {
                     HStack {
                         HStack(spacing: OneBoxSpacing.small) {
@@ -1352,7 +1376,8 @@ struct ConfigurationView: View {
         }
         .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
         .onChange(of: binding.wrappedValue) { _ in
-            HapticManager.shared.selection()
+            let generator = UISelectionFeedbackGenerator()
+            generator.selectionChanged()
         }
     }
     
@@ -1400,7 +1425,8 @@ struct ConfigurationView: View {
                 isDisabled: !isConfigurationValid
             ) {
                 onProcess()
-                HapticManager.shared.notification(.success)
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
             }
         }
     }
@@ -1601,7 +1627,8 @@ struct ConfigurationView: View {
                             // Clear page ranges when selecting all pages
                             settings.splitRanges = []
                         }
-                        HapticManager.shared.selection()
+                        let generator = UISelectionFeedbackGenerator()
+            generator.selectionChanged()
                     }
                 
                 if !settings.selectAllPages {

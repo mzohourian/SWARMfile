@@ -323,41 +323,20 @@ struct OneBoxButtonStyle: ButtonStyle {
                     // Haptic feedback based on button style
                     switch style {
                     case .primary, .security:
-                        HapticManager.shared.impact(.medium)
+                        let generator = UIImpactFeedbackGenerator(style: .medium)
+                        generator.impactOccurred()
                     case .secondary, .subtle:
-                        HapticManager.shared.impact(.light)
+                        let generator = UIImpactFeedbackGenerator(style: .light)
+                        generator.impactOccurred()
                     case .critical:
-                        HapticManager.shared.impact(.heavy)
+                        let generator = UIImpactFeedbackGenerator(style: .heavy)
+                        generator.impactOccurred()
                     }
                 }
             }
     }
 }
 
-// MARK: - Haptic Manager
-public class HapticManager: ObservableObject {
-    public static let shared = HapticManager()
-    
-    private init() {}
-    
-    public func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
-        let impactGenerator = UIImpactFeedbackGenerator(style: style)
-        impactGenerator.prepare()
-        impactGenerator.impactOccurred()
-    }
-    
-    public func notification(_ type: UINotificationFeedbackGenerator.FeedbackType) {
-        let notificationGenerator = UINotificationFeedbackGenerator()
-        notificationGenerator.prepare()
-        notificationGenerator.notificationOccurred(type)
-    }
-    
-    public func selection() {
-        let selectionGenerator = UISelectionFeedbackGenerator()
-        selectionGenerator.prepare()
-        selectionGenerator.selectionChanged()
-    }
-}
 
 // MARK: - Usage Meter
 public struct UsageMeter: View {

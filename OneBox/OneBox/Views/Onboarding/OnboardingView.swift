@@ -440,8 +440,10 @@ struct OnboardingView: View {
         let context = LAContext()
         let reason = "Enable biometric authentication for secure document access"
         
-        context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { success, error in
-            DispatchQueue.main.async {
+        Task { @MainActor in
+            do {
+                let success = try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason)
+                
                 self.isAuthenticating = false
                 
                 if success {
@@ -450,6 +452,9 @@ struct OnboardingView: View {
                 } else {
                     HapticManager.shared.notification(.error)
                 }
+            } catch {
+                self.isAuthenticating = false
+                HapticManager.shared.notification(.error)
             }
         }
     }

@@ -6,7 +6,9 @@
 //
 
 import Foundation
+#if canImport(SwiftUI)
 import SwiftUI
+#endif
 
 // MARK: - Tool Type
 public enum ToolType: String, CaseIterable, Identifiable {
@@ -68,6 +70,8 @@ public enum ToolType: String, CaseIterable, Identifiable {
         }
     }
 
+    #if canImport(SwiftUI)
+    @available(iOS 15.0, macOS 12.0, *)
     public var color: Color {
         switch self {
         case .imagesToPDF: return .blue
@@ -82,6 +86,7 @@ public enum ToolType: String, CaseIterable, Identifiable {
         case .pdfRedact: return .red
         }
     }
+    #endif
 }
 
 public enum PDFOrientation: String, Codable, CaseIterable {

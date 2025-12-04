@@ -59,8 +59,8 @@ struct AdaptiveWatermarkView: View {
                         // Appearance Settings
                         appearanceSection
                         
-                        // Anti-Removal Protection
-                        antiRemovalSection
+                        // Anti-Removal Protection (temporarily disabled)
+                        // antiRemovalSection
                         
                         // Page Analysis
                         if !pageAnalysis.isEmpty {
@@ -105,7 +105,7 @@ struct AdaptiveWatermarkView: View {
                             .font(OneBoxTypography.sectionTitle)
                             .foregroundColor(OneBoxColors.primaryText)
                         
-                        Text("AI-powered placement with tamper resistance")
+                        Text("Smart on-device placement analysis")
                             .font(OneBoxTypography.caption)
                             .foregroundColor(OneBoxColors.secondaryText)
                     }
@@ -157,8 +157,14 @@ struct AdaptiveWatermarkView: View {
                     .foregroundColor(OneBoxColors.primaryText)
                 
                 VStack(spacing: OneBoxSpacing.small) {
-                    ForEach(WatermarkType.allCases, id: \.self) { type in
-                        watermarkTypeOption(type)
+                    // Only show text watermarks for now (others are under development)
+                    watermarkTypeOption(.text)
+                    
+                    // Coming Soon indicator for other types
+                    VStack(spacing: OneBoxSpacing.tiny) {
+                        ForEach([WatermarkType.image, .logo, .qr], id: \.self) { type in
+                            comingSoonTypeOption(type)
+                        }
                     }
                 }
             }
@@ -195,6 +201,30 @@ struct AdaptiveWatermarkView: View {
         .buttonStyle(PlainButtonStyle())
     }
     
+    private func comingSoonTypeOption(_ type: WatermarkType) -> some View {
+        HStack(spacing: OneBoxSpacing.small) {
+            Image(systemName: "clock")
+                .foregroundColor(OneBoxColors.tertiaryText)
+            
+            VStack(alignment: .leading, spacing: OneBoxSpacing.tiny) {
+                Text(type.displayName)
+                    .font(OneBoxTypography.body)
+                    .foregroundColor(OneBoxColors.tertiaryText)
+                
+                Text("Coming Soon")
+                    .font(OneBoxTypography.caption)
+                    .foregroundColor(OneBoxColors.tertiaryText)
+            }
+            
+            Spacer()
+            
+            Image(systemName: type.icon)
+                .font(.system(size: 16))
+                .foregroundColor(OneBoxColors.tertiaryText)
+        }
+        .opacity(0.6)
+    }
+    
     // MARK: - Content Configuration
     private var contentConfigurationSection: some View {
         OneBoxCard(style: .standard) {
@@ -219,42 +249,19 @@ struct AdaptiveWatermarkView: View {
                                 watermarkPreset("INTERNAL USE")
                             }
                         }
-                    }
-                    
-                    if watermarkType == .image {
+                    } else {
+                        // Temporarily disable advanced watermark types
                         VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
-                            Text("Watermark Image")
+                            Text("Feature Coming Soon")
                                 .font(OneBoxTypography.caption)
                                 .foregroundColor(OneBoxColors.secondaryText)
                             
-                            Button(action: {
-                                // Image picker
-                            }) {
-                                Text("Select Image")
-                            }
-                            .foregroundColor(OneBoxColors.primaryGold)
-                            
-                            if let image = customImage {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(height: 60)
-                                    .cornerRadius(OneBoxRadius.small)
-                            }
-                        }
-                    }
-                    
-                    if watermarkType == .logo {
-                        VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
-                            Text("Logo Configuration")
-                                .font(OneBoxTypography.caption)
-                                .foregroundColor(OneBoxColors.secondaryText)
-                            
-                            HStack {
-                                logoOption("Company", "building.2")
-                                logoOption("Personal", "person.circle")
-                                logoOption("Security", "shield")
-                            }
+                            Text("Image, Logo, and QR Code watermarks are currently under development. Please use Text watermarks for now.")
+                                .font(OneBoxTypography.micro)
+                                .foregroundColor(OneBoxColors.tertiaryText)
+                                .padding(OneBoxSpacing.small)
+                                .background(OneBoxColors.surfaceGraphite.opacity(0.3))
+                                .cornerRadius(OneBoxRadius.small)
                         }
                     }
                 }
@@ -310,7 +317,7 @@ struct AdaptiveWatermarkView: View {
                 
                 if watermarkPosition == .adaptive && !intelligentPositions.isEmpty {
                     VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
-                        Text("AI-Detected Positions")
+                        Text("Detected Positions (On-Device)")
                             .font(OneBoxTypography.caption)
                             .foregroundColor(OneBoxColors.primaryGold)
                         
@@ -973,7 +980,7 @@ enum AdaptiveWatermarkPosition: String, CaseIterable {
         case .center: return "Center"
         case .corner: return "Corner"
         case .pattern: return "Pattern"
-        case .adaptive: return "AI Adaptive"
+        case .adaptive: return "Smart Adaptive"
         }
     }
     
@@ -982,7 +989,7 @@ enum AdaptiveWatermarkPosition: String, CaseIterable {
         case .center: return "Single watermark in page center"
         case .corner: return "Watermark in document corners"
         case .pattern: return "Repeating pattern across page"
-        case .adaptive: return "AI determines optimal placement"
+        case .adaptive: return "On-device analysis determines optimal placement"
         }
     }
 }
@@ -1057,29 +1064,94 @@ struct WatermarkPreviewView: View {
     let watermarkSettings: WatermarkSettings
     @Environment(\.dismiss) var dismiss
     
+    @State private var pdfDocument: PDFDocument?
+    @State private var currentPageIndex = 0
+    @State private var isLoading = true
+    
     var body: some View {
         NavigationStack {
-            VStack {
-                Text("Watermark Preview")
-                    .font(OneBoxTypography.sectionTitle)
-                    .foregroundColor(OneBoxColors.primaryText)
-                
-                // Simplified preview
-                ZStack {
-                    Rectangle()
-                        .fill(Color.white)
-                        .frame(height: 400)
-                        .cornerRadius(OneBoxRadius.medium)
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text("Watermark Preview")
+                        .font(OneBoxTypography.sectionTitle)
+                        .foregroundColor(OneBoxColors.primaryText)
                     
-                    Text(watermarkSettings.text)
-                        .font(.system(size: watermarkSettings.fontSize))
-                        .foregroundColor(watermarkSettings.color)
-                        .opacity(watermarkSettings.opacity)
-                        .rotationEffect(.degrees(watermarkSettings.rotation))
+                    Spacer()
+                    
+                    if let document = pdfDocument, document.pageCount > 1 {
+                        Text("Page \(currentPageIndex + 1) of \(document.pageCount)")
+                            .font(OneBoxTypography.caption)
+                            .foregroundColor(OneBoxColors.secondaryText)
+                    }
                 }
                 .padding()
                 
-                Spacer()
+                // PDF Preview with Watermark Overlay
+                GeometryReader { geometry in
+                    ZStack {
+                        // PDF Page Background
+                        if isLoading {
+                            Rectangle()
+                                .fill(OneBoxColors.surfaceGraphite)
+                                .overlay(
+                                    ProgressView()
+                                        .tint(OneBoxColors.primaryGold)
+                                )
+                        } else if let document = pdfDocument,
+                                let page = document.page(at: currentPageIndex) {
+                            
+                            // PDF Page
+                            PDFPagePreviewView(page: page)
+                                .overlay(
+                                    // Watermark Overlay
+                                    WatermarkOverlayView(
+                                        settings: watermarkSettings,
+                                        pageSize: page.bounds(for: .mediaBox).size
+                                    )
+                                )
+                        } else {
+                            Rectangle()
+                                .fill(OneBoxColors.surfaceGraphite)
+                                .overlay(
+                                    Text("Unable to load PDF")
+                                        .foregroundColor(OneBoxColors.secondaryText)
+                                )
+                        }
+                    }
+                    .cornerRadius(OneBoxRadius.medium)
+                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                }
+                .padding()
+                
+                // Page Navigation
+                if let document = pdfDocument, document.pageCount > 1 {
+                    HStack {
+                        Button(action: {
+                            if currentPageIndex > 0 {
+                                currentPageIndex -= 1
+                            }
+                        }) {
+                            Image(systemName: "chevron.left")
+                                .foregroundColor(currentPageIndex > 0 ? OneBoxColors.primaryGold : OneBoxColors.tertiaryText)
+                        }
+                        .disabled(currentPageIndex == 0)
+                        
+                        Spacer()
+                        
+                        Button(action: {
+                            if currentPageIndex < document.pageCount - 1 {
+                                currentPageIndex += 1
+                            }
+                        }) {
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(currentPageIndex < document.pageCount - 1 ? OneBoxColors.primaryGold : OneBoxColors.tertiaryText)
+                        }
+                        .disabled(currentPageIndex >= document.pageCount - 1)
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom)
+                }
             }
             .background(OneBoxColors.primaryGraphite)
             .navigationTitle("Preview")
@@ -1090,9 +1162,134 @@ struct WatermarkPreviewView: View {
                         dismiss()
                     }) {
                         Text("Done")
+                            .foregroundColor(OneBoxColors.primaryGold)
                     }
                 }
             }
+            .onAppear {
+                loadPDFDocument()
+            }
+        }
+    }
+    
+    private func loadPDFDocument() {
+        Task {
+            let document = PDFDocument(url: pdfURL)
+            await MainActor.run {
+                self.pdfDocument = document
+                self.isLoading = false
+            }
+        }
+    }
+}
+
+struct PDFPagePreviewView: UIViewRepresentable {
+    let page: PDFPage
+    
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .white
+        return view
+    }
+    
+    func updateUIView(_ uiView: UIView, context: Context) {
+        // Clear previous content
+        uiView.subviews.forEach { $0.removeFromSuperview() }
+        
+        // Create image from PDF page
+        let pageRect = page.bounds(for: .mediaBox)
+        let renderer = UIGraphicsImageRenderer(size: pageRect.size)
+        let image = renderer.image { context in
+            context.cgContext.translateBy(x: 0, y: pageRect.size.height)
+            context.cgContext.scaleBy(x: 1.0, y: -1.0)
+            page.draw(with: .mediaBox, to: context.cgContext)
+        }
+        
+        // Add image view
+        let imageView = UIImageView(image: image)
+        imageView.contentMode = .scaleAspectFit
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        uiView.addSubview(imageView)
+        
+        NSLayoutConstraint.activate([
+            imageView.topAnchor.constraint(equalTo: uiView.topAnchor),
+            imageView.leadingAnchor.constraint(equalTo: uiView.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: uiView.trailingAnchor),
+            imageView.bottomAnchor.constraint(equalTo: uiView.bottomAnchor)
+        ])
+    }
+}
+
+struct WatermarkOverlayView: View {
+    let settings: WatermarkSettings
+    let pageSize: CGSize
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let watermarkSize = calculateWatermarkSize(for: geometry.size)
+            let watermarkPosition = calculateWatermarkPosition(for: geometry.size, watermarkSize: watermarkSize)
+            
+            if settings.type == .text {
+                Text(settings.text)
+                    .font(.system(size: settings.fontSize * (geometry.size.width / pageSize.width)))
+                    .foregroundColor(settings.color)
+                    .opacity(settings.opacity)
+                    .rotationEffect(.degrees(settings.rotation))
+                    .position(watermarkPosition)
+            }
+        }
+    }
+    
+    private func calculateWatermarkSize(for viewSize: CGSize) -> CGSize {
+        // Scale watermark relative to view size
+        let scale = min(viewSize.width / pageSize.width, viewSize.height / pageSize.height)
+        return CGSize(
+            width: pageSize.width * 0.2 * scale, // Default 20% of page width
+            height: pageSize.height * 0.1 * scale // Default 10% of page height
+        )
+    }
+    
+    private func calculateWatermarkPosition(for viewSize: CGSize, watermarkSize: CGSize) -> CGPoint {
+        // Convert adaptive position to standard position for preview
+        let standardPosition: WatermarkPosition
+        switch settings.position {
+        case .center:
+            standardPosition = .center
+        case .corner:
+            standardPosition = .bottomRight
+        case .pattern:
+            standardPosition = .center // Show one instance for pattern preview
+        case .adaptive:
+            standardPosition = .center // Default adaptive to center for preview
+        }
+        
+        return calculatePositionPoint(standardPosition, in: viewSize, watermarkSize: watermarkSize)
+    }
+    
+    private func calculatePositionPoint(_ position: WatermarkPosition, in viewSize: CGSize, watermarkSize: CGSize) -> CGPoint {
+        let margin: CGFloat = 20
+        
+        switch position {
+        case .topLeft:
+            return CGPoint(x: margin + watermarkSize.width/2, y: margin + watermarkSize.height/2)
+        case .topCenter:
+            return CGPoint(x: viewSize.width/2, y: margin + watermarkSize.height/2)
+        case .topRight:
+            return CGPoint(x: viewSize.width - margin - watermarkSize.width/2, y: margin + watermarkSize.height/2)
+        case .middleLeft:
+            return CGPoint(x: margin + watermarkSize.width/2, y: viewSize.height/2)
+        case .center:
+            return CGPoint(x: viewSize.width/2, y: viewSize.height/2)
+        case .middleRight:
+            return CGPoint(x: viewSize.width - margin - watermarkSize.width/2, y: viewSize.height/2)
+        case .bottomLeft:
+            return CGPoint(x: margin + watermarkSize.width/2, y: viewSize.height - margin - watermarkSize.height/2)
+        case .bottomCenter:
+            return CGPoint(x: viewSize.width/2, y: viewSize.height - margin - watermarkSize.height/2)
+        case .bottomRight:
+            return CGPoint(x: viewSize.width - margin - watermarkSize.width/2, y: viewSize.height - margin - watermarkSize.height/2)
+        case .tiled:
+            return CGPoint(x: viewSize.width/2, y: viewSize.height/2) // Show center instance for preview
         }
     }
 }

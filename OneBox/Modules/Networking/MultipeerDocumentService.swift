@@ -10,6 +10,7 @@ import MultipeerConnectivity
 import Combine
 import CryptoKit
 import Network
+import UIKit
 
 // MARK: - Multipeer Document Service
 
@@ -370,9 +371,10 @@ extension MultipeerDocumentService: MCSessionDelegate {
                 if let transferIndex = activeTransfers.firstIndex(where: { $0.fromPeer == peerID.displayName }) {
                     if error != nil {
                         activeTransfers[transferIndex].status = .failed
-                } else {
-                    activeTransfers[transferIndex].status = .completed
-                    activeTransfers[transferIndex].progress = 1.0
+                    } else {
+                        activeTransfers[transferIndex].status = .completed
+                        activeTransfers[transferIndex].progress = 1.0
+                    }
                 }
             }
         }

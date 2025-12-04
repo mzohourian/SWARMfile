@@ -9,6 +9,7 @@ import Foundation
 import StoreKit
 
 // MARK: - Payments Manager
+@available(iOS 15.0, macOS 12.0, *)
 @MainActor
 public class PaymentsManager: ObservableObject {
 
@@ -273,6 +274,7 @@ public enum PaymentError: LocalizedError {
 }
 
 // MARK: - Subscription Status
+@available(iOS 15.0, macOS 12.0, *)
 public struct SubscriptionStatus {
     public let isActive: Bool
     public let productID: String?
@@ -290,6 +292,7 @@ public struct SubscriptionStatus {
     }
 }
 
+@available(iOS 15.0, macOS 12.0, *)
 extension PaymentsManager {
     public func getSubscriptionStatus() async -> SubscriptionStatus {
         if hasLifetime {

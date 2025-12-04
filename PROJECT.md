@@ -53,7 +53,8 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- Watermark PDF hang at 27% - Fixed by reducing tiling limits from 50x50 to 15x15 and adding memory management
+- Watermark PDF hang at 27% - Fixed by reducing tiling limits from 50x50 to 15x15
+- Crash at 100% completion - Fixed division by zero in ExportPreviewView.swift
 
 ---
 
@@ -65,15 +66,17 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - Created new documentation structure (CLAUDE.md, PROJECT.md, docs/) to solve model memory problem
 - Added 100% offline principle to all documentation as NON-NEGOTIABLE requirement
 - Fixed Watermark PDF 27% hang - root cause was excessive tiling (50x50 = 2500 operations per page)
+- Fixed crash after watermark completes - division by zero when originalSize is 0
 - Reduced tiling limits from 50x50 to 15x15 (225 max operations per page)
 - Added autoreleasepool memory management inside tiling loops
 
 **What's Unfinished:**
-- Watermark fix needs user testing to verify it works
+- Watermark feature needs final verification after both fixes
 
 **Files Modified:**
 - `CLAUDE.md`, `PROJECT.md`, `docs/*` - New documentation structure
 - `OneBox/Modules/CorePDF/CorePDF.swift` - Watermark tiling fix
+- `OneBox/OneBox/Views/ExportPreviewView.swift` - Division by zero fix
 
 ---
 

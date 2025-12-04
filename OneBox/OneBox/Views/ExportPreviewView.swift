@@ -472,7 +472,12 @@ struct ExportPreviewView: View {
         let totalSize = outputURLs.reduce(0) { sum, url in
             sum + (fileSize(for: url) ?? 0)
         }
-        
+
+        // Guard against division by zero which causes crash when converting infinity to Int
+        guard originalSize > 0 else {
+            return "No change"
+        }
+
         if totalSize < originalSize {
             let savedBytes = originalSize - totalSize
             let percentage = (Double(savedBytes) / Double(originalSize)) * 100

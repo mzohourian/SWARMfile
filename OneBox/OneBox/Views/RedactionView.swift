@@ -475,39 +475,60 @@ struct RedactionView: View {
     }
     
     private func performSensitiveDataAnalysis() {
-        guard let document = pdfDocument else { return }
-        
+        guard let document = pdfDocument else {
+            print("⚠️ RedactionView: No PDF document to analyze")
+            return
+        }
+
+        print("🔍 RedactionView: Starting sensitive data analysis on \(document.pageCount) pages")
         isAnalyzing = true
         analysisProgress = 0
         redactionItems = []
-        
+
         Task {
             var detectedItems: [RedactionItem] = []
             let pageCount = document.pageCount
-            
+
             for pageIndex in 0..<pageCount {
-                guard let page = document.page(at: pageIndex) else { continue }
-                
+                guard let page = document.page(at: pageIndex) else {
+                    print("⚠️ RedactionView: Could not get page \(pageIndex)")
+                    continue
+                }
+
                 await MainActor.run {
                     analysisProgress = Double(pageIndex) / Double(pageCount) * 0.5
                 }
-                
+
                 // Extract text from page
-                guard let pageText = page.string else { continue }
-                
-                // Detect various types of sensitive data
-                let pageItems = await detectSensitiveData(in: pageText, pageNumber: pageIndex)
-                detectedItems.append(contentsOf: pageItems)
-                
+                if let pageText = page.string {
+                    print("🔍 RedactionView: Page \(pageIndex + 1) has \(pageText.count) characters")
+
+                    if pageText.isEmpty {
+                        print("⚠️ RedactionView: Page \(pageIndex + 1) text is empty - PDF might be image-based")
+                    } else {
+                        // Detect various types of sensitive data
+                        let pageItems = await detectSensitiveData(in: pageText, pageNumber: pageIndex)
+                        detectedItems.append(contentsOf: pageItems)
+                    }
+                } else {
+                    print("⚠️ RedactionView: Page \(pageIndex + 1) returned nil text - PDF might be image-based (scanned document)")
+                }
+
                 await MainActor.run {
                     analysisProgress = Double(pageIndex) / Double(pageCount)
                 }
             }
-            
+
+            print("🔍 RedactionView: Analysis complete. Found \(detectedItems.count) total items")
+
             await MainActor.run {
                 self.redactionItems = detectedItems.sorted { $0.confidence > $1.confidence }
                 self.isAnalyzing = false
                 self.analysisProgress = 1.0
+
+                if detectedItems.isEmpty {
+                    print("⚠️ RedactionView: No items detected. If document has text, patterns may not match.")
+                }
             }
         }
     }
@@ -515,60 +536,98 @@ struct RedactionView: View {
     private func detectSensitiveData(in text: String, pageNumber: Int, categories: Set<SensitiveDataCategory>? = nil) async -> [RedactionItem] {
         var items: [RedactionItem] = []
         let categoriesToDetect = categories ?? Set(SensitiveDataCategory.allCases)
-        
+
+        // Debug: Log extracted text (first 500 chars)
+        let textPreview = String(text.prefix(500))
+        print("🔍 RedactionView: Page \(pageNumber + 1) text preview: \(textPreview)")
+        print("🔍 RedactionView: Page \(pageNumber + 1) total chars: \(text.count)")
+
+        // Passport Numbers (various formats)
+        // US: 9 alphanumeric, UK: 9 digits, EU: alphanumeric with possible spaces
+        if categoriesToDetect.contains(.passport) {
+            // Common passport patterns
+            let passportPatterns = [
+                #"\b[A-Z]{1,2}\d{6,9}\b"#,           // UK, EU style (letter(s) + digits)
+                #"\b\d{9}\b"#,                        // US 9-digit
+                #"\b[A-Z]\d{8}\b"#,                   // Single letter + 8 digits
+                #"\b[A-Z]{2}\d{7}\b"#,                // Two letters + 7 digits
+                #"(?i)passport[:\s#]*([A-Z0-9]{6,12})"#, // After "passport" keyword
+                #"(?i)passport\s*(?:no|number|#)?[:\s]*([A-Z0-9]{6,12})"# // Passport No/Number
+            ]
+            for pattern in passportPatterns {
+                items.append(contentsOf: findMatches(pattern: pattern, in: text, category: .passport, pageNumber: pageNumber, minConfidence: 0.85))
+            }
+        }
+
         // Social Security Numbers
         if categoriesToDetect.contains(.socialSecurity) {
             let ssnPattern = #"(?:\d{3}-?\d{2}-?\d{4}|\d{9})"#
             items.append(contentsOf: findMatches(pattern: ssnPattern, in: text, category: .socialSecurity, pageNumber: pageNumber))
         }
-        
+
         // Credit Card Numbers (basic pattern)
         if categoriesToDetect.contains(.creditCard) {
             let creditCardPattern = #"(?:\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4})"#
             items.append(contentsOf: findMatches(pattern: creditCardPattern, in: text, category: .creditCard, pageNumber: pageNumber))
         }
-        
-        // Phone Numbers
+
+        // Phone Numbers - International patterns
         if categoriesToDetect.contains(.phoneNumber) {
-            let phonePattern = #"(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}"#
-            items.append(contentsOf: findMatches(pattern: phonePattern, in: text, category: .phoneNumber, pageNumber: pageNumber))
+            let phonePatterns = [
+                #"(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}"#,  // US/Canada
+                #"\+\d{1,3}[-.\s]?\d{2,4}[-.\s]?\d{3,4}[-.\s]?\d{3,4}"#,           // International with +
+                #"\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b"#,                              // Basic 10-digit
+                #"\b\d{2,4}[-.\s]?\d{3,4}[-.\s]?\d{4}\b"#,                          // Various formats
+                #"(?i)(?:phone|tel|mobile|cell)[:\s]*([+\d\s\-().]{7,20})"#         // After phone keyword
+            ]
+            for pattern in phonePatterns {
+                items.append(contentsOf: findMatches(pattern: pattern, in: text, category: .phoneNumber, pageNumber: pageNumber, minConfidence: 0.75))
+            }
         }
-        
+
         // Email Addresses
         if categoriesToDetect.contains(.email) {
             let emailPattern = #"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"#
             items.append(contentsOf: findMatches(pattern: emailPattern, in: text, category: .email, pageNumber: pageNumber))
         }
-        
+
         // Bank Account Numbers (basic pattern)
         if categoriesToDetect.contains(.bankAccount) {
             let bankAccountPattern = #"\b\d{8,17}\b"#
             items.append(contentsOf: findMatches(pattern: bankAccountPattern, in: text, category: .bankAccount, pageNumber: pageNumber, minConfidence: 0.6))
         }
-        
+
         // Addresses (simplified pattern)
         if categoriesToDetect.contains(.address) {
             let addressPattern = #"\d+\s+[A-Za-z\s]+(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Court|Ct|Place|Pl)\b"#
             items.append(contentsOf: findMatches(pattern: addressPattern, in: text, category: .address, pageNumber: pageNumber, minConfidence: 0.7))
         }
-        
-        // Dates
+
+        // Dates - More comprehensive patterns
         if categoriesToDetect.contains(.date) {
-            let datePattern = #"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b"#
-            items.append(contentsOf: findMatches(pattern: datePattern, in: text, category: .date, pageNumber: pageNumber, minConfidence: 0.7))
+            let datePatterns = [
+                #"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b"#,           // MM/DD/YYYY or DD/MM/YYYY
+                #"\b\d{4}[/-]\d{1,2}[/-]\d{1,2}\b"#,             // YYYY-MM-DD (ISO format)
+                #"\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4}\b"#, // 15 Jan 2024
+                #"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{2,4}\b"# // Jan 15, 2024
+            ]
+            for pattern in datePatterns {
+                items.append(contentsOf: findMatches(pattern: pattern, in: text, category: .date, pageNumber: pageNumber, minConfidence: 0.7))
+            }
         }
-        
+
         // IP Addresses
         if categoriesToDetect.contains(.ipAddress) {
             let ipPattern = #"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"#
             items.append(contentsOf: findMatches(pattern: ipPattern, in: text, category: .ipAddress, pageNumber: pageNumber, minConfidence: 0.8))
         }
-        
+
         // Use NaturalLanguage framework for person names
         if categoriesToDetect.contains(.personalName) {
             items.append(contentsOf: await detectPersonNames(in: text, pageNumber: pageNumber))
         }
-        
+
+        print("🔍 RedactionView: Page \(pageNumber + 1) found \(items.count) items")
         return items
     }
     
@@ -820,11 +879,11 @@ enum RedactionPreset: String, CaseIterable, Identifiable {
     var categories: Set<SensitiveDataCategory> {
         switch self {
         case .legal:
-            return [.socialSecurity, .personalName, .address, .phoneNumber, .email, .date]
+            return [.socialSecurity, .personalName, .address, .phoneNumber, .email, .date, .passport]
         case .finance:
-            return [.creditCard, .bankAccount, .socialSecurity, .personalName, .email, .phoneNumber]
+            return [.creditCard, .bankAccount, .socialSecurity, .personalName, .email, .phoneNumber, .passport]
         case .hr:
-            return [.personalName, .socialSecurity, .email, .phoneNumber, .address, .date]
+            return [.personalName, .socialSecurity, .email, .phoneNumber, .address, .date, .passport]
         }
     }
 }
@@ -839,8 +898,9 @@ enum SensitiveDataCategory: String, CaseIterable {
     case personalName = "Name"
     case date = "Date"
     case ipAddress = "IP Address"
+    case passport = "Passport"
     case custom = "Custom"
-    
+
     var displayName: String {
         switch self {
         case .socialSecurity: return "Social Security"
@@ -852,10 +912,11 @@ enum SensitiveDataCategory: String, CaseIterable {
         case .personalName: return "Personal Name"
         case .date: return "Date"
         case .ipAddress: return "IP Address"
+        case .passport: return "Passport Number"
         case .custom: return "Custom"
         }
     }
-    
+
     var color: Color {
         switch self {
         case .socialSecurity: return OneBoxColors.criticalRed
@@ -867,6 +928,7 @@ enum SensitiveDataCategory: String, CaseIterable {
         case .personalName: return OneBoxColors.secondaryGold
         case .date: return OneBoxColors.warningAmber
         case .ipAddress: return OneBoxColors.warningAmber
+        case .passport: return OneBoxColors.criticalRed
         case .custom: return OneBoxColors.primaryGold
         }
     }

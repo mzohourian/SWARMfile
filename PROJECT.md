@@ -37,9 +37,11 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - Redaction with presets
 
 ### Broken / Blocked
-- **Redact PDF** - Shows black screen after file selection (debugging in progress)
-  - Enhanced logging added to track exactly where view fails
-  - Added fallback error view in case URL is nil
+- **Redact PDF** - Black screen fixed, now testing detection accuracy
+  - Added passport number detection (various international formats)
+  - Added international phone number patterns
+  - Added extensive debug logging for text extraction
+  - Issue: May not detect text from image-based/scanned PDFs (needs OCR)
 
 ### Needs Testing
 - **Watermark PDF** - Multiple fixes applied, needs user verification:

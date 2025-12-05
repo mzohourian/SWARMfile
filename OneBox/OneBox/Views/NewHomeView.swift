@@ -21,12 +21,8 @@ struct HomeView: View {
     @State private var showingToolFlow = false
     @State private var showingIntegrityDashboard = false
     @State private var showingWorkflowConcierge = false
-    @State private var selectedIntent: ProcessingIntent = .convert
     @StateObject private var searchService = OnDeviceSearchService.shared
-    
-    // Privacy hero animation
-    @State private var privacyAnimationPhase: Double = 0
-    
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -34,22 +30,19 @@ struct HomeView: View {
                 OneBoxColors.primaryGraphite.ignoresSafeArea()
                 
                 ScrollView {
-                    VStack(spacing: OneBoxSpacing.xxl) {
-                        // Privacy Hero Section
+                    VStack(spacing: OneBoxSpacing.large) {
+                        // Privacy Hero Section (compact)
                         privacyHeroSection
-                        
-                        // Usage Status & Upgrade CTA (Contextual)
+
+                        // All Tools Grid - 2x5
+                        allToolsSection
+
+                        // Usage Status (only for free users)
                         if !paymentsManager.hasPro {
                             usageStatusSection
                         }
-                        
-                        // Intent-Based Navigation
-                        intentNavigationSection
-                        
-                        // Quick Actions & Workflow Suggestions
-                        quickActionsSection
-                        
-                        // Integrity Dashboard Summary
+
+                        // Vault Health Summary
                         integrityDashboardSummary
                     }
                     .padding(OneBoxSpacing.medium)
@@ -79,9 +72,6 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showingWorkflowConcierge) {
             WorkflowConciergeView()
-        }
-        .onAppear {
-            // Privacy animations removed for clean, static presentation
         }
     }
     
@@ -238,182 +228,78 @@ struct HomeView: View {
         .cornerRadius(OneBoxRadius.small)
     }
     
-    // MARK: - Intent-Based Navigation
-    private var intentNavigationSection: some View {
+    // MARK: - All Tools Section
+    private var allToolsSection: some View {
         VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
-            Text("What would you like to do?")
+            Text("Tools")
                 .font(OneBoxTypography.sectionTitle)
                 .foregroundColor(OneBoxColors.primaryText)
-            
-            // Intent selector
-            HStack(spacing: OneBoxSpacing.small) {
-                ForEach(ProcessingIntent.allCases, id: \.self) { intent in
-                    intentButton(intent)
+
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: OneBoxSpacing.small),
+                GridItem(.flexible(), spacing: OneBoxSpacing.small)
+            ], spacing: OneBoxSpacing.small) {
+                ForEach(allTools, id: \.self) { tool in
+                    toolCard(tool)
                 }
-            }
-            
-            // Tools for selected intent
-            intentToolsGrid
-        }
-    }
-    
-    private func intentButton(_ intent: ProcessingIntent) -> some View {
-        let isSelected = selectedIntent == intent
-        
-        return Button(action: {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedIntent = intent
-                HapticManager.shared.selection()
-            }
-        }) {
-            VStack(spacing: OneBoxSpacing.tiny) {
-                Image(systemName: intent.icon)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(isSelected ? OneBoxColors.primaryGraphite : OneBoxColors.primaryGold)
-                
-                Text(intent.title)
-                    .font(OneBoxTypography.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(isSelected ? OneBoxColors.primaryGraphite : OneBoxColors.primaryText)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, OneBoxSpacing.small)
-            .background(isSelected ? OneBoxColors.primaryGold : OneBoxColors.surfaceGraphite)
-            .cornerRadius(OneBoxRadius.medium)
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-    
-    private var intentToolsGrid: some View {
-        let tools = selectedIntent.tools
-        
-        return LazyVGrid(columns: [
-            GridItem(.flexible()),
-            GridItem(.flexible())
-        ], spacing: OneBoxSpacing.medium) {
-            ForEach(tools, id: \.self) { tool in
-                intentToolCard(tool)
             }
         }
     }
-    
-    private func intentToolCard(_ tool: ToolType) -> some View {
-        OneBoxCard(style: .interactive) {
-            VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
-                HStack {
-                    Image(systemName: tool.icon)
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(tool.color)
-                    
-                    Spacer()
-                    
-                    // Privacy info button
-                    Button(action: {
-                        showPrivacyInfo(for: tool)
-                    }) {
-                        Image(systemName: "info.circle")
-                            .font(.system(size: 14))
-                            .foregroundColor(OneBoxColors.secondaryText)
-                    }
-                }
-                
-                Text(tool.displayName)
-                    .font(OneBoxTypography.cardTitle)
-                    .foregroundColor(OneBoxColors.primaryText)
-                
-                Text(tool.description)
-                    .font(OneBoxTypography.caption)
-                    .foregroundColor(OneBoxColors.secondaryText)
-                    .lineLimit(2)
-                
-                // Proactive insights for this tool
-                if let insight = getInsightForTool(tool) {
-                    HStack(spacing: OneBoxSpacing.tiny) {
-                        Image(systemName: "lightbulb.fill")
-                            .font(.system(size: 12))
-                            .foregroundColor(OneBoxColors.warningAmber)
-                        
-                        Text(insight)
-                            .font(OneBoxTypography.micro)
-                            .foregroundColor(OneBoxColors.secondaryText)
-                            .lineLimit(1)
-                    }
-                    .padding(.top, OneBoxSpacing.tiny)
-                }
-                
-                OneBoxButton("Open", style: .primary) {
-                    selectedTool = tool
-                    showingToolFlow = true
-                    HapticManager.shared.impact(.light)
-                }
-            }
-        }
-        .onTapGesture {
+
+    /// All available tools in display order
+    private var allTools: [ToolType] {
+        [
+            .pdfMerge, .pdfSplit,
+            .pdfOrganize, .pdfCompress,
+            .pdfSign, .pdfWatermark,
+            .pdfRedact, .imagesToPDF,
+            .pdfToImages, .imageResize
+        ]
+    }
+
+    private func toolCard(_ tool: ToolType) -> some View {
+        Button(action: {
             selectedTool = tool
             showingToolFlow = true
             HapticManager.shared.impact(.light)
-        }
-    }
-    
-    // MARK: - Quick Actions Section
-    private var quickActionsSection: some View {
-        OneBoxCard(style: .elevated) {
-            VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
-                HStack {
-                    Text("Quick Actions")
-                        .font(OneBoxTypography.cardTitle)
-                        .foregroundColor(OneBoxColors.primaryText)
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        showingWorkflowConcierge = true
-                    }) {
-                        HStack(spacing: OneBoxSpacing.tiny) {
-                            Text("Workflow Concierge")
-                                .font(OneBoxTypography.caption)
-                                .foregroundColor(OneBoxColors.goldText)
-                            
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(OneBoxColors.goldText)
-                        }
-                    }
+        }) {
+            HStack(spacing: OneBoxSpacing.small) {
+                // Icon with gradient background
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [tool.color.opacity(0.8), tool.color.opacity(0.4)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 40, height: 40)
+
+                    Image(systemName: tool.icon)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
                 }
-                
-                HStack(spacing: OneBoxSpacing.small) {
-                    quickActionButton("Recent Files", "clock.fill") {
-                        // Show recent files
-                    }
-                    
-                    quickActionButton("Workflows", "gear.badge.checkmark") {
-                        showingWorkflowConcierge = true
-                    }
-                    
-                    quickActionButton("Search", "magnifyingglass") {
-                        // Focus search
-                    }
-                }
+
+                Text(tool.displayName)
+                    .font(OneBoxTypography.body)
+                    .fontWeight(.medium)
+                    .foregroundColor(OneBoxColors.primaryText)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(OneBoxColors.primaryGold.opacity(0.6))
             }
-        }
-    }
-    
-    private func quickActionButton(_ title: String, _ icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: OneBoxSpacing.tiny) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(OneBoxColors.primaryGold)
-                
-                Text(title)
-                    .font(OneBoxTypography.micro)
-                    .foregroundColor(OneBoxColors.secondaryText)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, OneBoxSpacing.small)
-            .background(OneBoxColors.surfaceGraphite.opacity(0.5))
-            .cornerRadius(OneBoxRadius.small)
+            .padding(OneBoxSpacing.medium)
+            .background(OneBoxColors.surfaceGraphite)
+            .cornerRadius(OneBoxRadius.medium)
+            .overlay(
+                RoundedRectangle(cornerRadius: OneBoxRadius.medium)
+                    .stroke(OneBoxColors.primaryGold.opacity(0.1), lineWidth: 1)
+            )
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -525,37 +411,6 @@ struct HomeView: View {
     }
     
     // MARK: - Helper Functions
-    private func startPrivacyAnimation() {
-        privacyAnimationPhase = Double.pi * 2 // Full cycle for sine wave
-    }
-    
-    private func performGlobalSearch(_ query: String) {
-        // Implement global search across documents, tags, workflows
-        // This logic is now handled by OnDeviceSearchService via onChange
-        if !query.isEmpty {
-            HapticManager.shared.selection()
-        }
-    }
-    
-    private func showPrivacyInfo(for tool: ToolType) {
-        // Show privacy information modal
-        HapticManager.shared.impact(.light)
-    }
-    
-    private func getInsightForTool(_ tool: ToolType) -> String? {
-        // Return proactive insights for specific tools
-        switch tool {
-        case .pdfCompress:
-            return "Reduce file sizes by up to 80%"
-        case .pdfSign:
-            return "Face ID verification required"
-        case .pdfMerge:
-            return "Auto-bookmark creation available"
-        default:
-            return nil
-        }
-    }
-    
     private func getSecureFilesCount() -> Int {
         // Calculate number of secure files based on completed jobs
         // Using correct JobType enum cases from JobEngine
@@ -612,40 +467,6 @@ struct HomeView: View {
         return totalSize
     }
 }
-
-// MARK: - Processing Intent
-enum ProcessingIntent: CaseIterable {
-    case convert, organize, secure
-    
-    var title: String {
-        switch self {
-        case .convert: return "Convert"
-        case .organize: return "Organize"
-        case .secure: return "Secure"
-        }
-    }
-    
-    var icon: String {
-        switch self {
-        case .convert: return "arrow.triangle.2.circlepath"
-        case .organize: return "square.grid.2x2"
-        case .secure: return "shield.checkered"
-        }
-    }
-    
-    var tools: [ToolType] {
-        switch self {
-        case .convert:
-            return [.imagesToPDF, .pdfToImages, .imageResize]
-        case .organize:
-            return [.pdfMerge, .pdfSplit, .pdfOrganize, .pdfCompress]
-        case .secure:
-            return [.pdfSign, .pdfWatermark, .pdfRedact]
-        }
-    }
-}
-
-
 
 #Preview {
     HomeView()

@@ -691,18 +691,19 @@ struct PageOrganizerView: View {
 
                 // 2. Rotate if needed
                 if hasRotations {
-                    // Reload PDF from reordered output
-                    guard let reorderedPDF = PDFDocument(url: outputURL) else {
-                        throw PDFError.invalidPDF("Reordered PDF")
-                    }
-
                     // Find indices of pages that need rotation
                     let rotationMap = pages.enumerated().filter { $0.element.rotation != 0 }
 
                     for (newIndex, pageInfo) in rotationMap {
+                        // Reload PDF from current outputURL for each rotation
+                        // This ensures previous rotations are preserved
+                        guard let currentPDF = PDFDocument(url: outputURL) else {
+                            throw PDFError.invalidPDF("Could not load PDF for rotation")
+                        }
+
                         let indices = Set([newIndex])
                         outputURL = try await processor.rotatePages(
-                            in: reorderedPDF,
+                            in: currentPDF,
                             indices: indices,
                             angle: pageInfo.rotation,
                             progressHandler: { _ in }
@@ -710,14 +711,18 @@ struct PageOrganizerView: View {
                     }
                 }
 
-                // Create job record
+                // Save output file to Documents/Exports for persistence
+                // This view bypasses JobEngine's processJob(), so we need to persist manually
+                let persistedURL = saveOutputToDocuments(outputURL)
+
+                // Create job record with persisted URL
                 let job = Job(
                     type: .pdfOrganize,
                     inputs: [pdfURL],
                     settings: JobSettings(),
                     status: .success,
                     progress: 1.0,
-                    outputURLs: [outputURL],
+                    outputURLs: [persistedURL],
                     completedAt: Date()
                 )
 
@@ -737,6 +742,64 @@ struct PageOrganizerView: View {
                     showError = true
                 }
             }
+        }
+    }
+
+    /// Saves output file from temp directory to Documents/Exports for persistence
+    private func saveOutputToDocuments(_ tempURL: URL) -> URL {
+        let fileManager = FileManager.default
+
+        guard let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("❌ PageOrganizerView: Could not get Documents directory")
+            return tempURL
+        }
+
+        let exportsURL = documentsURL.appendingPathComponent("Exports", isDirectory: true)
+
+        // Create Exports directory if it doesn't exist
+        do {
+            try fileManager.createDirectory(at: exportsURL, withIntermediateDirectories: true, attributes: nil)
+        } catch {
+            print("❌ PageOrganizerView: Failed to create Exports directory: \(error)")
+            return tempURL
+        }
+
+        // Check if file exists
+        guard fileManager.fileExists(atPath: tempURL.path) else {
+            print("⚠️ PageOrganizerView: Temp file doesn't exist: \(tempURL.path)")
+            return tempURL
+        }
+
+        // Skip if already in Documents
+        if tempURL.path.hasPrefix(documentsURL.path) {
+            print("📁 PageOrganizerView: File already in Documents: \(tempURL.path)")
+            return tempURL
+        }
+
+        // Create clean filename with timestamp
+        let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .short)
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+            .replacingOccurrences(of: " ", with: "_")
+            .replacingOccurrences(of: ",", with: "")
+
+        let newFilename = "organize_pages_\(timestamp).pdf"
+        let destinationURL = exportsURL.appendingPathComponent(newFilename)
+
+        do {
+            // Remove existing file if present
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                try fileManager.removeItem(at: destinationURL)
+            }
+
+            // Copy file to persistent location
+            try fileManager.copyItem(at: tempURL, to: destinationURL)
+            print("✅ PageOrganizerView: Saved file to: \(destinationURL.path)")
+            return destinationURL
+
+        } catch {
+            print("❌ PageOrganizerView: Failed to save file: \(error)")
+            return tempURL
         }
     }
 }

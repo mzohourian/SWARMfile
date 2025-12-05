@@ -44,6 +44,7 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
   - Size slider now has dramatic effect (5%-50% for images, 2%-15% for text)
   - Density slider now has dramatic effect (0.6x to 5x spacing)
   - Previous fix: reduced tiling from 50x50 to 15x15
+- **Organize PDF** - Fixed file persistence and multi-page rotation bug
 - Some advanced workflow features may need verification
 
 ---
@@ -56,6 +57,8 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
+- Organize PDF not saving to Files - PageOrganizerView was bypassing JobEngine's file persistence
+- Organize PDF multi-page rotation bug - Rotating multiple pages only kept last rotation
 - Processed files not saving to Files app - Files now auto-saved to Documents/Exports folder
 - Watermark size slider not working - Text watermarks now use size parameter (was ignored)
 - Watermark size range too narrow - Improved to 5%-50% (images) and 2%-15% (text)

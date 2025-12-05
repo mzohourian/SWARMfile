@@ -20,6 +20,13 @@ struct RedactionView: View {
     @EnvironmentObject var paymentsManager: PaymentsManager
 
     @State private var redactionItems: [RedactionItem] = []
+
+    init(pdfURL: URL) {
+        self.pdfURL = pdfURL
+        print("🟢 RedactionView: init called with URL: \(pdfURL.absoluteString)")
+        print("🟢 RedactionView: File exists at init: \(FileManager.default.fileExists(atPath: pdfURL.path))")
+    }
+
     @State private var isAnalyzing = false
     @State private var analysisProgress: Double = 0
     @State private var selectedPage = 0
@@ -43,6 +50,7 @@ struct RedactionView: View {
     }
     
     var body: some View {
+        let _ = print("🟢 RedactionView: body is being evaluated")
         NavigationStack {
             VStack(spacing: 0) {
                 // Show error if PDF couldn't be loaded
@@ -102,10 +110,13 @@ struct RedactionView: View {
             }
         }
         .onAppear {
+            print("🟢 RedactionView: onAppear called")
             // Start security-scoped access for files from document picker
-            if pdfURL.startAccessingSecurityScopedResource() {
+            let securityAccess = pdfURL.startAccessingSecurityScopedResource()
+            print("🟢 RedactionView: startAccessingSecurityScopedResource returned: \(securityAccess)")
+            if securityAccess {
                 didStartAccessingSecurityScoped = true
-                print("RedactionView: Started security-scoped resource access")
+                print("🟢 RedactionView: Started security-scoped resource access")
             }
             loadPDFDocument()
             performSensitiveDataAnalysis()

@@ -37,7 +37,9 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - Redaction with presets
 
 ### Broken / Blocked
-- None currently
+- **Redact PDF** - Shows black screen after file selection (debugging in progress)
+  - Enhanced logging added to track exactly where view fails
+  - Added fallback error view in case URL is nil
 
 ### Needs Testing
 - **Watermark PDF** - Multiple fixes applied, needs user verification:

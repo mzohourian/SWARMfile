@@ -89,11 +89,50 @@ struct ToolFlowView: View {
         .onChange(of: showInteractiveSigning) { newValue in
             print("🔵 ToolFlowView: showInteractiveSigning changed to \(newValue)")
         }
-        .fullScreenCover(isPresented: $showRedactionView) {
+        .onChange(of: showRedactionView) { newValue in
+            print("🔵 ToolFlowView: showRedactionView changed to \(newValue)")
+            print("🔵 ToolFlowView: selectedURLs.count at change = \(selectedURLs.count)")
             if let url = selectedURLs.first {
-                RedactionView(pdfURL: url)
-                    .environmentObject(jobManager)
-                    .environmentObject(paymentsManager)
+                print("🔵 ToolFlowView: URL at change = \(url.absoluteString)")
+            }
+        }
+        .fullScreenCover(isPresented: $showRedactionView) {
+            Group {
+                if let url = selectedURLs.first {
+                    RedactionView(pdfURL: url)
+                        .environmentObject(jobManager)
+                        .environmentObject(paymentsManager)
+                        .onAppear {
+                            print("🔵 ToolFlowView: RedactionView appeared with URL: \(url.absoluteString)")
+                        }
+                } else {
+                    // Fallback view if URL is missing
+                    VStack(spacing: OneBoxSpacing.large) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 48))
+                            .foregroundColor(OneBoxColors.warningAmber)
+
+                        Text("Error: No PDF selected")
+                            .font(OneBoxTypography.sectionTitle)
+                            .foregroundColor(OneBoxColors.primaryText)
+
+                        Text("Please go back and select a PDF file")
+                            .font(OneBoxTypography.body)
+                            .foregroundColor(OneBoxColors.secondaryText)
+
+                        Button("Dismiss") {
+                            showRedactionView = false
+                        }
+                        .foregroundColor(OneBoxColors.primaryGold)
+                        .padding(.top, OneBoxSpacing.medium)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(OneBoxColors.primaryGraphite.ignoresSafeArea())
+                    .onAppear {
+                        print("❌ ToolFlowView: RedactionView fullScreenCover triggered but selectedURLs.first is nil!")
+                        print("❌ ToolFlowView: selectedURLs.count = \(selectedURLs.count)")
+                    }
+                }
             }
         }
         .alert("Error", isPresented: $showError) {
@@ -173,13 +212,18 @@ struct ToolFlowView: View {
         print("🔵 ToolFlowView: onContinue called")
         print("🔵 ToolFlowView: tool = \(tool)")
         print("🔵 ToolFlowView: selectedURLs.count = \(selectedURLs.count)")
-        
+        if let firstURL = selectedURLs.first {
+            print("🔵 ToolFlowView: First URL = \(firstURL.absoluteString)")
+            print("🔵 ToolFlowView: File exists = \(FileManager.default.fileExists(atPath: firstURL.path))")
+        }
+
         if tool == .pdfOrganize {
             if let url = selectedURLs.first {
                 pageOrganizerURL = IdentifiableURL(url: url)
             }
         } else if tool == .pdfRedact {
             if !selectedURLs.isEmpty {
+                print("🔵 ToolFlowView: Setting showRedactionView = true")
                 showRedactionView = true
             }
         } else if tool == .pdfSign {

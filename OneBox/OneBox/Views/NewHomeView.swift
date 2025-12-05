@@ -253,11 +253,11 @@ struct HomeView: View {
     /// All available tools in display order
     private var allTools: [ToolType] {
         [
-            .pdfMerge, .pdfSplit,
+            .imagesToPDF, .pdfToImages,
+            .pdfSplit, .pdfMerge,
             .pdfOrganize, .pdfCompress,
             .pdfSign, .pdfWatermark,
-            .pdfRedact, .imagesToPDF,
-            .pdfToImages, .imageResize
+            .pdfRedact, .imageResize
         ]
     }
 

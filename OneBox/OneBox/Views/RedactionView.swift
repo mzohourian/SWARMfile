@@ -486,36 +486,55 @@ struct RedactionView: View {
         analysisProgress = 0
         redactionItems = []
 
-        Task {
+        Task(priority: .userInitiated) {
             var detectedItems: [RedactionItem] = []
             let pageCount = document.pageCount
 
             for pageIndex in 0..<pageCount {
-                guard let page = document.page(at: pageIndex) else {
-                    print("⚠️ RedactionView: Could not get page \(pageIndex)")
-                    continue
+                // Check if task was cancelled
+                if Task.isCancelled { break }
+
+                // Use autoreleasepool to manage memory for each page
+                let pageItems: [RedactionItem] = await withCheckedContinuation { continuation in
+                    autoreleasepool {
+                        guard let page = document.page(at: pageIndex) else {
+                            print("⚠️ RedactionView: Could not get page \(pageIndex)")
+                            continuation.resume(returning: [])
+                            return
+                        }
+
+                        // Try to extract text from page
+                        var pageText: String? = page.string
+
+                        // If no text found, try OCR (for scanned/image-based PDFs)
+                        if pageText == nil || pageText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+                            print("🔍 RedactionView: Page \(pageIndex + 1) has no embedded text, trying OCR...")
+
+                            // Perform OCR synchronously within autoreleasepool
+                            pageText = performOCRSync(on: page)
+                        }
+
+                        if let text = pageText, !text.isEmpty {
+                            print("🔍 RedactionView: Page \(pageIndex + 1) has \(text.count) characters")
+
+                            // Detect sensitive data synchronously
+                            let items = detectSensitiveDataSync(in: text, pageNumber: pageIndex)
+                            continuation.resume(returning: items)
+                        } else {
+                            print("⚠️ RedactionView: Page \(pageIndex + 1) - no text found even after OCR")
+                            continuation.resume(returning: [])
+                        }
+                    }
                 }
+
+                detectedItems.append(contentsOf: pageItems)
 
                 await MainActor.run {
-                    analysisProgress = Double(pageIndex) / Double(pageCount)
+                    analysisProgress = Double(pageIndex + 1) / Double(pageCount)
                 }
 
-                // Try to extract text from page
-                var pageText: String? = page.string
-
-                // If no text found, try OCR (for scanned/image-based PDFs)
-                if pageText == nil || pageText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
-                    print("🔍 RedactionView: Page \(pageIndex + 1) has no embedded text, trying OCR...")
-                    pageText = await performOCR(on: page)
-                }
-
-                if let text = pageText, !text.isEmpty {
-                    print("🔍 RedactionView: Page \(pageIndex + 1) has \(text.count) characters")
-                    let pageItems = await detectSensitiveData(in: text, pageNumber: pageIndex)
-                    detectedItems.append(contentsOf: pageItems)
-                } else {
-                    print("⚠️ RedactionView: Page \(pageIndex + 1) - no text found even after OCR")
-                }
+                // Small delay to let UI update and prevent watchdog timeout
+                try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
             }
 
             print("🔍 RedactionView: Analysis complete. Found \(detectedItems.count) total items")
@@ -532,20 +551,30 @@ struct RedactionView: View {
         }
     }
 
-    /// Perform OCR on a PDF page using Vision framework (100% on-device)
-    private func performOCR(on page: PDFPage) async -> String? {
-        // Render the PDF page as an image
+    /// Perform OCR synchronously (called within autoreleasepool)
+    private func performOCRSync(on page: PDFPage) -> String? {
+        // Render the PDF page as an image at lower scale to reduce memory
         let pageRect = page.bounds(for: .mediaBox)
-        let scale: CGFloat = 2.0 // Higher scale = better OCR accuracy
+        let scale: CGFloat = 1.5 // Reduced from 2.0 for better memory usage
         let imageSize = CGSize(width: pageRect.width * scale, height: pageRect.height * scale)
 
-        let renderer = UIGraphicsImageRenderer(size: imageSize)
+        // Limit max image size to prevent memory issues
+        let maxDimension: CGFloat = 2000
+        var finalScale = scale
+        if imageSize.width > maxDimension || imageSize.height > maxDimension {
+            let widthScale = maxDimension / pageRect.width
+            let heightScale = maxDimension / pageRect.height
+            finalScale = min(widthScale, heightScale)
+        }
+        let finalSize = CGSize(width: pageRect.width * finalScale, height: pageRect.height * finalScale)
+
+        let renderer = UIGraphicsImageRenderer(size: finalSize)
         let image = renderer.image { context in
             UIColor.white.setFill()
-            context.fill(CGRect(origin: .zero, size: imageSize))
+            context.fill(CGRect(origin: .zero, size: finalSize))
 
-            context.cgContext.translateBy(x: 0, y: imageSize.height)
-            context.cgContext.scaleBy(x: scale, y: -scale)
+            context.cgContext.translateBy(x: 0, y: finalSize.height)
+            context.cgContext.scaleBy(x: finalScale, y: -finalScale)
 
             page.draw(with: .mediaBox, to: context.cgContext)
         }
@@ -555,41 +584,110 @@ struct RedactionView: View {
             return nil
         }
 
-        // Perform text recognition using Vision
-        return await withCheckedContinuation { continuation in
-            let request = VNRecognizeTextRequest { request, error in
-                if let error = error {
-                    print("⚠️ RedactionView: OCR error: \(error.localizedDescription)")
-                    continuation.resume(returning: nil)
-                    return
-                }
+        // Perform text recognition using Vision (synchronous with semaphore)
+        var recognizedText: String?
+        let semaphore = DispatchSemaphore(value: 0)
 
-                guard let observations = request.results as? [VNRecognizedTextObservation] else {
-                    continuation.resume(returning: nil)
-                    return
-                }
+        let request = VNRecognizeTextRequest { request, error in
+            defer { semaphore.signal() }
 
-                // Combine all recognized text
-                let recognizedText = observations.compactMap { observation in
-                    observation.topCandidates(1).first?.string
-                }.joined(separator: " ")
-
-                print("🔍 RedactionView: OCR extracted \(recognizedText.count) characters")
-                continuation.resume(returning: recognizedText.isEmpty ? nil : recognizedText)
+            if let error = error {
+                print("⚠️ RedactionView: OCR error: \(error.localizedDescription)")
+                return
             }
 
-            // Configure for best accuracy
-            request.recognitionLevel = .accurate
-            request.usesLanguageCorrection = true
+            guard let observations = request.results as? [VNRecognizedTextObservation] else {
+                return
+            }
 
-            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-            do {
-                try handler.perform([request])
-            } catch {
-                print("⚠️ RedactionView: OCR handler error: \(error.localizedDescription)")
-                continuation.resume(returning: nil)
+            // Combine all recognized text
+            recognizedText = observations.compactMap { observation in
+                observation.topCandidates(1).first?.string
+            }.joined(separator: " ")
+
+            if let text = recognizedText {
+                print("🔍 RedactionView: OCR extracted \(text.count) characters")
             }
         }
+
+        // Configure for faster processing (trade accuracy for speed)
+        request.recognitionLevel = .fast // Changed from .accurate
+        request.usesLanguageCorrection = false // Disabled for speed
+
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        do {
+            try handler.perform([request])
+            _ = semaphore.wait(timeout: .now() + 5.0) // 5 second timeout per page
+        } catch {
+            print("⚠️ RedactionView: OCR handler error: \(error.localizedDescription)")
+        }
+
+        return recognizedText?.isEmpty == true ? nil : recognizedText
+    }
+
+    /// Perform OCR on a PDF page using Vision framework (100% on-device) - async version
+    private func performOCR(on page: PDFPage) async -> String? {
+        return performOCRSync(on: page)
+    }
+
+    /// Synchronous version of detectSensitiveData for use in autoreleasepool
+    private func detectSensitiveDataSync(in text: String, pageNumber: Int) -> [RedactionItem] {
+        var items: [RedactionItem] = []
+
+        // Debug: Log extracted text (first 200 chars to reduce log spam)
+        let textPreview = String(text.prefix(200))
+        print("🔍 RedactionView: Page \(pageNumber + 1) text preview: \(textPreview)...")
+
+        // Passport Numbers (various formats)
+        let passportPatterns = [
+            #"\b[A-Z]{1,2}\d{6,9}\b"#,
+            #"\b\d{9}\b"#,
+            #"\b[A-Z]\d{8}\b"#,
+            #"\b[A-Z]{2}\d{7}\b"#,
+            #"(?i)passport[:\s#]*([A-Z0-9]{6,12})"#,
+            #"(?i)passport\s*(?:no|number|#)?[:\s]*([A-Z0-9]{6,12})"#
+        ]
+        for pattern in passportPatterns {
+            items.append(contentsOf: findMatches(pattern: pattern, in: text, category: .passport, pageNumber: pageNumber, minConfidence: 0.85))
+        }
+
+        // Social Security Numbers
+        let ssnPattern = #"(?:\d{3}-?\d{2}-?\d{4}|\d{9})"#
+        items.append(contentsOf: findMatches(pattern: ssnPattern, in: text, category: .socialSecurity, pageNumber: pageNumber))
+
+        // Credit Card Numbers
+        let creditCardPattern = #"(?:\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4})"#
+        items.append(contentsOf: findMatches(pattern: creditCardPattern, in: text, category: .creditCard, pageNumber: pageNumber))
+
+        // Phone Numbers - International patterns
+        let phonePatterns = [
+            #"(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}"#,
+            #"\+\d{1,3}[-.\s]?\d{2,4}[-.\s]?\d{3,4}[-.\s]?\d{3,4}"#,
+            #"\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b"#,
+            #"\b\d{2,4}[-.\s]?\d{3,4}[-.\s]?\d{4}\b"#,
+            #"(?i)(?:phone|tel|mobile|cell)[:\s]*([+\d\s\-().]{7,20})"#
+        ]
+        for pattern in phonePatterns {
+            items.append(contentsOf: findMatches(pattern: pattern, in: text, category: .phoneNumber, pageNumber: pageNumber, minConfidence: 0.75))
+        }
+
+        // Email Addresses
+        let emailPattern = #"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"#
+        items.append(contentsOf: findMatches(pattern: emailPattern, in: text, category: .email, pageNumber: pageNumber))
+
+        // Dates - More comprehensive patterns
+        let datePatterns = [
+            #"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b"#,
+            #"\b\d{4}[/-]\d{1,2}[/-]\d{1,2}\b"#,
+            #"\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4}\b"#,
+            #"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{2,4}\b"#
+        ]
+        for pattern in datePatterns {
+            items.append(contentsOf: findMatches(pattern: pattern, in: text, category: .date, pageNumber: pageNumber, minConfidence: 0.7))
+        }
+
+        print("🔍 RedactionView: Page \(pageNumber + 1) found \(items.count) items")
+        return items
     }
     
     private func detectSensitiveData(in text: String, pageNumber: Int, categories: Set<SensitiveDataCategory>? = nil) async -> [RedactionItem] {

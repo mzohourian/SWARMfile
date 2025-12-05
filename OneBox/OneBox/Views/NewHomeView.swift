@@ -37,6 +37,9 @@ struct HomeView: View {
                         // All Tools Grid - 2x5
                         allToolsSection
 
+                        // Quick Actions (Recent Files, Workflows, Search)
+                        quickActionsSection
+
                         // Usage Status (only for free users)
                         if !paymentsManager.hasPro {
                             usageStatusSection
@@ -231,26 +234,9 @@ struct HomeView: View {
     // MARK: - All Tools Section
     private var allToolsSection: some View {
         VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
-            HStack {
-                Text("Tools")
-                    .font(OneBoxTypography.sectionTitle)
-                    .foregroundColor(OneBoxColors.primaryText)
-
-                Spacer()
-
-                Button(action: {
-                    showingWorkflowConcierge = true
-                    HapticManager.shared.impact(.light)
-                }) {
-                    HStack(spacing: OneBoxSpacing.tiny) {
-                        Image(systemName: "gear.badge.checkmark")
-                            .font(.system(size: 14, weight: .medium))
-                        Text("Workflows")
-                            .font(OneBoxTypography.caption)
-                    }
-                    .foregroundColor(OneBoxColors.primaryGold)
-                }
-            }
+            Text("Tools")
+                .font(OneBoxTypography.sectionTitle)
+                .foregroundColor(OneBoxColors.primaryText)
 
             LazyVGrid(columns: [
                 GridItem(.flexible(), spacing: OneBoxSpacing.small),
@@ -320,7 +306,56 @@ struct HomeView: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-    
+
+    // MARK: - Quick Actions Section
+    private var quickActionsSection: some View {
+        VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
+            Text("Quick Actions")
+                .font(OneBoxTypography.sectionTitle)
+                .foregroundColor(OneBoxColors.primaryText)
+
+            HStack(spacing: OneBoxSpacing.small) {
+                quickActionButton("Recent Files", "clock.fill") {
+                    // TODO: Show recent files view
+                }
+
+                quickActionButton("Workflows", "gear.badge.checkmark") {
+                    showingWorkflowConcierge = true
+                }
+
+                quickActionButton("Search", "magnifyingglass") {
+                    // TODO: Focus search bar
+                }
+            }
+        }
+    }
+
+    private func quickActionButton(_ title: String, _ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: {
+            action()
+            HapticManager.shared.impact(.light)
+        }) {
+            VStack(spacing: OneBoxSpacing.tiny) {
+                ZStack {
+                    Circle()
+                        .fill(OneBoxColors.surfaceGraphite)
+                        .frame(width: 44, height: 44)
+
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(OneBoxColors.primaryGold)
+                }
+
+                Text(title)
+                    .font(OneBoxTypography.micro)
+                    .foregroundColor(OneBoxColors.secondaryText)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
     // MARK: - Integrity Dashboard Summary
     private var integrityDashboardSummary: some View {
         OneBoxCard(style: .standard) {

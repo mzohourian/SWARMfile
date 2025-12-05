@@ -616,7 +616,7 @@ public actor PDFProcessor {
 
                 if let text = text {
                     print("🎨 CorePDF: Drawing text watermark on page \(pageIndex)")
-                    drawTextWatermark(text, in: pageBounds, position: position, tileDensity: tileDensity)
+                    drawTextWatermark(text, in: pageBounds, position: position, size: size, tileDensity: tileDensity)
                 } else if let image = image {
                     print("🎨 CorePDF: Drawing image watermark on page \(pageIndex)")
                     drawImageWatermark(image, in: pageBounds, position: position, size: size, tileDensity: tileDensity)
@@ -636,25 +636,30 @@ public actor PDFProcessor {
         return outputURL
     }
 
-    private func drawTextWatermark(_ text: String, in bounds: CGRect, position: WatermarkPosition, tileDensity: Double) {
-        print("🎨 CorePDF: Drawing text watermark '\(text)' at position \(position)")
+    private func drawTextWatermark(_ text: String, in bounds: CGRect, position: WatermarkPosition, size: Double, tileDensity: Double) {
+        print("🎨 CorePDF: Drawing text watermark '\(text)' at position \(position), size: \(size), density: \(tileDensity)")
 
-        let fontSize: CGFloat = bounds.height * 0.05
+        // IMPROVED: Size now dramatically affects font size
+        // At size 0.0: 2% of page height (small)
+        // At size 1.0: 15% of page height (large)
+        let fontSize: CGFloat = bounds.height * CGFloat(0.02 + size * 0.13)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: fontSize, weight: .bold),
             .foregroundColor: UIColor.gray
         ]
 
         let textSize = (text as NSString).size(withAttributes: attributes)
-        print("🎨 CorePDF: Text size: \(textSize), bounds: \(bounds)")
+        print("🎨 CorePDF: Text size: \(textSize), fontSize: \(fontSize), bounds: \(bounds)")
 
         if position == .tiled {
             print("🎨 CorePDF: Drawing tiled watermark with density \(tileDensity)")
 
-            // Calculate spacing for tiled watermarks based on density
-            let spacingMultiplier = 2.0 + (1.0 - tileDensity) * 3.0 // Higher density = smaller spacing
+            // IMPROVED: Density now has much more dramatic effect
+            // At density 1.0: spacing = 0.8x text size (watermarks overlap slightly)
+            // At density 0.0: spacing = 6x text size (very sparse)
+            let spacingMultiplier = 0.8 + (1.0 - tileDensity) * 5.2
             let horizontalSpacing = textSize.width * CGFloat(spacingMultiplier)
-            let verticalSpacing = textSize.height * CGFloat(spacingMultiplier * 2.0)
+            let verticalSpacing = textSize.height * CGFloat(spacingMultiplier * 1.5)
 
             // Prevent excessive tiling that could cause memory issues
             guard horizontalSpacing > 0 && verticalSpacing > 0 else {
@@ -696,15 +701,26 @@ public actor PDFProcessor {
             return
         }
 
+        print("🎨 CorePDF: Drawing image watermark with size: \(size), density: \(tileDensity)")
+
         let aspectRatio = image.size.height / image.size.width
+
+        // IMPROVED: Size now has much more dramatic effect
+        // At size 0.0: 5% of page width (small logo)
+        // At size 1.0: 50% of page width (large watermark)
+        let effectiveSize = 0.05 + size * 0.45
         let watermarkSize = CGSize(
-            width: bounds.width * CGFloat(size),
-            height: bounds.width * CGFloat(size) * aspectRatio
+            width: bounds.width * CGFloat(effectiveSize),
+            height: bounds.width * CGFloat(effectiveSize) * aspectRatio
         )
 
+        print("🎨 CorePDF: Watermark size: \(watermarkSize), effectiveSize: \(effectiveSize)")
+
         if position == .tiled {
-            // Calculate spacing for tiled images based on density
-            let spacingMultiplier = 1.0 + (1.0 - tileDensity) * 2.0 // Higher density = smaller spacing
+            // IMPROVED: Density now has much more dramatic effect
+            // At density 1.0: spacing = 0.6x size (watermarks overlap significantly)
+            // At density 0.0: spacing = 5x size (very sparse)
+            let spacingMultiplier = 0.6 + (1.0 - tileDensity) * 4.4
             let horizontalSpacing = watermarkSize.width * CGFloat(spacingMultiplier)
             let verticalSpacing = watermarkSize.height * CGFloat(spacingMultiplier)
 

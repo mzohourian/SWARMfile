@@ -40,7 +40,10 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - None currently
 
 ### Needs Testing
-- **Watermark PDF** - Fix applied (reduced tiling from 50x50 to 15x15), needs user verification
+- **Watermark PDF** - Multiple fixes applied, needs user verification:
+  - Size slider now has dramatic effect (5%-50% for images, 2%-15% for text)
+  - Density slider now has dramatic effect (0.6x to 5x spacing)
+  - Previous fix: reduced tiling from 50x50 to 15x15
 - Some advanced workflow features may need verification
 
 ---
@@ -53,6 +56,9 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
+- Watermark size slider not working - Text watermarks now use size parameter (was ignored)
+- Watermark size range too narrow - Improved to 5%-50% (images) and 2%-15% (text)
+- Watermark density range too narrow - Improved to 0.6x-5x spacing (was 1x-3x)
 - Watermark PDF hang at 27% - Fixed by reducing tiling limits from 50x50 to 15x15
 - Crash at 100% completion - Fixed division by zero in ExportPreviewView.swift
 
@@ -60,23 +66,22 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2025-12-04
+**Date:** 2025-12-05
 
 **What Was Done:**
-- Created new documentation structure (CLAUDE.md, PROJECT.md, docs/) to solve model memory problem
-- Added 100% offline principle to all documentation as NON-NEGOTIABLE requirement
-- Fixed Watermark PDF 27% hang - root cause was excessive tiling (50x50 = 2500 operations per page)
-- Fixed crash after watermark completes - division by zero when originalSize is 0
-- Reduced tiling limits from 50x50 to 15x15 (225 max operations per page)
-- Added autoreleasepool memory management inside tiling loops
+- Fixed watermark SIZE slider - text watermarks were ignoring the size parameter completely
+- Improved size range for dramatic visible effect:
+  - Images: 5% to 50% of page width (was just 0-100% linear)
+  - Text: 2% to 15% of page height (was fixed at 5%)
+- Improved density range for dramatic visible effect:
+  - Images: 0.6x to 5x spacing (was 1x to 3x)
+  - Text: 0.8x to 6x spacing (was 2x to 5x)
 
 **What's Unfinished:**
-- Watermark feature needs final verification after both fixes
+- Watermark feature needs user testing to verify size/density improvements
 
 **Files Modified:**
-- `CLAUDE.md`, `PROJECT.md`, `docs/*` - New documentation structure
-- `OneBox/Modules/CorePDF/CorePDF.swift` - Watermark tiling fix
-- `OneBox/OneBox/Views/ExportPreviewView.swift` - Division by zero fix
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Watermark size and density improvements
 
 ---
 

@@ -4,6 +4,26 @@
 
 ---
 
+## 2025-12-05: Watermark Size and Density Slider Improvements
+
+**What Was Done:**
+- Fixed text watermark SIZE completely ignored (parameter wasn't being passed to draw function)
+- Improved image watermark size formula: now 5%-50% of page width (10x range)
+- Improved text watermark size formula: now 2%-15% of page height (7.5x range)
+- Improved image density formula: spacing 0.6x-5x watermark size (8x range)
+- Improved text density formula: spacing 0.8x-6x text size (7.5x range)
+
+**Root Cause:**
+- Text watermarks had `drawTextWatermark(text, in: bounds, position: position, tileDensity: tileDensity)` - the `size` parameter was never passed
+- Size and density formulas used narrow ranges that didn't produce visually obvious differences
+
+**Files Modified:**
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Updated `drawTextWatermark` and `drawImageWatermark` functions
+
+**Status:** Fix applied, needs user testing
+
+---
+
 ## 2025-12-04: Watermark PDF Fix - Large File Handling
 
 **What Was Done:**

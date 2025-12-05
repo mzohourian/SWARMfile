@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-04
+**Last Updated:** 2025-12-05
 
 ## What This Is
 **OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -57,6 +57,9 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
+- Organize PDF scrolling not working - Removed conflicting DragGesture that consumed scroll events
+- Organize PDF selection cleared after rotation - Kept selection after rotate left/right
+- Organize PDF false anomaly detection - Disabled feature (too many false positives, no solutions)
 - Organize PDF not saving to Files - PageOrganizerView was bypassing JobEngine's file persistence
 - Organize PDF multi-page rotation bug - Rotating multiple pages only kept last rotation
 - Processed files not saving to Files app - Files now auto-saved to Documents/Exports folder
@@ -73,6 +76,11 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-05
 
 **What Was Done:**
+- Fixed Organize PDF scrolling - removed conflicting DragGesture that blocked ScrollView
+- Fixed Organize PDF selection - pages stay selected after rotation for multi-rotation
+- Disabled Organize PDF anomaly detection - too many false positives, no solutions offered
+- Fixed Organize PDF file persistence - PageOrganizerView now saves to Documents/Exports
+- Fixed Organize PDF multi-page rotation - reloads PDF after each rotation
 - Fixed processed files not saving to Files app - centralized fix in JobEngine
   - ALL tools now auto-save to Documents/Exports folder
   - Covers: watermark, merge, split, compress, sign, images-to-pdf, pdf-to-images, etc.
@@ -85,9 +93,10 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
   - Text: 0.8x to 6x spacing (was 2x to 5x)
 
 **What's Unfinished:**
-- All features need user testing to verify file persistence works
+- All features need user testing to verify fixes work
 
 **Files Modified:**
+- `OneBox/OneBox/Views/PageOrganizerView.swift` - Scrolling fix, selection fix, anomaly detection disabled
 - `OneBox/Modules/JobEngine/JobEngine.swift` - Centralized auto-save to Documents/Exports
 - `OneBox/Modules/CorePDF/CorePDF.swift` - Watermark size and density improvements
 - `OneBox/OneBox/Views/ToolFlowView.swift` - Simplified (persistence now in JobEngine)

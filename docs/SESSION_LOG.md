@@ -4,6 +4,35 @@
 
 ---
 
+## 2025-12-05: Organize PDF Fixes
+
+**What Was Done:**
+- Fixed scrolling not working in Organize PDF
+  - Root cause: Standalone `DragGesture()` was consuming all drag events before ScrollView
+  - Fix: Removed the conflicting gesture; `.onDrag` modifier handles drag-and-drop already
+- Fixed selection cleared after rotation
+  - Root cause: `selectedPages.removeAll()` was called at end of rotate functions
+  - Fix: Removed the line so users can rotate multiple times without reselecting
+- Disabled anomaly detection (false positives)
+  - User feedback: "28 issues detected" but all pages marked as duplicates (incorrect)
+  - Fix: Disabled `detectAnomalies()` call; feature needs proper algorithms and one-click solutions
+- Fixed file persistence for PageOrganizerView
+  - Root cause: View creates jobs with status: .success, bypassing JobEngine's processJob()
+  - Fix: Added local `saveOutputToDocuments()` function
+- Fixed multi-page rotation bug
+  - Root cause: All rotations applied to same PDF object without saving intermediate results
+  - Fix: Reload PDF from outputURL after each rotation to preserve previous changes
+
+**Root Cause Summary:**
+PageOrganizerView had a standalone DragGesture that was only used for visual feedback (opacity, scale) but it consumed scroll gestures. The `.onDrag` modifier already handles the actual drag-and-drop functionality.
+
+**Files Modified:**
+- `OneBox/OneBox/Views/PageOrganizerView.swift` - All fixes applied
+
+**Status:** Fixes applied, needs user testing
+
+---
+
 ## 2025-12-05: Watermark Fixes + File Persistence
 
 **What Was Done:**

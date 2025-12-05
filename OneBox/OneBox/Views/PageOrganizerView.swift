@@ -853,7 +853,6 @@ struct PageCell: View {
     var hasAnomaly: Bool = false
 
     @State private var isTargeted = false
-    @GestureState private var isDragging = false
 
     var body: some View {
         VStack(spacing: 8) {
@@ -871,7 +870,6 @@ struct PageCell: View {
                                 .stroke(isSelected ? Color.accentColor : (isTargeted ? Color.green : Color.clear), lineWidth: 3)
                         )
                         .shadow(color: isTargeted ? .green.opacity(0.5) : .clear, radius: 8)
-                        .opacity(isDragging ? 0.5 : 1.0)
                 } else {
                     Rectangle()
                         .fill(Color(.systemGray5))
@@ -923,13 +921,6 @@ struct PageCell: View {
                     onTap()
                 }
         )
-        .scaleEffect(isDragging ? 0.95 : 1.0)
-        .gesture(
-            DragGesture()
-                .updating($isDragging) { _, state, _ in
-                    state = true
-                }
-        )
         .onDrag {
             print("PageCell: Starting drag for page \(page.displayIndex + 1)")
             onDrag()
@@ -971,7 +962,6 @@ struct PageCell: View {
         }
         .onDrop(of: [UTType.plainText], delegate: PageDropDelegate(onDrop: onDrop, isTargeted: $isTargeted))
         .animation(.easeInOut(duration: 0.2), value: isTargeted)
-        .animation(.easeInOut(duration: 0.2), value: isDragging)
     }
 }
 

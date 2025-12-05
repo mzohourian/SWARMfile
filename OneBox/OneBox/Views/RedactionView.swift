@@ -33,6 +33,7 @@ struct RedactionView: View {
     @State private var completedJob: Job?
     @State private var showingResult = false
     @State private var errorMessage: String?
+    @State private var didStartAccessingSecurityScoped = false
     
     enum RedactionMode: String, CaseIterable {
         case automatic = "Automatic Detection"
@@ -95,8 +96,21 @@ struct RedactionView: View {
             }
         }
         .onAppear {
+            // Start security-scoped access for files from document picker
+            if pdfURL.startAccessingSecurityScopedResource() {
+                didStartAccessingSecurityScoped = true
+                print("RedactionView: Started security-scoped resource access")
+            }
             loadPDFDocument()
             performSensitiveDataAnalysis()
+        }
+        .onDisappear {
+            // Stop security-scoped access when view disappears
+            if didStartAccessingSecurityScoped {
+                pdfURL.stopAccessingSecurityScopedResource()
+                didStartAccessingSecurityScoped = false
+                print("RedactionView: Stopped security-scoped resource access")
+            }
         }
     }
 

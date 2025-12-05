@@ -37,11 +37,11 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - Redaction with presets
 
 ### Broken / Blocked
-- **Redact PDF** - Black screen fixed, now testing detection accuracy
+- **Redact PDF** - Testing OCR for scanned documents
+  - Added Vision framework OCR for image-based/scanned PDFs (100% on-device)
   - Added passport number detection (various international formats)
   - Added international phone number patterns
-  - Added extensive debug logging for text extraction
-  - Issue: May not detect text from image-based/scanned PDFs (needs OCR)
+  - OCR renders each page as image, then uses VNRecognizeTextRequest
 
 ### Needs Testing
 - **Watermark PDF** - Multiple fixes applied, needs user verification:

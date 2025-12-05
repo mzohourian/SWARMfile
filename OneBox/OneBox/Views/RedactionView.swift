@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 import UIComponents
 import JobEngine
 import CommonTypes
@@ -496,26 +497,24 @@ struct RedactionView: View {
                 }
 
                 await MainActor.run {
-                    analysisProgress = Double(pageIndex) / Double(pageCount) * 0.5
-                }
-
-                // Extract text from page
-                if let pageText = page.string {
-                    print("🔍 RedactionView: Page \(pageIndex + 1) has \(pageText.count) characters")
-
-                    if pageText.isEmpty {
-                        print("⚠️ RedactionView: Page \(pageIndex + 1) text is empty - PDF might be image-based")
-                    } else {
-                        // Detect various types of sensitive data
-                        let pageItems = await detectSensitiveData(in: pageText, pageNumber: pageIndex)
-                        detectedItems.append(contentsOf: pageItems)
-                    }
-                } else {
-                    print("⚠️ RedactionView: Page \(pageIndex + 1) returned nil text - PDF might be image-based (scanned document)")
-                }
-
-                await MainActor.run {
                     analysisProgress = Double(pageIndex) / Double(pageCount)
+                }
+
+                // Try to extract text from page
+                var pageText: String? = page.string
+
+                // If no text found, try OCR (for scanned/image-based PDFs)
+                if pageText == nil || pageText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+                    print("🔍 RedactionView: Page \(pageIndex + 1) has no embedded text, trying OCR...")
+                    pageText = await performOCR(on: page)
+                }
+
+                if let text = pageText, !text.isEmpty {
+                    print("🔍 RedactionView: Page \(pageIndex + 1) has \(text.count) characters")
+                    let pageItems = await detectSensitiveData(in: text, pageNumber: pageIndex)
+                    detectedItems.append(contentsOf: pageItems)
+                } else {
+                    print("⚠️ RedactionView: Page \(pageIndex + 1) - no text found even after OCR")
                 }
             }
 
@@ -527,8 +526,68 @@ struct RedactionView: View {
                 self.analysisProgress = 1.0
 
                 if detectedItems.isEmpty {
-                    print("⚠️ RedactionView: No items detected. If document has text, patterns may not match.")
+                    print("⚠️ RedactionView: No items detected. Document may have no recognizable sensitive data.")
                 }
+            }
+        }
+    }
+
+    /// Perform OCR on a PDF page using Vision framework (100% on-device)
+    private func performOCR(on page: PDFPage) async -> String? {
+        // Render the PDF page as an image
+        let pageRect = page.bounds(for: .mediaBox)
+        let scale: CGFloat = 2.0 // Higher scale = better OCR accuracy
+        let imageSize = CGSize(width: pageRect.width * scale, height: pageRect.height * scale)
+
+        let renderer = UIGraphicsImageRenderer(size: imageSize)
+        let image = renderer.image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: imageSize))
+
+            context.cgContext.translateBy(x: 0, y: imageSize.height)
+            context.cgContext.scaleBy(x: scale, y: -scale)
+
+            page.draw(with: .mediaBox, to: context.cgContext)
+        }
+
+        guard let cgImage = image.cgImage else {
+            print("⚠️ RedactionView: Failed to render page as image for OCR")
+            return nil
+        }
+
+        // Perform text recognition using Vision
+        return await withCheckedContinuation { continuation in
+            let request = VNRecognizeTextRequest { request, error in
+                if let error = error {
+                    print("⚠️ RedactionView: OCR error: \(error.localizedDescription)")
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                guard let observations = request.results as? [VNRecognizedTextObservation] else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                // Combine all recognized text
+                let recognizedText = observations.compactMap { observation in
+                    observation.topCandidates(1).first?.string
+                }.joined(separator: " ")
+
+                print("🔍 RedactionView: OCR extracted \(recognizedText.count) characters")
+                continuation.resume(returning: recognizedText.isEmpty ? nil : recognizedText)
+            }
+
+            // Configure for best accuracy
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            do {
+                try handler.perform([request])
+            } catch {
+                print("⚠️ RedactionView: OCR handler error: \(error.localizedDescription)")
+                continuation.resume(returning: nil)
             }
         }
     }

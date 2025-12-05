@@ -231,9 +231,26 @@ struct HomeView: View {
     // MARK: - All Tools Section
     private var allToolsSection: some View {
         VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
-            Text("Tools")
-                .font(OneBoxTypography.sectionTitle)
-                .foregroundColor(OneBoxColors.primaryText)
+            HStack {
+                Text("Tools")
+                    .font(OneBoxTypography.sectionTitle)
+                    .foregroundColor(OneBoxColors.primaryText)
+
+                Spacer()
+
+                Button(action: {
+                    showingWorkflowConcierge = true
+                    HapticManager.shared.impact(.light)
+                }) {
+                    HStack(spacing: OneBoxSpacing.tiny) {
+                        Image(systemName: "gear.badge.checkmark")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Workflows")
+                            .font(OneBoxTypography.caption)
+                    }
+                    .foregroundColor(OneBoxColors.primaryGold)
+                }
+            }
 
             LazyVGrid(columns: [
                 GridItem(.flexible(), spacing: OneBoxSpacing.small),

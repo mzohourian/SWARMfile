@@ -93,6 +93,7 @@ struct ToolFlowView: View {
             if let url = selectedURLs.first {
                 RedactionView(pdfURL: url)
                     .environmentObject(jobManager)
+                    .environmentObject(paymentsManager)
             }
         }
         .alert("Error", isPresented: $showError) {

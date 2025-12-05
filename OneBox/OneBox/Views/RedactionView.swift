@@ -17,7 +17,8 @@ struct RedactionView: View {
     let pdfURL: URL
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var jobManager: JobManager
-    
+    @EnvironmentObject var paymentsManager: PaymentsManager
+
     @State private var redactionItems: [RedactionItem] = []
     @State private var isAnalyzing = false
     @State private var analysisProgress: Double = 0
@@ -28,6 +29,10 @@ struct RedactionView: View {
     @State private var redactionMode: RedactionMode = .automatic
     @State private var selectedPreset: RedactionPreset?
     @State private var showingPresetPicker = false
+    @State private var isProcessing = false
+    @State private var completedJob: Job?
+    @State private var showingResult = false
+    @State private var errorMessage: String?
     
     enum RedactionMode: String, CaseIterable {
         case automatic = "Automatic Detection"
@@ -66,7 +71,7 @@ struct RedactionView: View {
                         applyRedactions()
                     }
                     .foregroundColor(OneBoxColors.primaryGold)
-                    .disabled(redactionItems.filter { $0.isSelected }.isEmpty)
+                    .disabled(redactionItems.filter { $0.isSelected }.isEmpty || isProcessing)
                 }
             }
         }
@@ -76,9 +81,47 @@ struct RedactionView: View {
                 redactionItems: redactionItems.filter { $0.isSelected }
             )
         }
+        .sheet(isPresented: $showingResult, onDismiss: {
+            // Dismiss RedactionView after result is shown
+            dismiss()
+        }) {
+            if let job = completedJob {
+                JobResultView(job: job)
+            }
+        }
+        .overlay {
+            if isProcessing {
+                processingOverlay
+            }
+        }
         .onAppear {
             loadPDFDocument()
             performSensitiveDataAnalysis()
+        }
+    }
+
+    // MARK: - Processing Overlay
+    private var processingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+
+            VStack(spacing: OneBoxSpacing.medium) {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: OneBoxColors.primaryGold))
+                    .scaleEffect(1.5)
+
+                Text("Applying Redactions...")
+                    .font(OneBoxTypography.body)
+                    .foregroundColor(OneBoxColors.primaryText)
+
+                Text("Permanently removing sensitive data")
+                    .font(OneBoxTypography.caption)
+                    .foregroundColor(OneBoxColors.secondaryText)
+            }
+            .padding(OneBoxSpacing.large)
+            .background(OneBoxColors.surfaceGraphite)
+            .cornerRadius(OneBoxRadius.large)
         }
     }
     
@@ -569,23 +612,97 @@ struct RedactionView: View {
     private func applyRedactions() {
         let selectedItems = redactionItems.filter { $0.isSelected }
         guard !selectedItems.isEmpty else { return }
-        
-        // Create redaction job
-        let settings = JobSettings()
-        let job = Job(
-            type: .pdfRedact,
-            inputs: [pdfURL],
-            settings: settings
-        )
-        
+
+        isProcessing = true
+        HapticManager.shared.impact(.medium)
+
         Task {
-            await jobManager.submitJob(job)
-            await MainActor.run {
-                dismiss()
+            do {
+                // Create settings with redaction items
+                var settings = JobSettings()
+                settings.redactionItems = selectedItems.map { $0.detectedText }
+                settings.redactionMode = redactionMode.rawValue
+
+                // Process redaction using JobEngine
+                let processor = JobProcessor()
+                let tempJob = Job(
+                    type: .pdfRedact,
+                    inputs: [pdfURL],
+                    settings: settings
+                )
+
+                let outputURLs = try await processor.process(job: tempJob) { progress in
+                    // Progress is handled by the overlay
+                }
+
+                // Save to Documents/Exports for persistence
+                let persistedURL = saveOutputToDocuments(outputURLs.first)
+
+                // Create completed job for result display
+                let job = Job(
+                    type: .pdfRedact,
+                    inputs: [pdfURL],
+                    settings: settings,
+                    status: .success,
+                    outputURLs: [persistedURL ?? outputURLs.first!],
+                    completedAt: Date()
+                )
+
+                await MainActor.run {
+                    paymentsManager.consumeExport()
+                    completedJob = job
+                    isProcessing = false
+                    showingResult = true
+                    HapticManager.shared.notification(.success)
+                }
+
+                // Submit job for history tracking
+                await jobManager.submitJob(job)
+
+            } catch {
+                await MainActor.run {
+                    isProcessing = false
+                    errorMessage = error.localizedDescription
+                    HapticManager.shared.notification(.error)
+                }
             }
         }
-        
-        HapticManager.shared.notification(.success)
+    }
+
+    /// Save output file to Documents/Exports for persistence
+    private func saveOutputToDocuments(_ tempURL: URL?) -> URL? {
+        guard let tempURL = tempURL else { return nil }
+
+        let fileManager = FileManager.default
+        guard let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return tempURL
+        }
+
+        let exportsURL = documentsURL.appendingPathComponent("Exports", isDirectory: true)
+
+        // Create Exports directory if needed
+        if !fileManager.fileExists(atPath: exportsURL.path) {
+            try? fileManager.createDirectory(at: exportsURL, withIntermediateDirectories: true)
+        }
+
+        // Generate unique filename with timestamp
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "M-d-yy_h-mm_a"
+        let timestamp = dateFormatter.string(from: Date())
+        let filename = "redacted_pdf_\(timestamp).pdf"
+        let destinationURL = exportsURL.appendingPathComponent(filename)
+
+        do {
+            // Remove existing file if present
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                try fileManager.removeItem(at: destinationURL)
+            }
+            try fileManager.copyItem(at: tempURL, to: destinationURL)
+            return destinationURL
+        } catch {
+            print("Failed to save to Documents: \(error)")
+            return tempURL
+        }
     }
 }
 
@@ -720,4 +837,5 @@ struct RedactionPreviewView: View {
 #Preview {
     RedactionView(pdfURL: URL(fileURLWithPath: "/tmp/sample.pdf"))
         .environmentObject(JobManager.shared)
+        .environmentObject(PaymentsManager.shared)
 }

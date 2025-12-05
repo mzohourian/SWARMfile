@@ -352,7 +352,16 @@ struct ToolFlowView: View {
                     currentJob = updatedJob
 
                     if updatedJob.status == .success {
+                        // Save output files to Documents/Exports for persistence
+                        let persistedURLs = await saveOutputFilesToDocuments(updatedJob.outputURLs)
+
                         await MainActor.run {
+                            // Update job with persisted URLs
+                            if !persistedURLs.isEmpty {
+                                var updatedJobWithPersistedURLs = updatedJob
+                                updatedJobWithPersistedURLs.outputURLs = persistedURLs
+                                currentJob = updatedJobWithPersistedURLs
+                            }
                             step = .exportPreview
                         }
                         break
@@ -370,8 +379,15 @@ struct ToolFlowView: View {
                         try? await Task.sleep(nanoseconds: 1_000_000_000) // 1.0s additional wait
                         if let finalJob = jobManager.jobs.first(where: { $0.id == job.id }),
                            finalJob.status == .success {
+                            // Save output files to Documents/Exports for persistence
+                            let persistedURLs = await saveOutputFilesToDocuments(finalJob.outputURLs)
+
                             await MainActor.run {
-                                currentJob = finalJob
+                                var jobWithPersistedURLs = finalJob
+                                if !persistedURLs.isEmpty {
+                                    jobWithPersistedURLs.outputURLs = persistedURLs
+                                }
+                                currentJob = jobWithPersistedURLs
                                 step = .exportPreview
                             }
                             break
@@ -382,6 +398,69 @@ struct ToolFlowView: View {
                 try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
             }
         }
+    }
+
+    /// Saves output files from temp directory to Documents/Exports for persistence
+    /// Files in temp directory get cleaned up by iOS, so we need to copy them
+    private func saveOutputFilesToDocuments(_ tempURLs: [URL]) async -> [URL] {
+        let fileManager = FileManager.default
+
+        guard let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("❌ ToolFlowView: Could not get Documents directory")
+            return tempURLs
+        }
+
+        let exportsURL = documentsURL.appendingPathComponent("Exports", isDirectory: true)
+
+        // Create Exports directory if it doesn't exist
+        do {
+            try fileManager.createDirectory(at: exportsURL, withIntermediateDirectories: true, attributes: nil)
+        } catch {
+            print("❌ ToolFlowView: Failed to create Exports directory: \(error)")
+            return tempURLs
+        }
+
+        var persistedURLs: [URL] = []
+
+        for tempURL in tempURLs {
+            // Check if file exists
+            guard fileManager.fileExists(atPath: tempURL.path) else {
+                print("⚠️ ToolFlowView: Temp file doesn't exist: \(tempURL.path)")
+                continue
+            }
+
+            // Create unique filename with timestamp to avoid conflicts
+            let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .short)
+                .replacingOccurrences(of: "/", with: "-")
+                .replacingOccurrences(of: ":", with: "-")
+                .replacingOccurrences(of: " ", with: "_")
+
+            let originalName = tempURL.deletingPathExtension().lastPathComponent
+            // Clean up the temp prefix (e.g., "watermarked_UUID" -> just use tool name)
+            let cleanName = originalName.components(separatedBy: "_").first ?? originalName
+            let ext = tempURL.pathExtension
+            let newFilename = "\(cleanName)_\(timestamp).\(ext)"
+            let destinationURL = exportsURL.appendingPathComponent(newFilename)
+
+            do {
+                // Remove existing file if present
+                if fileManager.fileExists(atPath: destinationURL.path) {
+                    try fileManager.removeItem(at: destinationURL)
+                }
+
+                // Copy file to persistent location
+                try fileManager.copyItem(at: tempURL, to: destinationURL)
+                print("✅ ToolFlowView: Saved file to: \(destinationURL.path)")
+                persistedURLs.append(destinationURL)
+
+            } catch {
+                print("❌ ToolFlowView: Failed to save file: \(error)")
+                // Fall back to temp URL if copy fails
+                persistedURLs.append(tempURL)
+            }
+        }
+
+        return persistedURLs.isEmpty ? tempURLs : persistedURLs
     }
 
     func calculateOriginalSize() -> Int64 {

@@ -56,6 +56,7 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
+- Processed files not saving to Files app - Files now auto-saved to Documents/Exports folder
 - Watermark size slider not working - Text watermarks now use size parameter (was ignored)
 - Watermark size range too narrow - Improved to 5%-50% (images) and 2%-15% (text)
 - Watermark density range too narrow - Improved to 0.6x-5x spacing (was 1x-3x)
@@ -69,6 +70,7 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-05
 
 **What Was Done:**
+- Fixed processed files not saving to Files app - output is now auto-saved to Documents/Exports folder
 - Fixed watermark SIZE slider - text watermarks were ignoring the size parameter completely
 - Improved size range for dramatic visible effect:
   - Images: 5% to 50% of page width (was just 0-100% linear)
@@ -78,10 +80,11 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
   - Text: 0.8x to 6x spacing (was 2x to 5x)
 
 **What's Unfinished:**
-- Watermark feature needs user testing to verify size/density improvements
+- Watermark feature needs user testing to verify all fixes work together
 
 **Files Modified:**
 - `OneBox/Modules/CorePDF/CorePDF.swift` - Watermark size and density improvements
+- `OneBox/OneBox/Views/ToolFlowView.swift` - Auto-save to Documents/Exports folder
 
 ---
 

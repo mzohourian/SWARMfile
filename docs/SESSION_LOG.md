@@ -4,9 +4,12 @@
 
 ---
 
-## 2025-12-05: Watermark Size and Density Slider Improvements
+## 2025-12-05: Watermark Fixes + File Persistence
 
 **What Was Done:**
+- Fixed processed files not saving to Files app
+  - Root cause: Output saved to temp directory which iOS cleans up automatically
+  - Fix: Added `saveOutputFilesToDocuments()` to copy files to Documents/Exports after processing
 - Fixed text watermark SIZE completely ignored (parameter wasn't being passed to draw function)
 - Improved image watermark size formula: now 5%-50% of page width (10x range)
 - Improved text watermark size formula: now 2%-15% of page height (7.5x range)
@@ -14,13 +17,15 @@
 - Improved text density formula: spacing 0.8x-6x text size (7.5x range)
 
 **Root Cause:**
+- Files were saved to temp directory which gets cleaned up by iOS
 - Text watermarks had `drawTextWatermark(text, in: bounds, position: position, tileDensity: tileDensity)` - the `size` parameter was never passed
 - Size and density formulas used narrow ranges that didn't produce visually obvious differences
 
 **Files Modified:**
+- `OneBox/OneBox/Views/ToolFlowView.swift` - Added auto-save to Documents/Exports
 - `OneBox/Modules/CorePDF/CorePDF.swift` - Updated `drawTextWatermark` and `drawImageWatermark` functions
 
-**Status:** Fix applied, needs user testing
+**Status:** Fixes applied, needs user testing
 
 ---
 

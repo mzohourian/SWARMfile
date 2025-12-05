@@ -304,12 +304,6 @@ struct HomeView: View {
                     }
                     .padding(.top, OneBoxSpacing.tiny)
                 }
-
-                OneBoxButton("Open", style: .primary) {
-                    selectedTool = tool
-                    showingToolFlow = true
-                    HapticManager.shared.impact(.light)
-                }
             }
         }
         .onTapGesture {

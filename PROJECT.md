@@ -80,36 +80,30 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-05
 
 **What Was Done:**
-- Fixed Organize PDF scrolling - removed conflicting DragGesture that blocked ScrollView
-- Fixed Organize PDF selection - pages stay selected after rotation for multi-rotation
-- Disabled Organize PDF anomaly detection - too many false positives, no solutions offered
-- Fixed Organize PDF file persistence - PageOrganizerView now saves to Documents/Exports
-- Fixed Organize PDF multi-page rotation - reloads PDF after each rotation
-- Fixed processed files not saving to Files app - centralized fix in JobEngine
-  - ALL tools now auto-save to Documents/Exports folder
-  - Covers: watermark, merge, split, compress, sign, images-to-pdf, pdf-to-images, etc.
-- Fixed watermark SIZE slider - text watermarks were ignoring the size parameter completely
-- Improved size range for dramatic visible effect:
-  - Images: 5% to 50% of page width (was just 0-100% linear)
-  - Text: 2% to 15% of page height (was fixed at 5%)
-- Improved density range for dramatic visible effect:
-  - Images: 0.6x to 5x spacing (was 1x to 3x)
-  - Text: 0.8x to 6x spacing (was 2x to 5x)
+- Fixed Redact PDF black screen issue - added fallback error view and extensive debug logging
+- Added passport number detection - various international formats (US, UK, EU)
+- Added international phone number patterns - not just US format
+- Added OCR for scanned/image-based PDFs using Vision framework (100% on-device)
+- Optimized OCR to prevent crashes on large documents:
+  - Reduced image scale from 2x to 1.5x
+  - Added max dimension limit (2000px)
+  - Added autoreleasepool for memory management
+  - Changed to .fast recognition level
+  - Added 5-second timeout per page
+  - Added 10ms delay between pages for UI updates
 
 **What's Unfinished:**
-- All features need user testing to verify fixes work
+- **Redact PDF OCR needs testing** - optimized but not yet verified on device with scanned documents
 
 **Files Modified:**
-- `OneBox/OneBox/Views/PageOrganizerView.swift` - Scrolling fix, selection fix, anomaly detection disabled
-- `OneBox/Modules/JobEngine/JobEngine.swift` - Centralized auto-save to Documents/Exports
-- `OneBox/Modules/CorePDF/CorePDF.swift` - Watermark size and density improvements
-- `OneBox/OneBox/Views/ToolFlowView.swift` - Simplified (persistence now in JobEngine)
+- `OneBox/OneBox/Views/RedactionView.swift` - OCR, passport detection, memory optimization
+- `OneBox/OneBox/Views/ToolFlowView.swift` - Debug logging, fallback error view for RedactionView
 
 ---
 
 ## Next Steps (Priority Order)
 
-1. **Test Watermark PDF** - Verify fix works on real device with large files
+1. **Test Redact PDF with scanned document** - Verify OCR works without crashing
 2. Test all features end-to-end
 3. Address Swift 6 warnings (optional, non-blocking)
 

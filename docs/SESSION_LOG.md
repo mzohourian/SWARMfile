@@ -4,6 +4,40 @@
 
 ---
 
+## 2025-12-05: Redact PDF - OCR for Scanned Documents
+
+**What Was Done:**
+- Fixed Redact PDF black screen issue
+  - Root cause: fullScreenCover had no fallback when URL was nil
+  - Fix: Added Group wrapper with fallback error view
+- Added passport number detection (various international formats)
+  - US: 9 digits
+  - UK/EU: 1-2 letters + 6-9 digits
+  - Detection after "passport" keyword
+- Added international phone number patterns (not just US format)
+- Added OCR for scanned/image-based PDFs using Vision framework
+  - 100% on-device using VNRecognizeTextRequest
+  - Renders PDF pages as images, then performs text recognition
+- Optimized OCR to prevent crashes on large documents (22 pages was crashing)
+  - Reduced image scale from 2x to 1.5x
+  - Added max dimension limit (2000px) to cap memory usage
+  - Added autoreleasepool for memory cleanup between pages
+  - Changed from .accurate to .fast recognition level
+  - Disabled language correction for speed
+  - Added 5-second timeout per page
+  - Added 10ms delay between pages for UI updates
+
+**Root Cause:**
+PDF was image-based (scanned documents) so `page.string` returned nil for all 22 pages. PDFKit cannot extract text from images - needs OCR.
+
+**Files Modified:**
+- `OneBox/OneBox/Views/RedactionView.swift` - OCR, passport detection, memory optimization
+- `OneBox/OneBox/Views/ToolFlowView.swift` - Debug logging, fallback error view
+
+**Status:** OCR implemented and optimized, needs testing on device with scanned documents
+
+---
+
 ## 2025-12-05: Organize PDF Fixes
 
 **What Was Done:**

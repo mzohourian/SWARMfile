@@ -151,7 +151,10 @@ struct PageOrganizerView: View {
             .sheet(isPresented: $showingPaywall) {
                 PaywallView()
             }
-            .sheet(isPresented: $showingResult) {
+            .sheet(isPresented: $showingResult, onDismiss: {
+                // Dismiss PageOrganizerView after result is shown
+                dismiss()
+            }) {
                 if let job = completedJob {
                     JobResultView(job: job)
                 }
@@ -735,7 +738,6 @@ struct PageOrganizerView: View {
                     paymentsManager.consumeExport()
                     completedJob = job
                     isProcessing = false
-                    dismiss()
                     showingResult = true
                 }
                 await jobManager.submitJob(job)

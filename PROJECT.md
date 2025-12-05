@@ -70,7 +70,9 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-05
 
 **What Was Done:**
-- Fixed processed files not saving to Files app - output is now auto-saved to Documents/Exports folder
+- Fixed processed files not saving to Files app - centralized fix in JobEngine
+  - ALL tools now auto-save to Documents/Exports folder
+  - Covers: watermark, merge, split, compress, sign, images-to-pdf, pdf-to-images, etc.
 - Fixed watermark SIZE slider - text watermarks were ignoring the size parameter completely
 - Improved size range for dramatic visible effect:
   - Images: 5% to 50% of page width (was just 0-100% linear)
@@ -80,11 +82,12 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
   - Text: 0.8x to 6x spacing (was 2x to 5x)
 
 **What's Unfinished:**
-- Watermark feature needs user testing to verify all fixes work together
+- All features need user testing to verify file persistence works
 
 **Files Modified:**
+- `OneBox/Modules/JobEngine/JobEngine.swift` - Centralized auto-save to Documents/Exports
 - `OneBox/Modules/CorePDF/CorePDF.swift` - Watermark size and density improvements
-- `OneBox/OneBox/Views/ToolFlowView.swift` - Auto-save to Documents/Exports folder
+- `OneBox/OneBox/Views/ToolFlowView.swift` - Simplified (persistence now in JobEngine)
 
 ---
 

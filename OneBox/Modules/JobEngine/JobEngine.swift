@@ -422,11 +422,15 @@ public class JobManager: ObservableObject {
                 }
             )
 
+            // Save output files to Documents/Exports for persistence
+            // Files in temp directory get cleaned up by iOS automatically
+            let persistedURLs = saveOutputFilesToDocuments(outputURLs, jobType: job.type)
+
             jobs[index].status = .success
             jobs[index].progress = 1.0
-            jobs[index].outputURLs = outputURLs
+            jobs[index].outputURLs = persistedURLs
             jobs[index].completedAt = Date()
-            
+
             // Clean up secure files if secure vault was enabled
             if job.settings.enableSecureVault {
                 privacyDelegate?.performSecureFilesCleanup()
@@ -489,6 +493,75 @@ public class JobManager: ObservableObject {
     private func processNextPendingJob() async {
         guard let nextJob = jobs.first(where: { $0.status == .pending }) else { return }
         await processJob(nextJob)
+    }
+
+    /// Saves output files from temp directory to Documents/Exports for persistence
+    /// Files in temp directory get cleaned up by iOS, so we need to copy them
+    private func saveOutputFilesToDocuments(_ tempURLs: [URL], jobType: JobType) -> [URL] {
+        let fileManager = FileManager.default
+
+        guard let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("❌ JobEngine: Could not get Documents directory")
+            return tempURLs
+        }
+
+        let exportsURL = documentsURL.appendingPathComponent("Exports", isDirectory: true)
+
+        // Create Exports directory if it doesn't exist
+        do {
+            try fileManager.createDirectory(at: exportsURL, withIntermediateDirectories: true, attributes: nil)
+        } catch {
+            print("❌ JobEngine: Failed to create Exports directory: \(error)")
+            return tempURLs
+        }
+
+        var persistedURLs: [URL] = []
+
+        for tempURL in tempURLs {
+            // Check if file exists
+            guard fileManager.fileExists(atPath: tempURL.path) else {
+                print("⚠️ JobEngine: Temp file doesn't exist: \(tempURL.path)")
+                continue
+            }
+
+            // Skip files that are already in Documents directory
+            if tempURL.path.hasPrefix(documentsURL.path) {
+                print("📁 JobEngine: File already in Documents: \(tempURL.path)")
+                persistedURLs.append(tempURL)
+                continue
+            }
+
+            // Create clean filename with job type and timestamp
+            let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .short)
+                .replacingOccurrences(of: "/", with: "-")
+                .replacingOccurrences(of: ":", with: "-")
+                .replacingOccurrences(of: " ", with: "_")
+                .replacingOccurrences(of: ",", with: "")
+
+            let jobPrefix = jobType.displayName.lowercased().replacingOccurrences(of: " ", with: "_")
+            let ext = tempURL.pathExtension
+            let newFilename = "\(jobPrefix)_\(timestamp).\(ext)"
+            let destinationURL = exportsURL.appendingPathComponent(newFilename)
+
+            do {
+                // Remove existing file if present
+                if fileManager.fileExists(atPath: destinationURL.path) {
+                    try fileManager.removeItem(at: destinationURL)
+                }
+
+                // Copy file to persistent location
+                try fileManager.copyItem(at: tempURL, to: destinationURL)
+                print("✅ JobEngine: Saved file to: \(destinationURL.path)")
+                persistedURLs.append(destinationURL)
+
+            } catch {
+                print("❌ JobEngine: Failed to save file: \(error)")
+                // Fall back to temp URL if copy fails
+                persistedURLs.append(tempURL)
+            }
+        }
+
+        return persistedURLs.isEmpty ? tempURLs : persistedURLs
     }
 }
 

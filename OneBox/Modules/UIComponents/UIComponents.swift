@@ -108,7 +108,7 @@ public struct ProgressCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                         .font(.headline)
-                    Text("\(Int(progress * 100))%")
+                    Text("\(progress.isNaN || progress.isInfinite ? 0 : Int(progress * 100))%")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

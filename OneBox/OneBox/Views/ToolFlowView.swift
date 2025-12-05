@@ -1998,7 +1998,9 @@ struct ProcessingView: View {
                         .frame(width: 280)
                         
                         if let job = job {
-                            Text("\(Int(job.progress * 100))% Complete")
+                            // Guard against NaN/infinity that crashes Int conversion
+                            let progressPercent = job.progress.isNaN || job.progress.isInfinite ? 0 : Int(job.progress * 100)
+                            Text("\(progressPercent)% Complete")
                                 .font(OneBoxTypography.cardTitle)
                                 .foregroundColor(OneBoxColors.primaryGold)
                                 .fontWeight(.semibold)

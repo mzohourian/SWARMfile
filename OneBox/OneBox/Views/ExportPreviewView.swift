@@ -433,7 +433,7 @@ struct ExportPreviewView: View {
                         .animation(.easeInOut(duration: 0.3), value: exportProgress)
                     
                     VStack(spacing: OneBoxSpacing.tiny) {
-                        Text("\(Int(exportProgress * 100))%")
+                        Text("\(exportProgress.isNaN || exportProgress.isInfinite ? 0 : Int(exportProgress * 100))%")
                             .font(OneBoxTypography.sectionTitle)
                             .fontWeight(.bold)
                             .foregroundColor(OneBoxColors.primaryGold)
@@ -610,7 +610,7 @@ struct ExportPreviewView: View {
             insights.append(QualityInsight(
                 id: "compression",
                 title: "Size Reduction",
-                description: "\(Int(sizeReduction * 100))% smaller than original",
+                description: "\(sizeReduction.isNaN || sizeReduction.isInfinite ? 0 : Int(sizeReduction * 100))% smaller than original",
                 icon: "arrow.down.circle.fill",
                 severity: .info,
                 isActionable: false

@@ -262,50 +262,95 @@ struct HomeView: View {
     }
 
     private func toolCard(_ tool: ToolType) -> some View {
-        OneBoxCard(style: .interactive) {
+        VStack(alignment: .leading, spacing: 0) {
+            // Top accent line - gold gradient
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [OneBoxColors.primaryGold, OneBoxColors.secondaryGold],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(height: 3)
+
             VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
-                HStack {
-                    Image(systemName: tool.icon)
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(tool.color)
+                // Icon row with security badge
+                HStack(alignment: .top) {
+                    // Tool icon in elegant circle
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [tool.color.opacity(0.15), tool.color.opacity(0.05)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 44, height: 44)
+
+                        Image(systemName: tool.icon)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(tool.color)
+                    }
 
                     Spacer()
 
-                    // Privacy info button
-                    Button(action: {
-                        showPrivacyInfo(for: tool)
-                    }) {
-                        Image(systemName: "info.circle")
-                            .font(.system(size: 14))
-                            .foregroundColor(OneBoxColors.secondaryText)
+                    // Security indicator
+                    HStack(spacing: 4) {
+                        Image(systemName: "lock.shield.fill")
+                            .font(.system(size: 10, weight: .medium))
+                        Text("SECURE")
+                            .font(.system(size: 8, weight: .bold))
+                            .tracking(0.5)
                     }
+                    .foregroundColor(OneBoxColors.secureGreen)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(OneBoxColors.secureGreen.opacity(0.1))
+                    .cornerRadius(4)
                 }
 
+                // Tool name - prominent
                 Text(tool.displayName)
-                    .font(OneBoxTypography.cardTitle)
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(OneBoxColors.primaryText)
+                    .lineLimit(1)
 
+                // Description
                 Text(tool.description)
-                    .font(OneBoxTypography.caption)
+                    .font(.system(size: 12))
                     .foregroundColor(OneBoxColors.secondaryText)
                     .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                // Proactive insights for this tool
-                if let insight = getInsightForTool(tool) {
-                    HStack(spacing: OneBoxSpacing.tiny) {
-                        Image(systemName: "lightbulb.fill")
-                            .font(.system(size: 12))
-                            .foregroundColor(OneBoxColors.warningAmber)
+                Spacer(minLength: 0)
 
-                        Text(insight)
-                            .font(OneBoxTypography.micro)
-                            .foregroundColor(OneBoxColors.secondaryText)
-                            .lineLimit(1)
-                    }
-                    .padding(.top, OneBoxSpacing.tiny)
+                // Bottom row - chevron indicator
+                HStack {
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(OneBoxColors.primaryGold.opacity(0.6))
                 }
             }
+            .padding(OneBoxSpacing.medium)
         }
+        .frame(height: 160) // Fixed height for uniform cards
+        .background(OneBoxColors.surfaceGraphite)
+        .cornerRadius(OneBoxRadius.medium)
+        .overlay(
+            RoundedRectangle(cornerRadius: OneBoxRadius.medium)
+                .stroke(
+                    LinearGradient(
+                        colors: [OneBoxColors.primaryGold.opacity(0.2), OneBoxColors.primaryGold.opacity(0.05)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
         .onTapGesture {
             selectedTool = tool
             showingToolFlow = true

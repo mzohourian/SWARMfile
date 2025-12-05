@@ -56,19 +56,6 @@ struct HomeView: View {
                 }
             }
             .navigationBarHidden(true)
-            .overlay(
-                // Security Badge - positioned to avoid text overlap
-                VStack {
-                    HStack {
-                        Spacer()
-                        SecurityBadge(style: .floating)
-                    }
-                    .padding(.top, OneBoxSpacing.large) // Extra top padding to clear "Fort Knox" text
-                    Spacer()
-                }
-                .padding(OneBoxSpacing.medium),
-                alignment: .topTrailing
-            )
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), suggestions: {
                 if !searchText.isEmpty && !searchService.searchResults.isEmpty {
                     searchResultsView

@@ -34,7 +34,8 @@ struct RedactionView: View {
     @State private var showingResult = false
     @State private var errorMessage: String?
     @State private var didStartAccessingSecurityScoped = false
-    
+    @State private var loadError: String?
+
     enum RedactionMode: String, CaseIterable {
         case automatic = "Automatic Detection"
         case manual = "Manual Selection"
@@ -44,16 +45,21 @@ struct RedactionView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Header with mode selection
-                headerSection
-                
-                // Main content based on analysis state
-                if isAnalyzing {
-                    analysisProgressView
-                } else if redactionItems.isEmpty && !isAnalyzing {
-                    noDataDetectedView
+                // Show error if PDF couldn't be loaded
+                if let error = loadError {
+                    loadErrorView(error)
                 } else {
-                    redactionContentView
+                    // Header with mode selection
+                    headerSection
+
+                    // Main content based on analysis state
+                    if isAnalyzing {
+                        analysisProgressView
+                    } else if redactionItems.isEmpty && !isAnalyzing {
+                        noDataDetectedView
+                    } else {
+                        redactionContentView
+                    }
                 }
             }
             .navigationTitle("Document Redaction")
@@ -409,9 +415,52 @@ struct RedactionView: View {
         }
     }
     
+    // MARK: - Load Error View
+    private func loadErrorView(_ error: String) -> some View {
+        VStack(spacing: OneBoxSpacing.large) {
+            Spacer()
+
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 48))
+                .foregroundColor(OneBoxColors.warningAmber)
+
+            Text("Unable to Load Document")
+                .font(OneBoxTypography.sectionTitle)
+                .foregroundColor(OneBoxColors.primaryText)
+
+            Text(error)
+                .font(OneBoxTypography.body)
+                .foregroundColor(OneBoxColors.secondaryText)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, OneBoxSpacing.large)
+
+            Button("Try Again") {
+                loadError = nil
+                loadPDFDocument()
+                if pdfDocument != nil {
+                    performSensitiveDataAnalysis()
+                }
+            }
+            .foregroundColor(OneBoxColors.primaryGold)
+            .padding(.top, OneBoxSpacing.medium)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     // MARK: - Helper Functions
     private func loadPDFDocument() {
-        pdfDocument = PDFDocument(url: pdfURL)
+        print("RedactionView: Attempting to load PDF from: \(pdfURL.path)")
+        print("RedactionView: File exists: \(FileManager.default.fileExists(atPath: pdfURL.path))")
+
+        if let document = PDFDocument(url: pdfURL) {
+            pdfDocument = document
+            print("RedactionView: PDF loaded successfully with \(document.pageCount) pages")
+        } else {
+            print("RedactionView: Failed to load PDF")
+            loadError = "Could not open the PDF file. The file may be corrupted or in an unsupported format."
+        }
     }
     
     private func performSensitiveDataAnalysis() {

@@ -135,7 +135,10 @@ struct PageOrganizerView: View {
                 loadPDF()
             }
             .onChange(of: pages) { _ in
-                detectAnomalies()
+                // Anomaly detection disabled - produces too many false positives
+                // and doesn't offer one-click solutions. Will be re-enabled when
+                // proper detection algorithms and automated fixes are implemented.
+                // detectAnomalies()
             }
             .onDisappear {
                 // Stop accessing security-scoped resource when view is dismissed
@@ -628,21 +631,23 @@ struct PageOrganizerView: View {
     }
 
     private func rotateLeft() {
+        saveState() // Save state for undo
         for id in selectedPages {
             if let index = pages.firstIndex(where: { $0.id == id }) {
                 pages[index].rotation = (pages[index].rotation - 90) % 360
             }
         }
-        selectedPages.removeAll()
+        // Keep selection so user can rotate multiple times without reselecting
     }
 
     private func rotateRight() {
+        saveState() // Save state for undo
         for id in selectedPages {
             if let index = pages.firstIndex(where: { $0.id == id }) {
                 pages[index].rotation = (pages[index].rotation + 90) % 360
             }
         }
-        selectedPages.removeAll()
+        // Keep selection so user can rotate multiple times without reselecting
     }
 
     private func deleteSelectedPages() {

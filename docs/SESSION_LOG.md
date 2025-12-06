@@ -7,26 +7,30 @@
 ## 2025-12-06: Redact PDF - File Not Saving Fix
 
 **What Was Done:**
-- Fixed Redact PDF processed files not saving/sharing
+- Fixed Redact PDF processed files not saving/sharing (TWO bugs found)
+
+**Bug 1: PDF Context Timing**
   - Root cause: `defer { UIGraphicsEndPDFContext() }` was closing PDF context AFTER the return statement
   - The file check happened before context was closed, so PDF wasn't fully written to disk
   - Fix: Removed defer, call UIGraphicsEndPDFContext() explicitly before file verification
-- Applied same fix to 3 other functions with identical issue:
-  - `watermarkPDF`
-  - `fillFormFields`
-  - `compressPDFWithQuality` (had both defer AND explicit call - removed defer to avoid double close)
-- Added comprehensive file verification to redactPDF:
-  - Check file exists
-  - Check file size is not 0
-  - Verify valid PDF with pages
+  - Applied same fix to watermarkPDF, fillFormFields, compressPDFWithQuality
+  - Added comprehensive file verification to redactPDF
 
-**Root Cause:**
-When using `defer { UIGraphicsEndPDFContext() }`, the context close happens AFTER the function completes but the file existence check happens BEFORE return. This meant the PDF was being checked/returned before UIGraphicsEndPDFContext() actually wrote the file to disk.
+**Bug 2: ShareSheet Deleting Files**
+  - Root cause: ShareSheet in JobResultView was trying to copy files from source to Documents/Exports
+  - When file was ALREADY in Documents/Exports, it would DELETE the destination first, then fail to copy
+  - The file was being removed before the share sheet could access it!
+  - Fix: Check if file is already in Documents directory - if so, use it directly without copying
+
+**Root Causes:**
+1. PDF context closed too late (defer runs after return but before value returned to caller)
+2. ShareSheet logic: `removeItem(at: destinationURL)` followed by `copyItem(at: url, to: destinationURL)` where source = destination
 
 **Files Modified:**
-- `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed PDF context timing in redactPDF, watermarkPDF, fillFormFields, compressPDFWithQuality
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed PDF context timing in 4 functions
+- `OneBox/OneBox/Views/JobResultView.swift` - Fixed ShareSheet file deletion bug
 
-**Status:** Fix applied, needs user testing to confirm file saving works
+**Status:** Both fixes applied, needs user testing to confirm file saving/sharing works
 
 ---
 

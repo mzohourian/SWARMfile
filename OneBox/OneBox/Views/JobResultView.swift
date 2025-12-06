@@ -456,31 +456,55 @@ struct ShareSheet: UIViewControllerRepresentable {
         if let urls = items as? [URL] {
             // Copy temp files to a more accessible location
             let accessibleURLs = urls.compactMap { url -> URL? in
-                // If file is in temp directory, copy to Documents/Exports
                 let fileManager = FileManager.default
+
+                // Check if file exists first
+                guard fileManager.fileExists(atPath: url.path) else {
+                    print("❌ ShareSheet: File doesn't exist: \(url.path)")
+                    return nil
+                }
+
+                // If file is already in Documents directory, use it directly (don't copy over itself!)
                 guard let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
                     return url
                 }
 
+                if url.path.hasPrefix(documentsURL.path) {
+                    print("✅ ShareSheet: File already in Documents, using directly: \(url.lastPathComponent)")
+                    return url
+                }
+
+                // Only copy files that are in temp directory
                 let exportsURL = documentsURL.appendingPathComponent("Exports", isDirectory: true)
                 try? fileManager.createDirectory(at: exportsURL, withIntermediateDirectories: true)
 
                 let destinationURL = exportsURL.appendingPathComponent(url.lastPathComponent)
 
-                // Remove old file if exists
-                try? fileManager.removeItem(at: destinationURL)
+                // If destination already exists, use it (don't delete and recopy!)
+                if fileManager.fileExists(atPath: destinationURL.path) {
+                    print("✅ ShareSheet: Destination already exists, using: \(destinationURL.lastPathComponent)")
+                    return destinationURL
+                }
 
-                // Copy file
+                // Copy file from temp to Documents/Exports
                 do {
                     try fileManager.copyItem(at: url, to: destinationURL)
+                    print("✅ ShareSheet: Copied to: \(destinationURL.lastPathComponent)")
                     return destinationURL
                 } catch {
-                    print("Failed to copy file: \(error)")
+                    print("❌ ShareSheet: Failed to copy file: \(error)")
                     return url
                 }
             }
 
-            return UIActivityViewController(activityItems: accessibleURLs, applicationActivities: nil)
+            // Filter out nil values
+            let validURLs = accessibleURLs.compactMap { $0 }
+            guard !validURLs.isEmpty else {
+                print("❌ ShareSheet: No valid URLs to share")
+                return activityVC
+            }
+
+            return UIActivityViewController(activityItems: validURLs, applicationActivities: nil)
         }
 
         return activityVC

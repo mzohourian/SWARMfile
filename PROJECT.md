@@ -61,7 +61,9 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **Redact PDF file not saving** - PDF context was closed in defer block (too late); fixed by explicit close before file verification
+- **Redact PDF file not saving** - Two bugs fixed:
+  1. PDF context closed too late (defer block) - fixed by explicit close before file verification
+  2. ShareSheet deleting file before sharing (same source/destination path) - fixed by checking if file already in Documents
 - Organize PDF scrolling not working - Removed conflicting DragGesture that consumed scroll events
 - Organize PDF selection cleared after rotation - Kept selection after rotate left/right
 - Organize PDF false anomaly detection - Disabled feature (too many false positives, no solutions)
@@ -81,15 +83,19 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-06
 
 **What Was Done:**
-- **Fixed Redact PDF file not saving** - Root cause: `defer { UIGraphicsEndPDFContext() }` was closing PDF context AFTER file verification check. Fixed by calling UIGraphicsEndPDFContext() explicitly before verification.
-- Applied same fix to watermarkPDF, fillFormFields, and compressPDFWithQuality functions
+- **Fixed Redact PDF file not saving** - Two root causes found and fixed:
+  1. PDF context closed too late (in defer block after return) - fixed by explicit close before verification
+  2. ShareSheet was deleting the file then trying to copy it (same source/destination path)
+- Applied PDF context fix to watermarkPDF, fillFormFields, and compressPDFWithQuality functions
 - Added comprehensive file verification with logging in redactPDF
+- Fixed ShareSheet to check if file is already in Documents before attempting to copy
 
 **What's Unfinished:**
-- Redact PDF needs user testing to confirm file saving now works
+- Redact PDF needs user testing to confirm file saving/sharing now works
 
 **Files Modified:**
 - `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed PDF context timing in 4 functions
+- `OneBox/OneBox/Views/JobResultView.swift` - Fixed ShareSheet deleting files before share
 
 ---
 

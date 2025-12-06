@@ -87,18 +87,27 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-06
 
 **What Was Done:**
-- **Fixed Redact PDF precision** - was redacting entire lines, now redacts only exact text:
-  1. Previous: Matching any part of an OCR text block would redact the entire block (full lines)
-  2. User showed screenshots: wrong text was blacked out, actual sensitive data (passport numbers, phones) was NOT redacted
-  3. Root cause: `blocksToRedact` filter was too loose, and we used block-level bounding boxes
-  4. Fix: Store `VNRecognizedText` objects during OCR, search for exact matches in each block, use `boundingBox(for: Range)` to get character-level bounding box for just the matched substring
-  5. Now only the precise sensitive text is redacted, not the surrounding text on the same line
+- **Rebuilt Workflow feature completely:**
+  1. Added missing workflow steps: `.redact`, `.addPageNumbers`, `.addDateStamp`, `.flatten`
+  2. Fixed step mappings in WorkflowExecutionService (organize now uses pdfOrganize, not pdfMerge)
+  3. Added professional industry presets:
+     - **Legal Discovery** - redact, Bates numbering, date stamp, flatten, compress
+     - **Contract Execution** - merge, flatten, sign, watermark, compress
+     - **Financial Report** - redact account numbers, CONFIDENTIAL watermark, date stamp
+     - **HR Documents** - redact SSN/personal data, INTERNAL watermark, page numbers
+     - **Medical Records** - HIPAA-compliant redaction, date stamp, watermark
+     - **Merge & Archive** - combine documents with page numbers and date stamp
+  4. Added step configuration capability (watermark text, redaction presets, Bates prefix)
+  5. Updated JobSettings with new properties for page numbering, date stamps, form flattening
 
 **What's Unfinished:**
 - Redact PDF needs user testing to confirm precise redaction works correctly
+- Workflow feature needs user testing
 
 **Files Modified:**
-- `OneBox/OneBox/Views/RedactionView.swift` - Character-level bounding boxes for precise redaction
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Added new steps and professional templates
+- `OneBox/OneBox/Services/WorkflowExecutionService.swift` - Fixed step mappings and added configuration
+- `OneBox/Modules/JobEngine/JobEngine.swift` - Added new JobSettings properties
 
 ---
 

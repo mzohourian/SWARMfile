@@ -94,6 +94,15 @@ public enum JobStatus: String, Codable {
     case failed
 }
 
+// MARK: - Workflow Redaction Preset
+public enum WorkflowRedactionPreset: String, Codable {
+    case legal      // SSN, dates, names, addresses, case numbers
+    case finance    // Account numbers, amounts, SSN
+    case hr         // SSN, DOB, salary, addresses
+    case medical    // PHI, patient IDs, dates (HIPAA)
+    case custom     // User-defined patterns
+}
+
 // MARK: - Job Settings
 public struct JobSettings {
     // PDF Settings
@@ -139,6 +148,19 @@ public struct JobSettings {
     public var redactionItems: [String] = [] // Text patterns to redact
     public var redactionMode: String = "automatic" // automatic, manual, combined
     public var redactionColor: String = "#000000" // Color of redaction boxes
+    public var redactionPreset: WorkflowRedactionPreset = .custom // For workflow automation
+
+    // Page Numbering / Bates Stamping Settings
+    public var isPageNumbering: Bool = false
+    public var batesPrefix: String?
+    public var batesStartNumber: Int = 1
+
+    // Date Stamp Settings
+    public var isDateStamp: Bool = false
+
+    // Form Flattening Settings
+    public var flattenFormFields: Bool = false
+    public var flattenAnnotations: Bool = false
     
     // Privacy Settings
     public var enableSecureVault: Bool = false
@@ -162,7 +184,10 @@ extension JobSettings: Codable {
         case watermarkText, watermarkPosition, watermarkOpacity, watermarkSize, watermarkTileDensity
         case splitRanges, selectAllPages
         case signatureText, signatureImageData, signaturePosition, signatureCustomPosition, signaturePageIndex, signatureOpacity, signatureSize
-        case redactionItems, redactionMode, redactionColor
+        case redactionItems, redactionMode, redactionColor, redactionPreset
+        case isPageNumbering, batesPrefix, batesStartNumber
+        case isDateStamp
+        case flattenFormFields, flattenAnnotations
         case enableSecureVault, enableZeroTrace, enableBiometricLock, enableStealthMode
         case enableDocumentSanitization, enableEncryption, encryptionPassword, complianceMode
     }
@@ -215,6 +240,16 @@ extension JobSettings: Codable {
         redactionItems = try container.decodeIfPresent([String].self, forKey: .redactionItems) ?? []
         redactionMode = try container.decodeIfPresent(String.self, forKey: .redactionMode) ?? "automatic"
         redactionColor = try container.decodeIfPresent(String.self, forKey: .redactionColor) ?? "#000000"
+        redactionPreset = try container.decodeIfPresent(WorkflowRedactionPreset.self, forKey: .redactionPreset) ?? .custom
+
+        isPageNumbering = try container.decodeIfPresent(Bool.self, forKey: .isPageNumbering) ?? false
+        batesPrefix = try container.decodeIfPresent(String.self, forKey: .batesPrefix)
+        batesStartNumber = try container.decodeIfPresent(Int.self, forKey: .batesStartNumber) ?? 1
+
+        isDateStamp = try container.decodeIfPresent(Bool.self, forKey: .isDateStamp) ?? false
+
+        flattenFormFields = try container.decodeIfPresent(Bool.self, forKey: .flattenFormFields) ?? false
+        flattenAnnotations = try container.decodeIfPresent(Bool.self, forKey: .flattenAnnotations) ?? false
         
         enableSecureVault = try container.decodeIfPresent(Bool.self, forKey: .enableSecureVault) ?? false
         enableZeroTrace = try container.decodeIfPresent(Bool.self, forKey: .enableZeroTrace) ?? false
@@ -271,7 +306,17 @@ extension JobSettings: Codable {
         try container.encode(redactionItems, forKey: .redactionItems)
         try container.encode(redactionMode, forKey: .redactionMode)
         try container.encode(redactionColor, forKey: .redactionColor)
-        
+        try container.encode(redactionPreset, forKey: .redactionPreset)
+
+        try container.encode(isPageNumbering, forKey: .isPageNumbering)
+        try container.encodeIfPresent(batesPrefix, forKey: .batesPrefix)
+        try container.encode(batesStartNumber, forKey: .batesStartNumber)
+
+        try container.encode(isDateStamp, forKey: .isDateStamp)
+
+        try container.encode(flattenFormFields, forKey: .flattenFormFields)
+        try container.encode(flattenAnnotations, forKey: .flattenAnnotations)
+
         try container.encode(enableSecureVault, forKey: .enableSecureVault)
         try container.encode(enableZeroTrace, forKey: .enableZeroTrace)
         try container.encode(enableBiometricLock, forKey: .enableBiometricLock)

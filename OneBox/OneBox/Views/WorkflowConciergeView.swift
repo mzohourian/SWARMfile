@@ -597,40 +597,79 @@ struct WorkflowTemplate: Identifiable {
     let isPro: Bool
     
     static let defaultTemplates: [WorkflowTemplate] = [
+        // Basic Templates (Free)
         WorkflowTemplate(
-            title: "Document Prepare",
-            description: "Organize, compress, and watermark documents for sharing",
-            icon: "doc.richtext",
+            title: "Quick Share",
+            description: "Compress and watermark documents for quick sharing",
+            icon: "square.and.arrow.up",
             accentColor: OneBoxColors.secureGreen,
-            steps: [.organize, .compress, .watermark],
-            estimatedTime: "2 min",
+            steps: [.compress, .watermark],
+            estimatedTime: "30 sec",
             isPro: false
         ),
         WorkflowTemplate(
-            title: "Legal Package",
-            description: "Sign, watermark, and archive legal documents securely",
+            title: "Image to PDF",
+            description: "Convert images to PDF with compression",
+            icon: "photo.on.rectangle",
+            accentColor: OneBoxColors.warningAmber,
+            steps: [.imagesToPDF, .compress],
+            estimatedTime: "45 sec",
+            isPro: false
+        ),
+
+        // Professional Templates (Pro)
+        WorkflowTemplate(
+            title: "Legal Discovery",
+            description: "Prepare documents for legal discovery: redact PII, add Bates numbers, date stamp, and flatten",
             icon: "scale.3d",
             accentColor: OneBoxColors.primaryGold,
-            steps: [.sign, .watermark, .compress],
+            steps: [.redact, .addPageNumbers, .addDateStamp, .flatten, .compress],
+            estimatedTime: "5 min",
+            isPro: true
+        ),
+        WorkflowTemplate(
+            title: "Contract Execution",
+            description: "Merge contract pages, flatten forms, sign, watermark with EXECUTED, and compress",
+            icon: "doc.text.magnifyingglass",
+            accentColor: OneBoxColors.primaryGold,
+            steps: [.merge, .flatten, .sign, .watermark, .compress],
             estimatedTime: "3 min",
             isPro: true
         ),
         WorkflowTemplate(
-            title: "Image to PDF Pro",
-            description: "Convert images to PDF with compression and watermarking",
-            icon: "photo.on.rectangle",
-            accentColor: OneBoxColors.warningAmber,
-            steps: [.imagesToPDF, .compress, .watermark],
-            estimatedTime: "90 sec",
-            isPro: false
+            title: "Financial Report",
+            description: "Redact account numbers, add CONFIDENTIAL watermark, date stamp, and compress",
+            icon: "chart.bar.doc.horizontal",
+            accentColor: OneBoxColors.secureGreen,
+            steps: [.redact, .watermark, .addDateStamp, .compress],
+            estimatedTime: "4 min",
+            isPro: true
         ),
         WorkflowTemplate(
-            title: "Merge & Secure",
-            description: "Merge multiple PDFs, compress, and add security features",
-            icon: "doc.on.doc",
+            title: "HR Documents",
+            description: "Redact SSN/personal data, watermark INTERNAL, add page numbers, compress",
+            icon: "person.text.rectangle",
             accentColor: OneBoxColors.criticalRed,
-            steps: [.merge, .compress, .sign, .watermark],
+            steps: [.redact, .watermark, .addPageNumbers, .compress],
             estimatedTime: "4 min",
+            isPro: true
+        ),
+        WorkflowTemplate(
+            title: "Medical Records",
+            description: "HIPAA-compliant: redact PHI, add processing date, watermark, flatten, compress",
+            icon: "cross.case",
+            accentColor: OneBoxColors.warningAmber,
+            steps: [.redact, .addDateStamp, .watermark, .flatten, .compress],
+            estimatedTime: "5 min",
+            isPro: true
+        ),
+        WorkflowTemplate(
+            title: "Merge & Archive",
+            description: "Combine documents, add page numbers, date stamp, compress for archival",
+            icon: "archivebox",
+            accentColor: OneBoxColors.secondaryGold,
+            steps: [.merge, .addPageNumbers, .addDateStamp, .compress],
+            estimatedTime: "3 min",
             isPro: true
         )
     ]
@@ -673,10 +712,10 @@ struct WorkflowSuggestion: Identifiable {
 }
 
 enum WorkflowStep: String, CaseIterable, Identifiable, Codable {
-    case organize, compress, watermark, sign, merge, split, imagesToPDF
-    
+    case organize, compress, watermark, sign, merge, split, imagesToPDF, redact, addPageNumbers, addDateStamp, flatten
+
     var id: String { rawValue }
-    
+
     var title: String {
         switch self {
         case .organize: return "Organize"
@@ -686,9 +725,13 @@ enum WorkflowStep: String, CaseIterable, Identifiable, Codable {
         case .merge: return "Merge"
         case .split: return "Split"
         case .imagesToPDF: return "Images to PDF"
+        case .redact: return "Redact"
+        case .addPageNumbers: return "Add Page Numbers"
+        case .addDateStamp: return "Add Date Stamp"
+        case .flatten: return "Flatten Forms"
         }
     }
-    
+
     var icon: String {
         switch self {
         case .organize: return "square.grid.2x2"
@@ -698,6 +741,26 @@ enum WorkflowStep: String, CaseIterable, Identifiable, Codable {
         case .merge: return "doc.on.doc"
         case .split: return "scissors"
         case .imagesToPDF: return "photo.on.rectangle"
+        case .redact: return "eye.slash.fill"
+        case .addPageNumbers: return "number"
+        case .addDateStamp: return "calendar.badge.clock"
+        case .flatten: return "square.on.square.dashed"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .organize: return "Reorder, rotate, or remove pages"
+        case .compress: return "Reduce file size while maintaining quality"
+        case .watermark: return "Add text or image watermarks"
+        case .sign: return "Add digital signature"
+        case .merge: return "Combine multiple PDFs into one"
+        case .split: return "Split PDF into separate files"
+        case .imagesToPDF: return "Convert images to PDF document"
+        case .redact: return "Permanently remove sensitive information"
+        case .addPageNumbers: return "Add page numbers (Bates numbering for legal)"
+        case .addDateStamp: return "Add processing date to documents"
+        case .flatten: return "Flatten form fields and annotations"
         }
     }
 }

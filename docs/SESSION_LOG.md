@@ -4,6 +4,59 @@
 
 ---
 
+## 2025-12-06: Workflow Feature - Complete Rebuild
+
+**Problem:**
+User reported workflow feature wasn't working properly and wasn't offering tailored workflows for specific use cases (legal, finance, HR, medical).
+
+**Issues Found:**
+1. `.organize` step was wrongly mapped to `.pdfMerge` (didn't actually organize)
+2. `.sign` step used placeholder "Digitally Processed" text
+3. Missing critical workflow steps: redact, page numbers, date stamp, flatten
+4. Preset workflows were too generic and didn't match real professional needs
+5. No step configuration capability
+
+**Fix:**
+1. **Added new workflow steps:**
+   - `.redact` - Remove sensitive information with preset patterns
+   - `.addPageNumbers` - Add page numbers or Bates numbering (for legal)
+   - `.addDateStamp` - Add processing date to documents
+   - `.flatten` - Flatten form fields and annotations
+
+2. **Fixed step mappings in WorkflowExecutionService:**
+   - `.organize` now maps to `.pdfOrganize` (not `.pdfMerge`)
+   - `.sign` uses date-based signature text
+   - `.redact` uses automatic redaction with legal/finance/HR/medical presets
+
+3. **Added professional industry presets:**
+   - **Legal Discovery** - redact PII, Bates numbers, date stamp, flatten, compress
+   - **Contract Execution** - merge, flatten, sign, watermark EXECUTED, compress
+   - **Financial Report** - redact account numbers, CONFIDENTIAL watermark, date stamp
+   - **HR Documents** - redact SSN/personal data, INTERNAL watermark, page numbers
+   - **Medical Records** - HIPAA-compliant PHI redaction, date stamp, watermark
+   - **Merge & Archive** - combine documents, page numbers, date stamp, compress
+
+4. **Added step configuration:**
+   - `StepConfiguration` struct for customizing each step
+   - Watermark text, opacity, position configurable
+   - Redaction presets (legal, finance, HR, medical, custom)
+   - Bates numbering prefix and start number
+
+5. **Updated JobSettings:**
+   - Added `WorkflowRedactionPreset` enum
+   - Added `isPageNumbering`, `batesPrefix`, `batesStartNumber`
+   - Added `isDateStamp`
+   - Added `flattenFormFields`, `flattenAnnotations`
+
+**Files Modified:**
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - New steps, professional templates
+- `OneBox/OneBox/Services/WorkflowExecutionService.swift` - Fixed mappings, step configuration
+- `OneBox/Modules/JobEngine/JobEngine.swift` - New JobSettings properties
+
+**Status:** Needs user testing
+
+---
+
 ## 2025-12-06: Redact PDF - Coordinate Transformation Fix
 
 **Problem:**

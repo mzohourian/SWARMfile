@@ -901,7 +901,13 @@ struct RedactionView: View {
     
     private func applyRedactions() {
         let selectedItems = redactionItems.filter { $0.isSelected }
-        guard !selectedItems.isEmpty else { return }
+        guard !selectedItems.isEmpty else {
+            print("❌ RedactionView: No items selected for redaction")
+            return
+        }
+
+        print("🔵 RedactionView: Starting redaction with \(selectedItems.count) items")
+        print("🔵 RedactionView: Items to redact: \(selectedItems.map { $0.detectedText })")
 
         isProcessing = true
         HapticManager.shared.impact(.medium)
@@ -913,6 +919,8 @@ struct RedactionView: View {
                 settings.redactionItems = selectedItems.map { $0.detectedText }
                 settings.redactionMode = redactionMode.rawValue
 
+                print("🔵 RedactionView: Created job settings with \(settings.redactionItems.count) redaction items")
+
                 // Process redaction using JobEngine
                 let processor = JobProcessor()
                 let tempJob = Job(
@@ -921,22 +929,39 @@ struct RedactionView: View {
                     settings: settings
                 )
 
+                print("🔵 RedactionView: Calling processor.process...")
                 let outputURLs = try await processor.process(job: tempJob) { progress in
-                    // Progress is handled by the overlay
+                    print("🔵 RedactionView: Processing progress: \(progress)")
+                }
+
+                print("🔵 RedactionView: Processing complete. OutputURLs count: \(outputURLs.count)")
+                if let firstOutput = outputURLs.first {
+                    print("🔵 RedactionView: First output URL: \(firstOutput.path)")
+                    print("🔵 RedactionView: Output file exists: \(FileManager.default.fileExists(atPath: firstOutput.path))")
+                    if let attrs = try? FileManager.default.attributesOfItem(atPath: firstOutput.path) {
+                        print("🔵 RedactionView: Output file size: \(attrs[.size] ?? 0) bytes")
+                    }
                 }
 
                 // Save to Documents/Exports for persistence
                 let persistedURL = saveOutputToDocuments(outputURLs.first)
+                print("🔵 RedactionView: Persisted URL: \(persistedURL?.path ?? "nil")")
+                if let url = persistedURL {
+                    print("🔵 RedactionView: Persisted file exists: \(FileManager.default.fileExists(atPath: url.path))")
+                }
 
                 // Create completed job for result display
+                let finalURL = persistedURL ?? outputURLs.first!
                 let job = Job(
                     type: .pdfRedact,
                     inputs: [pdfURL],
                     settings: settings,
                     status: .success,
-                    outputURLs: [persistedURL ?? outputURLs.first!],
+                    outputURLs: [finalURL],
                     completedAt: Date()
                 )
+
+                print("🔵 RedactionView: Created completed job with output: \(finalURL.path)")
 
                 await MainActor.run {
                     paymentsManager.consumeExport()
@@ -944,12 +969,14 @@ struct RedactionView: View {
                     isProcessing = false
                     showingResult = true
                     HapticManager.shared.notification(.success)
+                    print("🔵 RedactionView: showingResult = true, completedJob set")
                 }
 
                 // Submit job for history tracking
                 await jobManager.submitJob(job)
 
             } catch {
+                print("❌ RedactionView: Processing error: \(error)")
                 await MainActor.run {
                     isProcessing = false
                     errorMessage = error.localizedDescription
@@ -961,18 +988,32 @@ struct RedactionView: View {
 
     /// Save output file to Documents/Exports for persistence
     private func saveOutputToDocuments(_ tempURL: URL?) -> URL? {
-        guard let tempURL = tempURL else { return nil }
+        print("🔵 RedactionView.saveOutputToDocuments: Called with tempURL: \(tempURL?.path ?? "nil")")
+
+        guard let tempURL = tempURL else {
+            print("❌ RedactionView.saveOutputToDocuments: tempURL is nil")
+            return nil
+        }
+
+        print("🔵 RedactionView.saveOutputToDocuments: Temp file exists: \(FileManager.default.fileExists(atPath: tempURL.path))")
 
         let fileManager = FileManager.default
         guard let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("❌ RedactionView.saveOutputToDocuments: Could not get documents directory")
             return tempURL
         }
 
         let exportsURL = documentsURL.appendingPathComponent("Exports", isDirectory: true)
+        print("🔵 RedactionView.saveOutputToDocuments: Exports directory: \(exportsURL.path)")
 
         // Create Exports directory if needed
         if !fileManager.fileExists(atPath: exportsURL.path) {
-            try? fileManager.createDirectory(at: exportsURL, withIntermediateDirectories: true)
+            do {
+                try fileManager.createDirectory(at: exportsURL, withIntermediateDirectories: true)
+                print("🔵 RedactionView.saveOutputToDocuments: Created Exports directory")
+            } catch {
+                print("❌ RedactionView.saveOutputToDocuments: Failed to create Exports directory: \(error)")
+            }
         }
 
         // Generate unique filename with timestamp
@@ -982,15 +1023,19 @@ struct RedactionView: View {
         let filename = "redacted_pdf_\(timestamp).pdf"
         let destinationURL = exportsURL.appendingPathComponent(filename)
 
+        print("🔵 RedactionView.saveOutputToDocuments: Destination: \(destinationURL.path)")
+
         do {
             // Remove existing file if present
             if fileManager.fileExists(atPath: destinationURL.path) {
                 try fileManager.removeItem(at: destinationURL)
             }
             try fileManager.copyItem(at: tempURL, to: destinationURL)
+            print("✅ RedactionView.saveOutputToDocuments: Successfully copied to \(destinationURL.path)")
+            print("✅ RedactionView.saveOutputToDocuments: File exists: \(fileManager.fileExists(atPath: destinationURL.path))")
             return destinationURL
         } catch {
-            print("Failed to save to Documents: \(error)")
+            print("❌ RedactionView.saveOutputToDocuments: Failed to copy: \(error)")
             return tempURL
         }
     }

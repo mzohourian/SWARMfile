@@ -1311,44 +1311,64 @@ public actor PDFProcessor {
         redactionColor: UIColor = .black,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
-        
+
+        print("🔵 CorePDF.redactPDF: Starting with \(redactionItems.count) items")
+        print("🔵 CorePDF.redactPDF: Input PDF: \(pdfURL.path)")
+        print("🔵 CorePDF.redactPDF: Redaction items: \(redactionItems)")
+
         guard let sourcePDF = PDFDocument(url: pdfURL) else {
+            print("❌ CorePDF.redactPDF: Failed to load source PDF")
             throw PDFError.invalidPDF(pdfURL.lastPathComponent)
         }
-        
+
         let outputURL = temporaryOutputURL(prefix: "redacted")
         let pageCount = sourcePDF.pageCount
-        
+
+        print("🔵 CorePDF.redactPDF: Output URL: \(outputURL.path)")
+        print("🔵 CorePDF.redactPDF: Processing \(pageCount) pages")
+
         UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
         defer { UIGraphicsEndPDFContext() }
-        
+
         for pageIndex in 0..<pageCount {
             guard let page = sourcePDF.page(at: pageIndex) else { continue }
-            
+
             let pageBounds = page.bounds(for: .mediaBox)
             UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
-            
+
             guard let context = UIGraphicsGetCurrentContext() else { continue }
-            
+
             // Draw original page
             context.saveGState()
             context.translateBy(x: 0, y: pageBounds.size.height)
             context.scaleBy(x: 1.0, y: -1.0)
             page.draw(with: .mediaBox, to: context)
             context.restoreGState()
-            
+
             // Apply redactions
             if let pageText = page.string {
+                print("🔵 CorePDF.redactPDF: Page \(pageIndex + 1) has text, applying \(redactionItems.count) redactions")
                 for redactionItem in redactionItems {
                     if !redactionItem.isEmpty {
                         drawRedactionBoxes(for: redactionItem, in: pageText, pageBounds: pageBounds, context: context, redactionColor: redactionColor)
                     }
                 }
+            } else {
+                print("⚠️ CorePDF.redactPDF: Page \(pageIndex + 1) has no text (image-based)")
             }
-            
+
             progressHandler(Double(pageIndex + 1) / Double(pageCount))
         }
-        
+
+        // Verify output file was created
+        let fileExists = FileManager.default.fileExists(atPath: outputURL.path)
+        print("🔵 CorePDF.redactPDF: Output file exists: \(fileExists)")
+        if fileExists {
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: outputURL.path) {
+                print("🔵 CorePDF.redactPDF: Output file size: \(attrs[.size] ?? 0) bytes")
+            }
+        }
+
         return outputURL
     }
     

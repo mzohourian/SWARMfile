@@ -983,104 +983,91 @@ struct RedactionView: View {
 
         print("🔵 RedactionView.createRedactedPDF: Starting with \(redactingItems.count) items across \(pageCount) pages")
 
-        // Group redaction items by page
-        var itemsByPage: [Int: [RedactionItem]] = [:]
-        for item in redactingItems {
-            if itemsByPage[item.pageNumber] == nil {
-                itemsByPage[item.pageNumber] = []
-            }
-            itemsByPage[item.pageNumber]?.append(item)
-        }
+        // Get all text to redact (lowercased for matching)
+        let textsToRedact = Set(redactingItems.map { $0.detectedText.lowercased() })
 
         // Create PDF context
         guard UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil) else {
             throw NSError(domain: "RedactionView", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create PDF context"])
         }
 
-        // Get all text to redact (lowercased for matching)
-        let textsToRedact = Set(redactingItems.map { $0.detectedText.lowercased() })
-
         for pageIndex in 0..<pageCount {
+            // Use autoreleasepool for EACH page to release memory immediately
             autoreleasepool {
                 guard let page = document.page(at: pageIndex) else { return }
 
                 let pageBounds = page.bounds(for: .mediaBox)
-                let scale: CGFloat = 2.0 // Higher quality for output
 
-                // Render page as image
-                let imageSize = CGSize(width: pageBounds.width * scale, height: pageBounds.height * scale)
-                let renderer = UIGraphicsImageRenderer(size: imageSize)
-                var pageImage = renderer.image { context in
-                    UIColor.white.setFill()
-                    context.fill(CGRect(origin: .zero, size: imageSize))
+                // Use 1x scale to minimize memory (still good quality for documents)
+                let scale: CGFloat = 1.0
 
-                    context.cgContext.translateBy(x: 0, y: imageSize.height)
-                    context.cgContext.scaleBy(x: scale, y: -scale)
-                    page.draw(with: .mediaBox, to: context.cgContext)
+                // Calculate size with max dimension limit to prevent huge images
+                var imageWidth = pageBounds.width * scale
+                var imageHeight = pageBounds.height * scale
+                let maxDimension: CGFloat = 1500 // Reduced from 2000
+
+                if imageWidth > maxDimension || imageHeight > maxDimension {
+                    let ratio = min(maxDimension / imageWidth, maxDimension / imageHeight)
+                    imageWidth *= ratio
+                    imageHeight *= ratio
                 }
 
-                // Draw redaction boxes if we have OCR results for this page
+                let imageSize = CGSize(width: imageWidth, height: imageHeight)
+
+                // Get blocks to redact for this page
+                var blocksToRedact: [OCRTextBlock] = []
                 if let textBlocks = ocrResults[pageIndex] {
-                    // Find which text blocks need to be redacted
-                    let blocksToRedact = textBlocks.filter { block in
+                    blocksToRedact = textBlocks.filter { block in
                         let blockTextLower = block.text.lowercased()
-                        // Check if this block contains any text that should be redacted
                         return textsToRedact.contains { textToRedact in
                             blockTextLower.contains(textToRedact) || textToRedact.contains(blockTextLower)
                         }
                     }
-
-                    if !blocksToRedact.isEmpty {
-                        print("🔵 RedactionView.createRedactedPDF: Page \(pageIndex + 1) - redacting \(blocksToRedact.count) text blocks")
-
-                        // Draw black boxes over the text blocks
-                        let redactedRenderer = UIGraphicsImageRenderer(size: imageSize)
-                        pageImage = redactedRenderer.image { context in
-                            // Draw original image
-                            pageImage.draw(at: .zero)
-
-                            // Draw black boxes over redacted areas
-                            context.cgContext.setFillColor(UIColor.black.cgColor)
-
-                            for block in blocksToRedact {
-                                // Convert Vision's normalized coordinates (bottom-left origin) to image coordinates (top-left origin)
-                                let box = block.boundingBox
-                                let x = box.origin.x * imageSize.width
-                                let y = (1 - box.origin.y - box.height) * imageSize.height
-                                let width = box.width * imageSize.width
-                                let height = box.height * imageSize.height
-
-                                // Add some padding
-                                let padding: CGFloat = 2
-                                let rect = CGRect(
-                                    x: x - padding,
-                                    y: y - padding,
-                                    width: width + padding * 2,
-                                    height: height + padding * 2
-                                )
-
-                                context.cgContext.fill(rect)
-                            }
-                        }
-                    }
-                } else {
-                    print("⚠️ RedactionView.createRedactedPDF: Page \(pageIndex + 1) - no OCR results available")
                 }
 
-                // Add page to PDF
+                // Render page directly to PDF with redaction boxes (single render pass)
                 UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
+
                 if let pdfContext = UIGraphicsGetCurrentContext() {
-                    // Draw the (possibly redacted) image to the PDF page
+                    // Draw original page
                     pdfContext.saveGState()
                     pdfContext.translateBy(x: 0, y: pageBounds.height)
                     pdfContext.scaleBy(x: 1.0, y: -1.0)
-                    pageImage.draw(in: pageBounds)
+                    page.draw(with: .mediaBox, to: pdfContext)
                     pdfContext.restoreGState()
+
+                    // Draw black boxes over redacted areas (directly on PDF context)
+                    if !blocksToRedact.isEmpty {
+                        print("🔵 RedactionView.createRedactedPDF: Page \(pageIndex + 1) - redacting \(blocksToRedact.count) text blocks")
+
+                        pdfContext.setFillColor(UIColor.black.cgColor)
+
+                        for block in blocksToRedact {
+                            // Convert Vision's normalized coordinates to page coordinates
+                            // Vision uses bottom-left origin, PDF uses bottom-left too but we flipped it
+                            let box = block.boundingBox
+                            let x = box.origin.x * pageBounds.width
+                            let y = box.origin.y * pageBounds.height // Don't flip - Vision and PDF both use bottom-left
+                            let width = box.width * pageBounds.width
+                            let height = box.height * pageBounds.height
+
+                            // Add padding
+                            let padding: CGFloat = 2
+                            let rect = CGRect(
+                                x: x - padding,
+                                y: y - padding,
+                                width: width + padding * 2,
+                                height: height + padding * 2
+                            )
+
+                            pdfContext.fill(rect)
+                        }
+                    }
                 }
             }
 
-            // Allow UI updates
-            await Task.yield()
+            // Small delay between pages to allow memory cleanup
+            try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
         }
 
         // Close PDF context

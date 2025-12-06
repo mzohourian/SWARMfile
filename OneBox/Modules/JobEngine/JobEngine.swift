@@ -95,7 +95,7 @@ public enum JobStatus: String, Codable {
 }
 
 // MARK: - Workflow Redaction Preset
-public enum WorkflowRedactionPreset: String, Codable {
+public enum WorkflowRedactionPreset: String, Codable, CaseIterable {
     case legal      // SSN, dates, names, addresses, case numbers
     case finance    // Account numbers, amounts, SSN
     case hr         // SSN, DOB, salary, addresses

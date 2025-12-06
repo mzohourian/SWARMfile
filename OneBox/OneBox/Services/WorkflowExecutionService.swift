@@ -207,7 +207,7 @@ struct StepConfiguration {
     var splitRanges: [[Int]]?
 
     // Redaction settings
-    var redactionPreset: RedactionPreset?
+    var redactionPreset: WorkflowRedactionPreset?
 
     // Page numbering settings
     var pageNumberFormat: String?
@@ -217,9 +217,6 @@ struct StepConfiguration {
     // Date stamp settings
     var dateStampPosition: WatermarkPosition?
 }
-
-// Use WorkflowRedactionPreset from JobEngine module
-typealias RedactionPreset = WorkflowRedactionPreset
 
 enum WorkflowError: LocalizedError {
     case jobLost

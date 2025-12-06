@@ -580,16 +580,17 @@ struct RedactionView: View {
                 return
             }
 
-            // Collect text blocks with their bounding boxes
+            // Collect text blocks with their bounding boxes AND VNRecognizedText for precise redaction
             var allText: [String] = []
             for observation in observations {
                 if let candidate = observation.topCandidates(1).first {
                     allText.append(candidate.string)
-                    // Store the bounding box (normalized 0-1 coordinates)
+                    // Store the bounding box AND the VNRecognizedText for character-level access
                     let block = OCRTextBlock(
                         text: candidate.string,
                         boundingBox: observation.boundingBox,
-                        pageIndex: pageIndex
+                        pageIndex: pageIndex,
+                        recognizedText: candidate // Store for precise bounding boxes later
                     )
                     textBlocks.append(block)
                 }
@@ -998,29 +999,44 @@ struct RedactionView: View {
 
                 let pageBounds = page.bounds(for: .mediaBox)
 
-                // Use 1x scale to minimize memory (still good quality for documents)
-                let scale: CGFloat = 1.0
+                // Find precise bounding boxes for text to redact on this page
+                var preciseRedactionRects: [CGRect] = []
 
-                // Calculate size with max dimension limit to prevent huge images
-                var imageWidth = pageBounds.width * scale
-                var imageHeight = pageBounds.height * scale
-                let maxDimension: CGFloat = 1500 // Reduced from 2000
-
-                if imageWidth > maxDimension || imageHeight > maxDimension {
-                    let ratio = min(maxDimension / imageWidth, maxDimension / imageHeight)
-                    imageWidth *= ratio
-                    imageHeight *= ratio
-                }
-
-                let imageSize = CGSize(width: imageWidth, height: imageHeight)
-
-                // Get blocks to redact for this page
-                var blocksToRedact: [OCRTextBlock] = []
                 if let textBlocks = ocrResults[pageIndex] {
-                    blocksToRedact = textBlocks.filter { block in
-                        let blockTextLower = block.text.lowercased()
-                        return textsToRedact.contains { textToRedact in
-                            blockTextLower.contains(textToRedact) || textToRedact.contains(blockTextLower)
+                    for block in textBlocks {
+                        let blockText = block.text
+                        let blockTextLower = blockText.lowercased()
+
+                        // For each redaction target, find if it appears in this block
+                        for textToRedact in textsToRedact {
+                            // Search for the target text (case-insensitive)
+                            var searchRange = blockTextLower.startIndex..<blockTextLower.endIndex
+
+                            while let matchRange = blockTextLower.range(of: textToRedact, range: searchRange) {
+                                // Convert the lowercased match range to the original string range
+                                let startDistance = blockTextLower.distance(from: blockTextLower.startIndex, to: matchRange.lowerBound)
+                                let endDistance = blockTextLower.distance(from: blockTextLower.startIndex, to: matchRange.upperBound)
+                                let originalStart = blockText.index(blockText.startIndex, offsetBy: startDistance)
+                                let originalEnd = blockText.index(blockText.startIndex, offsetBy: endDistance)
+                                let originalRange = originalStart..<originalEnd
+
+                                // Try to get precise bounding box using VNRecognizedText
+                                if let recognizedText = block.recognizedText {
+                                    do {
+                                        // Get character-level bounding box for just the matched text
+                                        if let preciseBoundingBox = try recognizedText.boundingBox(for: originalRange) {
+                                            preciseRedactionRects.append(preciseBoundingBox.boundingBox)
+                                            print("🎯 RedactionView: Found precise match '\(String(blockText[originalRange]))' in block")
+                                        }
+                                    } catch {
+                                        // Fallback: if we can't get precise box, don't redact (better than wrong redaction)
+                                        print("⚠️ RedactionView: Could not get precise bounding box for '\(textToRedact)': \(error)")
+                                    }
+                                }
+
+                                // Move search range forward to find more occurrences
+                                searchRange = matchRange.upperBound..<blockTextLower.endIndex
+                            }
                         }
                     }
                 }
@@ -1036,22 +1052,21 @@ struct RedactionView: View {
                     page.draw(with: .mediaBox, to: pdfContext)
                     pdfContext.restoreGState()
 
-                    // Draw black boxes over redacted areas (directly on PDF context)
-                    if !blocksToRedact.isEmpty {
-                        print("🔵 RedactionView.createRedactedPDF: Page \(pageIndex + 1) - redacting \(blocksToRedact.count) text blocks")
+                    // Draw black boxes over PRECISE redacted areas only
+                    if !preciseRedactionRects.isEmpty {
+                        print("🔵 RedactionView.createRedactedPDF: Page \(pageIndex + 1) - drawing \(preciseRedactionRects.count) precise redaction boxes")
 
                         pdfContext.setFillColor(UIColor.black.cgColor)
 
-                        for block in blocksToRedact {
+                        for box in preciseRedactionRects {
                             // Convert Vision's normalized coordinates to page coordinates
-                            // Vision uses bottom-left origin, PDF uses bottom-left too but we flipped it
-                            let box = block.boundingBox
+                            // Vision uses bottom-left origin, same as PDF coordinate system
                             let x = box.origin.x * pageBounds.width
-                            let y = box.origin.y * pageBounds.height // Don't flip - Vision and PDF both use bottom-left
+                            let y = box.origin.y * pageBounds.height
                             let width = box.width * pageBounds.width
                             let height = box.height * pageBounds.height
 
-                            // Add padding
+                            // Add small padding for complete coverage
                             let padding: CGFloat = 2
                             let rect = CGRect(
                                 x: x - padding,
@@ -1062,6 +1077,8 @@ struct RedactionView: View {
 
                             pdfContext.fill(rect)
                         }
+                    } else {
+                        print("🔵 RedactionView.createRedactedPDF: Page \(pageIndex + 1) - no precise matches found")
                     }
                 }
             }
@@ -1150,11 +1167,12 @@ struct RedactionItem: Identifiable {
     var boundingBox: CGRect? // Normalized bounding box (0-1 range) for scanned PDFs
 }
 
-/// Stores OCR text with its bounding box for accurate redaction positioning
+/// Stores OCR text with VNRecognizedText for character-level bounding box access
 struct OCRTextBlock {
     let text: String
-    let boundingBox: CGRect // Normalized coordinates (0-1)
+    let boundingBox: CGRect // Normalized coordinates (0-1) - full block bounding box
     let pageIndex: Int
+    let recognizedText: VNRecognizedText? // Store for precise character-level bounding boxes
 }
 
 typealias RedactionCategory = SensitiveDataCategory

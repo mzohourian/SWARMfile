@@ -40,10 +40,10 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - None currently
 
 ### Needs Testing
-- **Redact PDF** - Completely rebuilt:
+- **Redact PDF** - Completely rebuilt with precise character-level redaction:
   - Fixed file not saving (2 bugs: PDF context timing + ShareSheet deletion)
   - Redaction now actually works on scanned/image-based PDFs
-  - Stores OCR bounding boxes and draws black boxes over sensitive text
+  - **NEW**: Uses Vision's character-level bounding boxes (`VNRecognizedText.boundingBox(for:)`) to redact ONLY the exact matched text, not entire lines
   - Simplified UI - removed Automatic/Manual/Combined modes, single unified flow
 - **Watermark PDF** - Multiple fixes applied, needs user verification:
   - Size slider now has dramatic effect (5%-50% for images, 2%-15% for text)
@@ -62,11 +62,11 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **Redact PDF completely rebuilt**:
-  1. PDF context closed too late (defer block) - fixed by explicit close before file verification
-  2. ShareSheet deleting file before sharing - fixed by checking if file already in Documents
-  3. Redaction not applying to scanned PDFs - fixed by storing OCR bounding boxes and drawing black boxes
-  4. Overly complex UI - removed Automatic/Manual/Combined modes, now single unified flow
+- **Redact PDF - Precise character-level redaction**:
+  1. Previous issue: Was redacting entire text lines when any part matched (wrong text blacked out)
+  2. Root cause: Used block-level bounding boxes instead of character-level
+  3. Fix: Store `VNRecognizedText` objects during OCR, use `boundingBox(for: Range)` to get precise location of only the matched substring
+  4. Now only the exact sensitive text is redacted, not surrounding text
 - Organize PDF scrolling not working - Removed conflicting DragGesture that consumed scroll events
 - Organize PDF selection cleared after rotation - Kept selection after rotate left/right
 - Organize PDF false anomaly detection - Disabled feature (too many false positives, no solutions)
@@ -86,21 +86,18 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-06
 
 **What Was Done:**
-- **Completely rebuilt Redact PDF feature:**
-  1. Fixed PDF context timing (defer block issue) - applies to 4 CorePDF functions
-  2. Fixed ShareSheet deleting files before share (same source/destination path)
-  3. Fixed redaction not applying to scanned PDFs - now stores OCR bounding boxes and draws black boxes
-  4. Simplified UI - removed Automatic/Manual/Combined modes, now single flow with manual review
-- OCR now captures text positions (bounding boxes) for accurate redaction
-- Redaction renders pages as images and draws black boxes over detected sensitive text
+- **Fixed Redact PDF precision** - was redacting entire lines, now redacts only exact text:
+  1. Previous: Matching any part of an OCR text block would redact the entire block (full lines)
+  2. User showed screenshots: wrong text was blacked out, actual sensitive data (passport numbers, phones) was NOT redacted
+  3. Root cause: `blocksToRedact` filter was too loose, and we used block-level bounding boxes
+  4. Fix: Store `VNRecognizedText` objects during OCR, search for exact matches in each block, use `boundingBox(for: Range)` to get character-level bounding box for just the matched substring
+  5. Now only the precise sensitive text is redacted, not the surrounding text on the same line
 
 **What's Unfinished:**
-- Redact PDF needs user testing to confirm redactions are applied correctly
+- Redact PDF needs user testing to confirm precise redaction works correctly
 
 **Files Modified:**
-- `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed PDF context timing in 4 functions
-- `OneBox/OneBox/Views/JobResultView.swift` - Fixed ShareSheet deleting files before share
-- `OneBox/OneBox/Views/RedactionView.swift` - Rebuilt with OCR bounding boxes and proper redaction
+- `OneBox/OneBox/Views/RedactionView.swift` - Character-level bounding boxes for precise redaction
 
 ---
 

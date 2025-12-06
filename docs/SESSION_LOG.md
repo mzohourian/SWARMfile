@@ -4,6 +4,39 @@
 
 ---
 
+## 2025-12-06: Redact PDF - Precise Character-Level Redaction
+
+**Problem:**
+User reported redaction was "completely inefficient" - random text was blacked out but actual sensitive data (passport numbers, phone numbers, emails) was NOT redacted.
+
+**Root Cause:**
+The matching logic used block-level (line-level) bounding boxes:
+```swift
+blocksToRedact = textBlocks.filter { block in
+    blockTextLower.contains(textToRedact) || textToRedact.contains(blockTextLower)
+}
+```
+This matched entire OCR text blocks (full lines) when any part matched, and the substring logic was too loose.
+
+**Fix:**
+1. Store `VNRecognizedText` objects (not just strings) in `OCRTextBlock` during OCR
+2. For each redaction target, search for exact substring matches in each OCR block
+3. Use `VNRecognizedText.boundingBox(for: Range<String.Index>)` to get the PRECISE character-level bounding box for just the matched text
+4. Only draw black boxes over those exact character positions
+
+**Technical Details:**
+- `OCRTextBlock` now has `let recognizedText: VNRecognizedText?` field
+- During OCR: `recognizedText: candidate` is stored for each observation
+- During redaction: iterate through blocks, find substring matches, call `recognizedText.boundingBox(for: originalRange)` to get precise position
+- Vision's bounding box API returns the exact rectangle containing just those characters
+
+**Files Modified:**
+- `OneBox/OneBox/Views/RedactionView.swift` - Store VNRecognizedText, use character-level bounding boxes
+
+**Status:** Needs user testing to confirm precise redaction works
+
+---
+
 ## 2025-12-06: Redact PDF - Complete Rebuild
 
 **What Was Done:**

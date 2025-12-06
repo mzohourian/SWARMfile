@@ -4,6 +4,32 @@
 
 ---
 
+## 2025-12-06: Redact PDF - File Not Saving Fix
+
+**What Was Done:**
+- Fixed Redact PDF processed files not saving/sharing
+  - Root cause: `defer { UIGraphicsEndPDFContext() }` was closing PDF context AFTER the return statement
+  - The file check happened before context was closed, so PDF wasn't fully written to disk
+  - Fix: Removed defer, call UIGraphicsEndPDFContext() explicitly before file verification
+- Applied same fix to 3 other functions with identical issue:
+  - `watermarkPDF`
+  - `fillFormFields`
+  - `compressPDFWithQuality` (had both defer AND explicit call - removed defer to avoid double close)
+- Added comprehensive file verification to redactPDF:
+  - Check file exists
+  - Check file size is not 0
+  - Verify valid PDF with pages
+
+**Root Cause:**
+When using `defer { UIGraphicsEndPDFContext() }`, the context close happens AFTER the function completes but the file existence check happens BEFORE return. This meant the PDF was being checked/returned before UIGraphicsEndPDFContext() actually wrote the file to disk.
+
+**Files Modified:**
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed PDF context timing in redactPDF, watermarkPDF, fillFormFields, compressPDFWithQuality
+
+**Status:** Fix applied, needs user testing to confirm file saving works
+
+---
+
 ## 2025-12-05: Redact PDF - OCR for Scanned Documents
 
 **What Was Done:**

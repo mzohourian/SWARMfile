@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-05
+**Last Updated:** 2025-12-06
 
 ## What This Is
 **OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -37,13 +37,13 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - Redaction with presets
 
 ### Broken / Blocked
-- **Redact PDF** - Testing OCR for scanned documents
-  - Added Vision framework OCR for image-based/scanned PDFs (100% on-device)
-  - Added passport number detection (various international formats)
-  - Added international phone number patterns
-  - OCR renders each page as image, then uses VNRecognizeTextRequest
+- None currently
 
 ### Needs Testing
+- **Redact PDF** - Major fixes applied:
+  - Fixed file not saving/sharing issue (PDF context was closed too late)
+  - OCR for scanned documents (Vision framework, 100% on-device)
+  - Added passport and international phone detection patterns
 - **Watermark PDF** - Multiple fixes applied, needs user verification:
   - Size slider now has dramatic effect (5%-50% for images, 2%-15% for text)
   - Density slider now has dramatic effect (0.6x to 5x spacing)
@@ -61,6 +61,7 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
+- **Redact PDF file not saving** - PDF context was closed in defer block (too late); fixed by explicit close before file verification
 - Organize PDF scrolling not working - Removed conflicting DragGesture that consumed scroll events
 - Organize PDF selection cleared after rotation - Kept selection after rotate left/right
 - Organize PDF false anomaly detection - Disabled feature (too many false positives, no solutions)
@@ -77,33 +78,24 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2025-12-05
+**Date:** 2025-12-06
 
 **What Was Done:**
-- Fixed Redact PDF black screen issue - added fallback error view and extensive debug logging
-- Added passport number detection - various international formats (US, UK, EU)
-- Added international phone number patterns - not just US format
-- Added OCR for scanned/image-based PDFs using Vision framework (100% on-device)
-- Optimized OCR to prevent crashes on large documents:
-  - Reduced image scale from 2x to 1.5x
-  - Added max dimension limit (2000px)
-  - Added autoreleasepool for memory management
-  - Changed to .fast recognition level
-  - Added 5-second timeout per page
-  - Added 10ms delay between pages for UI updates
+- **Fixed Redact PDF file not saving** - Root cause: `defer { UIGraphicsEndPDFContext() }` was closing PDF context AFTER file verification check. Fixed by calling UIGraphicsEndPDFContext() explicitly before verification.
+- Applied same fix to watermarkPDF, fillFormFields, and compressPDFWithQuality functions
+- Added comprehensive file verification with logging in redactPDF
 
 **What's Unfinished:**
-- **Redact PDF OCR needs testing** - optimized but not yet verified on device with scanned documents
+- Redact PDF needs user testing to confirm file saving now works
 
 **Files Modified:**
-- `OneBox/OneBox/Views/RedactionView.swift` - OCR, passport detection, memory optimization
-- `OneBox/OneBox/Views/ToolFlowView.swift` - Debug logging, fallback error view for RedactionView
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed PDF context timing in 4 functions
 
 ---
 
 ## Next Steps (Priority Order)
 
-1. **Test Redact PDF with scanned document** - Verify OCR works without crashing
+1. **Test Redact PDF** - Verify file saving/sharing now works correctly
 2. Test all features end-to-end
 3. Address Swift 6 warnings (optional, non-blocking)
 

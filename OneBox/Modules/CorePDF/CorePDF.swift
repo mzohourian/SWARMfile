@@ -278,7 +278,7 @@ public actor PDFProcessor {
         let chunkSize = useChunkedProcessing ? 50 : pageCount // Process 50 pages at a time for large PDFs
 
         UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
-        defer { UIGraphicsEndPDFContext() }
+        // NOTE: Explicit close at end of function - no defer needed
 
         // Process in chunks to manage memory
         var processedPages = 0
@@ -576,7 +576,7 @@ public actor PDFProcessor {
         }
 
         UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
-        defer { UIGraphicsEndPDFContext() }
+        // NOTE: Do NOT use defer here - context must close BEFORE returning
 
         // Process pages with memory management and debugging
         for pageIndex in 0..<pageCount {
@@ -632,6 +632,9 @@ public actor PDFProcessor {
             // Add small yield to prevent blocking the main thread
             await Task.yield()
         }
+
+        // Close PDF context before returning
+        UIGraphicsEndPDFContext()
 
         return outputURL
     }
@@ -1328,7 +1331,7 @@ public actor PDFProcessor {
         print("🔵 CorePDF.redactPDF: Processing \(pageCount) pages")
 
         UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
-        defer { UIGraphicsEndPDFContext() }
+        // NOTE: Do NOT use defer here - we need to close context BEFORE file verification
 
         for pageIndex in 0..<pageCount {
             guard let page = sourcePDF.page(at: pageIndex) else { continue }
@@ -1360,15 +1363,40 @@ public actor PDFProcessor {
             progressHandler(Double(pageIndex + 1) / Double(pageCount))
         }
 
+        // CRITICAL: Close PDF context BEFORE file verification
+        // This ensures the file is fully written to disk before we check/return it
+        UIGraphicsEndPDFContext()
+        print("🔵 CorePDF.redactPDF: PDF context closed")
+
         // Verify output file was created
         let fileExists = FileManager.default.fileExists(atPath: outputURL.path)
         print("🔵 CorePDF.redactPDF: Output file exists: \(fileExists)")
-        if fileExists {
-            if let attrs = try? FileManager.default.attributesOfItem(atPath: outputURL.path) {
-                print("🔵 CorePDF.redactPDF: Output file size: \(attrs[.size] ?? 0) bytes")
+
+        guard fileExists else {
+            print("❌ CorePDF.redactPDF: Output file was not created!")
+            throw PDFError.writeFailed
+        }
+
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: outputURL.path) {
+            let fileSize = attrs[.size] ?? 0
+            print("🔵 CorePDF.redactPDF: Output file size: \(fileSize) bytes")
+
+            // Verify file is not empty
+            if fileSize as! Int64 == 0 {
+                print("❌ CorePDF.redactPDF: Output file is empty!")
+                try? FileManager.default.removeItem(at: outputURL)
+                throw PDFError.writeFailed
             }
         }
 
+        // Verify it's a valid PDF
+        guard let createdPDF = PDFDocument(url: outputURL), createdPDF.pageCount > 0 else {
+            print("❌ CorePDF.redactPDF: Created file is not a valid PDF")
+            try? FileManager.default.removeItem(at: outputURL)
+            throw PDFError.writeFailed
+        }
+
+        print("✅ CorePDF.redactPDF: Successfully created redacted PDF with \(createdPDF.pageCount) pages")
         return outputURL
     }
     
@@ -1432,10 +1460,10 @@ public actor PDFProcessor {
         
         let outputURL = temporaryOutputURL(prefix: "form_filled")
         let pageCount = sourcePDF.pageCount
-        
+
         UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
-        defer { UIGraphicsEndPDFContext() }
-        
+        // NOTE: Do NOT use defer here - context must close BEFORE returning
+
         for pageIndex in 0..<pageCount {
             guard let page = sourcePDF.page(at: pageIndex) else { continue }
             
@@ -1453,10 +1481,13 @@ public actor PDFProcessor {
             
             // Apply form data and stamps (simplified implementation)
             // In a full implementation, this would use form field coordinates and proper rendering
-            
+
             progressHandler(Double(pageIndex + 1) / Double(pageCount))
         }
-        
+
+        // Close PDF context before returning
+        UIGraphicsEndPDFContext()
+
         return outputURL
     }
 

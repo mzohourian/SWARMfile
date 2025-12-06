@@ -62,11 +62,12 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **Redact PDF - Precise character-level redaction**:
-  1. Previous issue: Was redacting entire text lines when any part matched (wrong text blacked out)
-  2. Root cause: Used block-level bounding boxes instead of character-level
-  3. Fix: Store `VNRecognizedText` objects during OCR, use `boundingBox(for: Range)` to get precise location of only the matched substring
-  4. Now only the exact sensitive text is redacted, not surrounding text
+- **Redact PDF - Fixed coordinate transformation bug**:
+  1. Previous issue: Black boxes appeared in wrong positions (random places instead of over sensitive text)
+  2. Root cause: Vision uses bottom-left origin (Y up), UIKit PDF context uses top-left origin (Y down)
+  3. Fix: Proper Y coordinate conversion: `y = pageHeight * (1 - visionY - visionHeight)`
+  4. Added fallback: If character-level bounding box fails, estimate position from character ratios
+  5. Fixed thread safety: Capture OCR results from main thread before processing
 - Organize PDF scrolling not working - Removed conflicting DragGesture that consumed scroll events
 - Organize PDF selection cleared after rotation - Kept selection after rotate left/right
 - Organize PDF false anomaly detection - Disabled feature (too many false positives, no solutions)

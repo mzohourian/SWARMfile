@@ -4,36 +4,43 @@
 
 ---
 
-## 2025-12-06: Redact PDF - Precise Character-Level Redaction
+## 2025-12-06: Redact PDF - Coordinate Transformation Fix
 
 **Problem:**
-User reported redaction was "completely inefficient" - random text was blacked out but actual sensitive data (passport numbers, phone numbers, emails) was NOT redacted.
+User showed screenshots where black redaction boxes appeared in WRONG positions - random places on the document instead of over the actual sensitive data (passport numbers, phone numbers, emails were still visible).
 
 **Root Cause:**
-The matching logic used block-level (line-level) bounding boxes:
+Coordinate system mismatch between Vision and UIKit:
+- **Vision framework**: Bottom-left origin, Y increases upward (normalized 0-1)
+- **UIKit PDF context**: Top-left origin, Y increases downward
+
+The previous code incorrectly assumed same coordinate systems:
 ```swift
-blocksToRedact = textBlocks.filter { block in
-    blockTextLower.contains(textToRedact) || textToRedact.contains(blockTextLower)
-}
+let y = box.origin.y * pageBounds.height  // WRONG
 ```
-This matched entire OCR text blocks (full lines) when any part matched, and the substring logic was too loose.
 
 **Fix:**
-1. Store `VNRecognizedText` objects (not just strings) in `OCRTextBlock` during OCR
-2. For each redaction target, search for exact substring matches in each OCR block
-3. Use `VNRecognizedText.boundingBox(for: Range<String.Index>)` to get the PRECISE character-level bounding box for just the matched text
-4. Only draw black boxes over those exact character positions
+Proper coordinate transformation:
+```swift
+// Vision's box.origin.y is BOTTOM of box (from bottom of page)
+// Vision's top = origin.y + height
+// UIKit's origin.y should be TOP of box (from top of page)
+let y = pageBounds.height * (1.0 - box.origin.y - box.height)
+```
 
-**Technical Details:**
-- `OCRTextBlock` now has `let recognizedText: VNRecognizedText?` field
-- During OCR: `recognizedText: candidate` is stored for each observation
-- During redaction: iterate through blocks, find substring matches, call `recognizedText.boundingBox(for: originalRange)` to get precise position
-- Vision's bounding box API returns the exact rectangle containing just those characters
+**Additional Fixes:**
+1. **Fallback mechanism**: If `VNRecognizedText.boundingBox(for:)` fails, estimate position using character ratios within the block
+2. **Thread safety**: Capture `ocrResults` from main thread before processing to avoid race conditions
+3. **Better logging**: Added detailed logs for debugging
 
 **Files Modified:**
-- `OneBox/OneBox/Views/RedactionView.swift` - Store VNRecognizedText, use character-level bounding boxes
+- `OneBox/OneBox/Views/RedactionView.swift` - Coordinate fix, fallback, thread safety
 
-**Status:** Needs user testing to confirm precise redaction works
+**Status:** Needs user testing to confirm redaction boxes now appear in correct positions
+
+---
+
+## 2025-12-06: Redact PDF - Character-Level Bounding Boxes (Previous Attempt)
 
 ---
 

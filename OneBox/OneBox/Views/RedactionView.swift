@@ -986,6 +986,11 @@ struct RedactionView: View {
 
         // Get all text to redact (lowercased for matching)
         let textsToRedact = Set(redactingItems.map { $0.detectedText.lowercased() })
+        print("🔵 RedactionView.createRedactedPDF: Texts to redact: \(textsToRedact)")
+
+        // Capture OCR results from main thread to avoid thread safety issues
+        let capturedOCRResults = await MainActor.run { self.ocrResults }
+        print("🔵 RedactionView.createRedactedPDF: OCR results available for \(capturedOCRResults.count) pages")
 
         // Create PDF context
         guard UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil) else {
@@ -1002,7 +1007,8 @@ struct RedactionView: View {
                 // Find precise bounding boxes for text to redact on this page
                 var preciseRedactionRects: [CGRect] = []
 
-                if let textBlocks = ocrResults[pageIndex] {
+                if let textBlocks = capturedOCRResults[pageIndex] {
+                    print("🔍 Page \(pageIndex + 1): Searching \(textBlocks.count) OCR blocks for matches")
                     for block in textBlocks {
                         let blockText = block.text
                         let blockTextLower = blockText.lowercased()
@@ -1020,18 +1026,40 @@ struct RedactionView: View {
                                 let originalEnd = blockText.index(blockText.startIndex, offsetBy: endDistance)
                                 let originalRange = originalStart..<originalEnd
 
+                                var gotPreciseBox = false
+
                                 // Try to get precise bounding box using VNRecognizedText
                                 if let recognizedText = block.recognizedText {
                                     do {
                                         // Get character-level bounding box for just the matched text
                                         if let preciseBoundingBox = try recognizedText.boundingBox(for: originalRange) {
                                             preciseRedactionRects.append(preciseBoundingBox.boundingBox)
-                                            print("🎯 RedactionView: Found precise match '\(String(blockText[originalRange]))' in block")
+                                            print("🎯 RedactionView: Found PRECISE match '\(String(blockText[originalRange]))' at box: \(preciseBoundingBox.boundingBox)")
+                                            gotPreciseBox = true
                                         }
                                     } catch {
-                                        // Fallback: if we can't get precise box, don't redact (better than wrong redaction)
-                                        print("⚠️ RedactionView: Could not get precise bounding box for '\(textToRedact)': \(error)")
+                                        print("⚠️ RedactionView: Character-level bounding box failed for '\(textToRedact)': \(error)")
                                     }
+                                }
+
+                                // FALLBACK: If character-level failed, use the FULL block bounding box
+                                // This is less precise but ensures sensitive data gets redacted
+                                if !gotPreciseBox {
+                                    // Calculate approximate sub-box based on character position ratio
+                                    let matchLength = textToRedact.count
+                                    let blockLength = blockText.count
+                                    let startRatio = Double(startDistance) / Double(max(blockLength, 1))
+                                    let lengthRatio = Double(matchLength) / Double(max(blockLength, 1))
+
+                                    // Create approximate bounding box within the block
+                                    let approxBox = CGRect(
+                                        x: block.boundingBox.origin.x + (block.boundingBox.width * startRatio),
+                                        y: block.boundingBox.origin.y,
+                                        width: block.boundingBox.width * lengthRatio,
+                                        height: block.boundingBox.height
+                                    )
+                                    preciseRedactionRects.append(approxBox)
+                                    print("🔶 RedactionView: Using FALLBACK approximate box for '\(textToRedact)' at: \(approxBox)")
                                 }
 
                                 // Move search range forward to find more occurrences
@@ -1059,21 +1087,34 @@ struct RedactionView: View {
                         pdfContext.setFillColor(UIColor.black.cgColor)
 
                         for box in preciseRedactionRects {
-                            // Convert Vision's normalized coordinates to page coordinates
-                            // Vision uses bottom-left origin, same as PDF coordinate system
+                            // CRITICAL: Convert Vision's normalized coordinates to UIKit PDF context coordinates
+                            // Vision: origin at BOTTOM-LEFT, Y increases UPWARD (0-1 normalized)
+                            // UIKit PDF context: origin at TOP-LEFT, Y increases DOWNWARD
+
+                            // X coordinate is straightforward (both have same X direction)
                             let x = box.origin.x * pageBounds.width
-                            let y = box.origin.y * pageBounds.height
+
+                            // Y coordinate needs flipping:
+                            // Vision's box.origin.y is the BOTTOM of the box (from bottom of page)
+                            // Vision's top of box = origin.y + height
+                            // UIKit's origin.y should be the TOP of the box (from top of page)
+                            // UIKit y = pageHeight - (Vision's top of box * pageHeight)
+                            //         = pageHeight * (1 - origin.y - height)
+                            let y = pageBounds.height * (1.0 - box.origin.y - box.height)
+
                             let width = box.width * pageBounds.width
                             let height = box.height * pageBounds.height
 
                             // Add small padding for complete coverage
-                            let padding: CGFloat = 2
+                            let padding: CGFloat = 3
                             let rect = CGRect(
                                 x: x - padding,
                                 y: y - padding,
                                 width: width + padding * 2,
                                 height: height + padding * 2
                             )
+
+                            print("🎯 Drawing redaction box at: x=\(Int(x)), y=\(Int(y)), w=\(Int(width)), h=\(Int(height))")
 
                             pdfContext.fill(rect)
                         }

@@ -4,33 +4,42 @@
 
 ---
 
-## 2025-12-06: Redact PDF - File Not Saving Fix
+## 2025-12-06: Redact PDF - Complete Rebuild
 
 **What Was Done:**
-- Fixed Redact PDF processed files not saving/sharing (TWO bugs found)
+- Completely rebuilt Redact PDF feature with 4 major fixes
 
 **Bug 1: PDF Context Timing**
   - Root cause: `defer { UIGraphicsEndPDFContext() }` was closing PDF context AFTER the return statement
-  - The file check happened before context was closed, so PDF wasn't fully written to disk
   - Fix: Removed defer, call UIGraphicsEndPDFContext() explicitly before file verification
   - Applied same fix to watermarkPDF, fillFormFields, compressPDFWithQuality
-  - Added comprehensive file verification to redactPDF
 
 **Bug 2: ShareSheet Deleting Files**
-  - Root cause: ShareSheet in JobResultView was trying to copy files from source to Documents/Exports
-  - When file was ALREADY in Documents/Exports, it would DELETE the destination first, then fail to copy
-  - The file was being removed before the share sheet could access it!
-  - Fix: Check if file is already in Documents directory - if so, use it directly without copying
+  - Root cause: ShareSheet was deleting destination file before copying when source = destination
+  - Fix: Check if file is already in Documents directory - use directly without copying
 
-**Root Causes:**
-1. PDF context closed too late (defer runs after return but before value returned to caller)
-2. ShareSheet logic: `removeItem(at: destinationURL)` followed by `copyItem(at: url, to: destinationURL)` where source = destination
+**Bug 3: Redaction Not Actually Applying to Scanned PDFs**
+  - Root cause: CorePDF.redactPDF was using `page.string` which returns nil for scanned PDFs
+  - OCR found the text but didn't capture bounding boxes (positions)
+  - CorePDF couldn't find text to redact on image-based pages
+  - Fix: Store OCR bounding boxes during text detection, then render pages as images and draw black boxes over detected text positions
+
+**Bug 4: Overcomplicated UI**
+  - Had 3 modes: Automatic/Manual/Combined - confusing and unnecessary
+  - Fix: Removed mode picker, single unified flow where app detects, user reviews, then applies
+
+**Implementation Details:**
+- Added `OCRTextBlock` struct to store text with bounding boxes
+- Modified OCR to capture VNRecognizedTextObservation.boundingBox for each text block
+- New `createRedactedPDF()` function renders pages as images and draws black boxes over matching text blocks
+- Properly converts Vision's normalized coordinates (bottom-left origin) to image coordinates (top-left origin)
 
 **Files Modified:**
 - `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed PDF context timing in 4 functions
 - `OneBox/OneBox/Views/JobResultView.swift` - Fixed ShareSheet file deletion bug
+- `OneBox/OneBox/Views/RedactionView.swift` - Complete rebuild with OCR bounding boxes and proper redaction
 
-**Status:** Both fixes applied, needs user testing to confirm file saving/sharing works
+**Status:** Needs user testing to confirm redactions actually appear on the saved PDF
 
 ---
 

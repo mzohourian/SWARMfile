@@ -40,10 +40,11 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - None currently
 
 ### Needs Testing
-- **Redact PDF** - Major fixes applied:
-  - Fixed file not saving/sharing issue (PDF context was closed too late)
-  - OCR for scanned documents (Vision framework, 100% on-device)
-  - Added passport and international phone detection patterns
+- **Redact PDF** - Completely rebuilt:
+  - Fixed file not saving (2 bugs: PDF context timing + ShareSheet deletion)
+  - Redaction now actually works on scanned/image-based PDFs
+  - Stores OCR bounding boxes and draws black boxes over sensitive text
+  - Simplified UI - removed Automatic/Manual/Combined modes, single unified flow
 - **Watermark PDF** - Multiple fixes applied, needs user verification:
   - Size slider now has dramatic effect (5%-50% for images, 2%-15% for text)
   - Density slider now has dramatic effect (0.6x to 5x spacing)
@@ -61,9 +62,11 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **Redact PDF file not saving** - Two bugs fixed:
+- **Redact PDF completely rebuilt**:
   1. PDF context closed too late (defer block) - fixed by explicit close before file verification
-  2. ShareSheet deleting file before sharing (same source/destination path) - fixed by checking if file already in Documents
+  2. ShareSheet deleting file before sharing - fixed by checking if file already in Documents
+  3. Redaction not applying to scanned PDFs - fixed by storing OCR bounding boxes and drawing black boxes
+  4. Overly complex UI - removed Automatic/Manual/Combined modes, now single unified flow
 - Organize PDF scrolling not working - Removed conflicting DragGesture that consumed scroll events
 - Organize PDF selection cleared after rotation - Kept selection after rotate left/right
 - Organize PDF false anomaly detection - Disabled feature (too many false positives, no solutions)
@@ -83,19 +86,21 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-06
 
 **What Was Done:**
-- **Fixed Redact PDF file not saving** - Two root causes found and fixed:
-  1. PDF context closed too late (in defer block after return) - fixed by explicit close before verification
-  2. ShareSheet was deleting the file then trying to copy it (same source/destination path)
-- Applied PDF context fix to watermarkPDF, fillFormFields, and compressPDFWithQuality functions
-- Added comprehensive file verification with logging in redactPDF
-- Fixed ShareSheet to check if file is already in Documents before attempting to copy
+- **Completely rebuilt Redact PDF feature:**
+  1. Fixed PDF context timing (defer block issue) - applies to 4 CorePDF functions
+  2. Fixed ShareSheet deleting files before share (same source/destination path)
+  3. Fixed redaction not applying to scanned PDFs - now stores OCR bounding boxes and draws black boxes
+  4. Simplified UI - removed Automatic/Manual/Combined modes, now single flow with manual review
+- OCR now captures text positions (bounding boxes) for accurate redaction
+- Redaction renders pages as images and draws black boxes over detected sensitive text
 
 **What's Unfinished:**
-- Redact PDF needs user testing to confirm file saving/sharing now works
+- Redact PDF needs user testing to confirm redactions are applied correctly
 
 **Files Modified:**
 - `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed PDF context timing in 4 functions
 - `OneBox/OneBox/Views/JobResultView.swift` - Fixed ShareSheet deleting files before share
+- `OneBox/OneBox/Views/RedactionView.swift` - Rebuilt with OCR bounding boxes and proper redaction
 
 ---
 

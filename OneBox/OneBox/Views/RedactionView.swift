@@ -34,7 +34,6 @@ struct RedactionView: View {
     @State private var pdfDocument: PDFDocument?
     @State private var showingRedactionPreview = false
     @State private var customRedactionText = ""
-    @State private var redactionMode: RedactionMode = .automatic
     @State private var selectedPreset: RedactionPreset?
     @State private var showingPresetPicker = false
     @State private var isProcessing = false
@@ -43,12 +42,8 @@ struct RedactionView: View {
     @State private var errorMessage: String?
     @State private var didStartAccessingSecurityScoped = false
     @State private var loadError: String?
-
-    enum RedactionMode: String, CaseIterable {
-        case automatic = "Automatic Detection"
-        case manual = "Manual Selection"
-        case combined = "Combined Approach"
-    }
+    // Store OCR results with bounding boxes for accurate redaction
+    @State private var ocrResults: [Int: [OCRTextBlock]] = [:] // pageIndex -> text blocks
     
     var body: some View {
         let _ = print("🟢 RedactionView: body is being evaluated")
@@ -165,39 +160,26 @@ struct RedactionView: View {
                     Image(systemName: "eye.slash.fill")
                         .font(.system(size: 24, weight: .medium))
                         .foregroundColor(OneBoxColors.primaryGold)
-                    
+
                     VStack(alignment: .leading, spacing: OneBoxSpacing.tiny) {
                         Text("Sensitive Data Protection")
                             .font(OneBoxTypography.cardTitle)
                             .foregroundColor(OneBoxColors.primaryText)
-                        
-                        Text("AI-powered detection and secure redaction")
+
+                        Text("Review detected items, then tap Apply")
                             .font(OneBoxTypography.caption)
                             .foregroundColor(OneBoxColors.secondaryText)
                     }
-                    
+
                     Spacer()
                 }
-                
-                // Mode Selection
-                Picker("Redaction Mode", selection: $redactionMode) {
-                    ForEach(RedactionMode.allCases, id: \.self) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: redactionMode) { _ in
-                    if redactionMode == .automatic || redactionMode == .combined {
-                        performSensitiveDataAnalysis()
-                    }
-                }
-                
-                // Preset Selection
+
+                // Preset Selection for quick filtering
                 HStack {
-                    Text("Quick Presets:")
+                    Text("Filter by type:")
                         .font(OneBoxTypography.caption)
                         .foregroundColor(OneBoxColors.secondaryText)
-                    
+
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: OneBoxSpacing.small) {
                             ForEach(RedactionPreset.allCases) { preset in
@@ -261,14 +243,12 @@ struct RedactionView: View {
                     .foregroundColor(OneBoxColors.secondaryText)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, OneBoxSpacing.large)
-                
-                if redactionMode != .automatic {
-                    Button("Add Manual Redaction") {
-                        addManualRedaction()
-                    }
-                    .foregroundColor(OneBoxColors.primaryGold)
-                    .padding(.top, OneBoxSpacing.medium)
+
+                Button("Add Manual Redaction") {
+                    addManualRedaction()
                 }
+                .foregroundColor(OneBoxColors.primaryGold)
+                .padding(.top, OneBoxSpacing.medium)
             }
             
             Spacer()
@@ -288,10 +268,9 @@ struct RedactionView: View {
                     ForEach(redactionItems) { item in
                         redactionItemRow(item)
                     }
-                    
-                    if redactionMode != .automatic {
-                        addCustomRedactionButton
-                    }
+
+                    // Always show manual add option
+                    addCustomRedactionButton
                 }
                 .padding(OneBoxSpacing.medium)
             }
@@ -510,8 +489,8 @@ struct RedactionView: View {
                         if pageText == nil || pageText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
                             print("🔍 RedactionView: Page \(pageIndex + 1) has no embedded text, trying OCR...")
 
-                            // Perform OCR synchronously within autoreleasepool
-                            pageText = performOCRSync(on: page)
+                            // Perform OCR synchronously within autoreleasepool (captures bounding boxes)
+                            pageText = performOCRSync(on: page, pageIndex: pageIndex)
                         }
 
                         if let text = pageText, !text.isEmpty {
@@ -552,7 +531,7 @@ struct RedactionView: View {
     }
 
     /// Perform OCR synchronously (called within autoreleasepool)
-    private func performOCRSync(on page: PDFPage) -> String? {
+    private func performOCRSync(on page: PDFPage, pageIndex: Int = 0) -> String? {
         // Render the PDF page as an image at lower scale to reduce memory
         let pageRect = page.bounds(for: .mediaBox)
         let scale: CGFloat = 1.5 // Reduced from 2.0 for better memory usage
@@ -586,9 +565,10 @@ struct RedactionView: View {
 
         // Perform text recognition using Vision (synchronous with semaphore)
         var recognizedText: String?
+        var textBlocks: [OCRTextBlock] = []
         let semaphore = DispatchSemaphore(value: 0)
 
-        let request = VNRecognizeTextRequest { request, error in
+        let request = VNRecognizeTextRequest { [self] request, error in
             defer { semaphore.signal() }
 
             if let error = error {
@@ -600,13 +580,24 @@ struct RedactionView: View {
                 return
             }
 
-            // Combine all recognized text
-            recognizedText = observations.compactMap { observation in
-                observation.topCandidates(1).first?.string
-            }.joined(separator: " ")
+            // Collect text blocks with their bounding boxes
+            var allText: [String] = []
+            for observation in observations {
+                if let candidate = observation.topCandidates(1).first {
+                    allText.append(candidate.string)
+                    // Store the bounding box (normalized 0-1 coordinates)
+                    let block = OCRTextBlock(
+                        text: candidate.string,
+                        boundingBox: observation.boundingBox,
+                        pageIndex: pageIndex
+                    )
+                    textBlocks.append(block)
+                }
+            }
+            recognizedText = allText.joined(separator: " ")
 
             if let text = recognizedText {
-                print("🔍 RedactionView: OCR extracted \(text.count) characters")
+                print("🔍 RedactionView: OCR extracted \(text.count) characters, \(textBlocks.count) text blocks")
             }
         }
 
@@ -622,12 +613,19 @@ struct RedactionView: View {
             print("⚠️ RedactionView: OCR handler error: \(error.localizedDescription)")
         }
 
+        // Store the text blocks for later use during redaction
+        if !textBlocks.isEmpty {
+            DispatchQueue.main.async {
+                self.ocrResults[pageIndex] = textBlocks
+            }
+        }
+
         return recognizedText?.isEmpty == true ? nil : recognizedText
     }
 
     /// Perform OCR on a PDF page using Vision framework (100% on-device) - async version
-    private func performOCR(on page: PDFPage) async -> String? {
-        return performOCRSync(on: page)
+    private func performOCR(on page: PDFPage, pageIndex: Int) async -> String? {
+        return performOCRSync(on: page, pageIndex: pageIndex)
     }
 
     /// Synchronous version of detectSensitiveData for use in autoreleasepool
@@ -906,6 +904,11 @@ struct RedactionView: View {
             return
         }
 
+        guard let document = pdfDocument else {
+            print("❌ RedactionView: No PDF document loaded")
+            return
+        }
+
         print("🔵 RedactionView: Starting redaction with \(selectedItems.count) items")
         print("🔵 RedactionView: Items to redact: \(selectedItems.map { $0.detectedText })")
 
@@ -914,44 +917,30 @@ struct RedactionView: View {
 
         Task {
             do {
-                // Create settings with redaction items
-                var settings = JobSettings()
-                settings.redactionItems = selectedItems.map { $0.detectedText }
-                settings.redactionMode = redactionMode.rawValue
-
-                print("🔵 RedactionView: Created job settings with \(settings.redactionItems.count) redaction items")
-
-                // Process redaction using JobEngine
-                let processor = JobProcessor()
-                let tempJob = Job(
-                    type: .pdfRedact,
-                    inputs: [pdfURL],
-                    settings: settings
+                // Create redacted PDF by rendering pages as images with redaction boxes
+                let outputURL = try await createRedactedPDF(
+                    from: document,
+                    redactingItems: selectedItems
                 )
 
-                print("🔵 RedactionView: Calling processor.process...")
-                let outputURLs = try await processor.process(job: tempJob) { progress in
-                    print("🔵 RedactionView: Processing progress: \(progress)")
-                }
-
-                print("🔵 RedactionView: Processing complete. OutputURLs count: \(outputURLs.count)")
-                if let firstOutput = outputURLs.first {
-                    print("🔵 RedactionView: First output URL: \(firstOutput.path)")
-                    print("🔵 RedactionView: Output file exists: \(FileManager.default.fileExists(atPath: firstOutput.path))")
-                    if let attrs = try? FileManager.default.attributesOfItem(atPath: firstOutput.path) {
-                        print("🔵 RedactionView: Output file size: \(attrs[.size] ?? 0) bytes")
-                    }
+                print("🔵 RedactionView: Processing complete. Output: \(outputURL.path)")
+                print("🔵 RedactionView: Output file exists: \(FileManager.default.fileExists(atPath: outputURL.path))")
+                if let attrs = try? FileManager.default.attributesOfItem(atPath: outputURL.path) {
+                    print("🔵 RedactionView: Output file size: \(attrs[.size] ?? 0) bytes")
                 }
 
                 // Save to Documents/Exports for persistence
-                let persistedURL = saveOutputToDocuments(outputURLs.first)
+                let persistedURL = saveOutputToDocuments(outputURL)
                 print("🔵 RedactionView: Persisted URL: \(persistedURL?.path ?? "nil")")
                 if let url = persistedURL {
                     print("🔵 RedactionView: Persisted file exists: \(FileManager.default.fileExists(atPath: url.path))")
                 }
 
                 // Create completed job for result display
-                let finalURL = persistedURL ?? outputURLs.first!
+                let finalURL = persistedURL ?? outputURL
+                var settings = JobSettings()
+                settings.redactionItems = selectedItems.map { $0.detectedText }
+
                 let job = Job(
                     type: .pdfRedact,
                     inputs: [pdfURL],
@@ -984,6 +973,126 @@ struct RedactionView: View {
                 }
             }
         }
+    }
+
+    /// Create a redacted PDF by rendering each page as an image and drawing black boxes over sensitive text
+    private func createRedactedPDF(from document: PDFDocument, redactingItems: [RedactionItem]) async throws -> URL {
+        let pageCount = document.pageCount
+        let tempDir = FileManager.default.temporaryDirectory
+        let outputURL = tempDir.appendingPathComponent("redacted_\(UUID().uuidString).pdf")
+
+        print("🔵 RedactionView.createRedactedPDF: Starting with \(redactingItems.count) items across \(pageCount) pages")
+
+        // Group redaction items by page
+        var itemsByPage: [Int: [RedactionItem]] = [:]
+        for item in redactingItems {
+            if itemsByPage[item.pageNumber] == nil {
+                itemsByPage[item.pageNumber] = []
+            }
+            itemsByPage[item.pageNumber]?.append(item)
+        }
+
+        // Create PDF context
+        guard UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil) else {
+            throw NSError(domain: "RedactionView", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create PDF context"])
+        }
+
+        // Get all text to redact (lowercased for matching)
+        let textsToRedact = Set(redactingItems.map { $0.detectedText.lowercased() })
+
+        for pageIndex in 0..<pageCount {
+            autoreleasepool {
+                guard let page = document.page(at: pageIndex) else { return }
+
+                let pageBounds = page.bounds(for: .mediaBox)
+                let scale: CGFloat = 2.0 // Higher quality for output
+
+                // Render page as image
+                let imageSize = CGSize(width: pageBounds.width * scale, height: pageBounds.height * scale)
+                let renderer = UIGraphicsImageRenderer(size: imageSize)
+                var pageImage = renderer.image { context in
+                    UIColor.white.setFill()
+                    context.fill(CGRect(origin: .zero, size: imageSize))
+
+                    context.cgContext.translateBy(x: 0, y: imageSize.height)
+                    context.cgContext.scaleBy(x: scale, y: -scale)
+                    page.draw(with: .mediaBox, to: context.cgContext)
+                }
+
+                // Draw redaction boxes if we have OCR results for this page
+                if let textBlocks = ocrResults[pageIndex] {
+                    // Find which text blocks need to be redacted
+                    let blocksToRedact = textBlocks.filter { block in
+                        let blockTextLower = block.text.lowercased()
+                        // Check if this block contains any text that should be redacted
+                        return textsToRedact.contains { textToRedact in
+                            blockTextLower.contains(textToRedact) || textToRedact.contains(blockTextLower)
+                        }
+                    }
+
+                    if !blocksToRedact.isEmpty {
+                        print("🔵 RedactionView.createRedactedPDF: Page \(pageIndex + 1) - redacting \(blocksToRedact.count) text blocks")
+
+                        // Draw black boxes over the text blocks
+                        let redactedRenderer = UIGraphicsImageRenderer(size: imageSize)
+                        pageImage = redactedRenderer.image { context in
+                            // Draw original image
+                            pageImage.draw(at: .zero)
+
+                            // Draw black boxes over redacted areas
+                            context.cgContext.setFillColor(UIColor.black.cgColor)
+
+                            for block in blocksToRedact {
+                                // Convert Vision's normalized coordinates (bottom-left origin) to image coordinates (top-left origin)
+                                let box = block.boundingBox
+                                let x = box.origin.x * imageSize.width
+                                let y = (1 - box.origin.y - box.height) * imageSize.height
+                                let width = box.width * imageSize.width
+                                let height = box.height * imageSize.height
+
+                                // Add some padding
+                                let padding: CGFloat = 2
+                                let rect = CGRect(
+                                    x: x - padding,
+                                    y: y - padding,
+                                    width: width + padding * 2,
+                                    height: height + padding * 2
+                                )
+
+                                context.cgContext.fill(rect)
+                            }
+                        }
+                    }
+                } else {
+                    print("⚠️ RedactionView.createRedactedPDF: Page \(pageIndex + 1) - no OCR results available")
+                }
+
+                // Add page to PDF
+                UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
+                if let pdfContext = UIGraphicsGetCurrentContext() {
+                    // Draw the (possibly redacted) image to the PDF page
+                    pdfContext.saveGState()
+                    pdfContext.translateBy(x: 0, y: pageBounds.height)
+                    pdfContext.scaleBy(x: 1.0, y: -1.0)
+                    pageImage.draw(in: pageBounds)
+                    pdfContext.restoreGState()
+                }
+            }
+
+            // Allow UI updates
+            await Task.yield()
+        }
+
+        // Close PDF context
+        UIGraphicsEndPDFContext()
+
+        // Verify the PDF was created
+        guard FileManager.default.fileExists(atPath: outputURL.path) else {
+            throw NSError(domain: "RedactionView", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create redacted PDF"])
+        }
+
+        print("✅ RedactionView.createRedactedPDF: Successfully created at \(outputURL.path)")
+        return outputURL
     }
 
     /// Save output file to Documents/Exports for persistence
@@ -1051,6 +1160,14 @@ struct RedactionItem: Identifiable {
     let confidence: Double
     let textRange: Range<String.Index>
     var isSelected = true
+    var boundingBox: CGRect? // Normalized bounding box (0-1 range) for scanned PDFs
+}
+
+/// Stores OCR text with its bounding box for accurate redaction positioning
+struct OCRTextBlock {
+    let text: String
+    let boundingBox: CGRect // Normalized coordinates (0-1)
+    let pageIndex: Int
 }
 
 typealias RedactionCategory = SensitiveDataCategory

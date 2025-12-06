@@ -75,6 +75,7 @@ struct WorkflowConciergeView: View {
         }
         .sheet(isPresented: $isCreatingWorkflow) {
             WorkflowBuilderView(template: selectedTemplate)
+                .environmentObject(jobManager)
         }
         .fileImporter(
             isPresented: $showingFilePicker,

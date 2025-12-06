@@ -75,6 +75,8 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showingWorkflowConcierge) {
             WorkflowConciergeView()
+                .environmentObject(jobManager)
+                .environmentObject(paymentsManager)
         }
     }
 

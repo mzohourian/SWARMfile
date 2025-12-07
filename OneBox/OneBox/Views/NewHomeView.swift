@@ -68,10 +68,14 @@ struct HomeView: View {
         .sheet(isPresented: $showingToolFlow) {
             if let tool = selectedTool {
                 ToolFlowView(tool: tool)
+                    .environmentObject(jobManager)
+                    .environmentObject(paymentsManager)
             }
         }
         .sheet(isPresented: $showingIntegrityDashboard) {
             IntegrityDashboardView()
+                .environmentObject(privacyManager)
+                .environmentObject(jobManager)
         }
         .sheet(isPresented: $showingWorkflowConcierge) {
             WorkflowConciergeView()

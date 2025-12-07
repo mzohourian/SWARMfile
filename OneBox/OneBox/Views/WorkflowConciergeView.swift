@@ -68,10 +68,8 @@ struct WorkflowConciergeView: View {
         }
         .onAppear {
             loadWorkflowData()
-            // Start rotation animation
-            withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
-                workflowAnimationRotation = 360
-            }
+            // Start rotation animation - just set the value, let the .animation modifier handle it
+            workflowAnimationRotation = 360
         }
         .sheet(isPresented: $isCreatingWorkflow) {
             WorkflowBuilderView(template: selectedTemplate)
@@ -117,7 +115,7 @@ struct WorkflowConciergeView: View {
                         .font(.system(size: 40, weight: .medium))
                         .foregroundColor(OneBoxColors.primaryGold)
                         .rotationEffect(.degrees(workflowAnimationRotation))
-                        .animation(.easeInOut(duration: 3.0).repeatForever(), value: workflowAnimationRotation)
+                        .animation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true), value: workflowAnimationRotation)
                 }
                 
                 // Workflow Stats

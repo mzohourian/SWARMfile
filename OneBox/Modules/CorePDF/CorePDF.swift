@@ -272,7 +272,17 @@ public actor PDFProcessor {
 
         let outputURL = temporaryOutputURL(prefix: "compressed")
         let pageCount = pdf.pageCount
-        
+
+        // Resolution scale based on quality - lower quality = smaller resolution = smaller file
+        let resolutionScale: CGFloat = {
+            switch quality {
+            case .maximum: return 1.0    // Full resolution
+            case .high: return 0.85      // 85% resolution
+            case .medium: return 0.70    // 70% resolution
+            case .low: return 0.50       // 50% resolution
+            }
+        }()
+
         // Use chunked processing for large PDFs (> 100 pages)
         let useChunkedProcessing = pageCount > 100
         let chunkSize = useChunkedProcessing ? 50 : pageCount // Process 50 pages at a time for large PDFs
@@ -284,18 +294,18 @@ public actor PDFProcessor {
         var processedPages = 0
         for chunkStart in stride(from: 0, to: pageCount, by: chunkSize) {
             let chunkEnd = min(chunkStart + chunkSize, pageCount)
-            
+
             // Check memory pressure before each chunk
             if useChunkedProcessing {
                 let memoryPressure = await MainActor.run {
                     MemoryManager.shared.getMemoryPressureLevel()
                 }
-                
+
                 if memoryPressure == .critical {
                     throw PDFError.invalidParameters("Memory critically low. Please close other apps and try again.")
                 }
             }
-            
+
             for pageIndex in chunkStart..<chunkEnd {
                 guard let page = pdf.page(at: pageIndex) else { continue }
 
@@ -306,18 +316,25 @@ public actor PDFProcessor {
 
                 // Use autoreleasepool for each page to manage memory
                 autoreleasepool {
-                    // Render page to image first
-                    let renderer = UIGraphicsImageRenderer(size: pageBounds.size)
+                    // Calculate scaled size for rendering (smaller = more compression)
+                    let scaledSize = CGSize(
+                        width: pageBounds.size.width * resolutionScale,
+                        height: pageBounds.size.height * resolutionScale
+                    )
+
+                    // Render page at reduced resolution
+                    let renderer = UIGraphicsImageRenderer(size: scaledSize)
                     let pageImage = renderer.image { rendererContext in
                         UIColor.white.setFill()
-                        rendererContext.fill(CGRect(origin: .zero, size: pageBounds.size))
+                        rendererContext.fill(CGRect(origin: .zero, size: scaledSize))
 
+                        rendererContext.cgContext.scaleBy(x: resolutionScale, y: resolutionScale)
                         rendererContext.cgContext.translateBy(x: 0, y: pageBounds.size.height)
                         rendererContext.cgContext.scaleBy(x: 1.0, y: -1.0)
                         page.draw(with: .mediaBox, to: rendererContext.cgContext)
                     }
 
-                    // Compress and draw to PDF context
+                    // Compress and draw to PDF context (scaled back to original page size)
                     if let compressedData = pageImage.jpegData(compressionQuality: quality.jpegQuality),
                        let compressedImage = UIImage(data: compressedData) {
                         compressedImage.draw(in: pageBounds)
@@ -329,7 +346,7 @@ public actor PDFProcessor {
                 processedPages += 1
                 progressHandler(Double(processedPages) / Double(pageCount))
             }
-            
+
             // Small delay between chunks to allow memory cleanup
             if useChunkedProcessing && chunkEnd < pageCount {
                 try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s delay

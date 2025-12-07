@@ -636,13 +636,35 @@ actor JobProcessor {
             return try await processPDFSign(job: job, progressHandler: progressHandler)
         case .pdfOrganize:
             // Page Organizer is normally handled through interactive UI (PageOrganizerView)
-            // In automated workflows, just pass through the input files unchanged
+            // In automated workflows, copy input files to output location (pass-through)
             // since page organization requires user interaction
-            progressHandler(1.0)
+            progressHandler(0.5)
+
             if !job.outputURLs.isEmpty {
                 return job.outputURLs // Use existing outputs if available (from interactive UI)
             }
-            return job.inputs // Pass through inputs for automated workflow
+
+            // Copy inputs to temp output files to ensure they're properly passed through
+            var outputURLs: [URL] = []
+            let tempDir = FileManager.default.temporaryDirectory
+            for inputURL in job.inputs {
+                let outputURL = tempDir.appendingPathComponent("organized_\(UUID().uuidString)_\(inputURL.lastPathComponent)")
+                do {
+                    if FileManager.default.fileExists(atPath: outputURL.path) {
+                        try FileManager.default.removeItem(at: outputURL)
+                    }
+                    try FileManager.default.copyItem(at: inputURL, to: outputURL)
+                    outputURLs.append(outputURL)
+                } catch {
+                    print("❌ pdfOrganize: Failed to copy \(inputURL.lastPathComponent): \(error)")
+                    // Use original as fallback
+                    outputURLs.append(inputURL)
+                }
+            }
+
+            progressHandler(1.0)
+            return outputURLs.isEmpty ? job.inputs : outputURLs
+
         case .fillForm:
             return try await processFormFilling(job: job, progressHandler: progressHandler)
         case .imageResize:

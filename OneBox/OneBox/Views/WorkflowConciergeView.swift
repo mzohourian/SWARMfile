@@ -74,7 +74,7 @@ struct WorkflowConciergeView: View {
         .onAppear {
             loadWorkflowData()
         }
-        .onChange(of: isCreatingWorkflow) { _, isCreating in
+        .onChange(of: isCreatingWorkflow) { isCreating in
             // Reload workflows when the builder sheet is dismissed
             if !isCreating {
                 loadCustomWorkflows()

@@ -20,9 +20,12 @@ struct WorkflowConciergeView: View {
     @State private var selectedTemplate: WorkflowTemplate?
     
     // Workflow Execution
-    @ObservedObject private var workflowService = WorkflowExecutionService.shared
     @State private var showingFilePicker = false
     @State private var activeTemplate: WorkflowTemplate?
+    @State private var isWorkflowRunning = false
+    @State private var workflowError: String?
+    @State private var currentStepIndex = 0
+    @State private var totalSteps = 0
 
     var body: some View {
         NavigationStack {
@@ -50,7 +53,7 @@ struct WorkflowConciergeView: View {
                 }
                 
                 // Progress Overlay
-                if workflowService.isRunning {
+                if isWorkflowRunning {
                     workflowProgressOverlay
                 }
             }
@@ -78,12 +81,12 @@ struct WorkflowConciergeView: View {
             handleFileSelection(result)
         }
         .alert("Workflow Error", isPresented: Binding<Bool>(
-            get: { workflowService.error != nil },
-            set: { if !$0 { workflowService.error = nil } }
+            get: { workflowError != nil },
+            set: { if !$0 { workflowError = nil } }
         )) {
             Button("OK", role: .cancel) {}
         } message: {
-            if let error = workflowService.error {
+            if let error = workflowError {
                 Text(error)
             }
         }
@@ -381,7 +384,7 @@ struct WorkflowConciergeView: View {
                             .font(OneBoxTypography.cardTitle)
                             .foregroundColor(OneBoxColors.primaryText)
                         
-                        Text("Step \(workflowService.currentStepIndex + 1) of \(workflowService.totalSteps)")
+                        Text("Step \(currentStepIndex + 1) of \(totalSteps)")
                             .font(OneBoxTypography.body)
                             .foregroundColor(OneBoxColors.secondaryText)
                     }
@@ -559,12 +562,23 @@ struct WorkflowConciergeView: View {
             }
             
             Task {
-                await workflowService.executeWorkflow(
+                isWorkflowRunning = true
+                totalSteps = template.steps.count
+                currentStepIndex = 0
+
+                await WorkflowExecutionService.shared.executeWorkflow(
                     template: template,
                     inputURLs: secureURLs,
                     jobManager: jobManager
                 )
-                
+
+                isWorkflowRunning = false
+
+                // Check for errors
+                if let error = WorkflowExecutionService.shared.error {
+                    workflowError = error
+                }
+
                 // Release resources after processing
                 for url in secureURLs {
                     url.stopAccessingSecurityScopedResource()

@@ -20,13 +20,13 @@ struct WorkflowConciergeView: View {
     @State private var selectedTemplate: WorkflowTemplate?
     
     // Workflow Execution
-    @ObservedObject private var workflowService = WorkflowExecutionService.shared
     @State private var showingFilePicker = false
     @State private var activeTemplate: WorkflowTemplate?
-    
-    // Animation state
-    @State private var workflowAnimationRotation: Double = 0
-    
+    @State private var isWorkflowRunning = false
+    @State private var workflowError: String?
+    @State private var currentStepIndex = 0
+    @State private var totalSteps = 0
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -53,7 +53,7 @@ struct WorkflowConciergeView: View {
                 }
                 
                 // Progress Overlay
-                if workflowService.isRunning {
+                if isWorkflowRunning {
                     workflowProgressOverlay
                 }
             }
@@ -68,13 +68,10 @@ struct WorkflowConciergeView: View {
         }
         .onAppear {
             loadWorkflowData()
-            // Start rotation animation
-            withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
-                workflowAnimationRotation = 360
-            }
         }
         .sheet(isPresented: $isCreatingWorkflow) {
             WorkflowBuilderView(template: selectedTemplate)
+                .environmentObject(jobManager)
         }
         .fileImporter(
             isPresented: $showingFilePicker,
@@ -84,12 +81,12 @@ struct WorkflowConciergeView: View {
             handleFileSelection(result)
         }
         .alert("Workflow Error", isPresented: Binding<Bool>(
-            get: { workflowService.error != nil },
-            set: { if !$0 { workflowService.error = nil } }
+            get: { workflowError != nil },
+            set: { if !$0 { workflowError = nil } }
         )) {
             Button("OK", role: .cancel) {}
         } message: {
-            if let error = workflowService.error {
+            if let error = workflowError {
                 Text(error)
             }
         }
@@ -115,8 +112,6 @@ struct WorkflowConciergeView: View {
                     Image(systemName: "gear.badge.checkmark")
                         .font(.system(size: 40, weight: .medium))
                         .foregroundColor(OneBoxColors.primaryGold)
-                        .rotationEffect(.degrees(workflowAnimationRotation))
-                        .animation(.easeInOut(duration: 3.0).repeatForever(), value: workflowAnimationRotation)
                 }
                 
                 // Workflow Stats
@@ -389,7 +384,7 @@ struct WorkflowConciergeView: View {
                             .font(OneBoxTypography.cardTitle)
                             .foregroundColor(OneBoxColors.primaryText)
                         
-                        Text("Step \(workflowService.currentStepIndex + 1) of \(workflowService.totalSteps)")
+                        Text("Step \(currentStepIndex + 1) of \(totalSteps)")
                             .font(OneBoxTypography.body)
                             .foregroundColor(OneBoxColors.secondaryText)
                     }
@@ -488,8 +483,12 @@ struct WorkflowConciergeView: View {
     
     private func analyzePattern(_ jobs: ArraySlice<Job>, firstType: JobType, secondType: JobType) -> Bool {
         let jobArray = Array(jobs)
+
+        // Need at least 2 jobs to analyze patterns
+        guard jobArray.count >= 2 else { return false }
+
         var patternCount = 0
-        
+
         for i in 0..<(jobArray.count - 1) {
             if jobArray[i].type == firstType && jobArray[i + 1].type == secondType {
                 let timeDiff = jobArray[i + 1].createdAt.timeIntervalSince(jobArray[i].createdAt)
@@ -567,12 +566,23 @@ struct WorkflowConciergeView: View {
             }
             
             Task {
-                await workflowService.executeWorkflow(
+                isWorkflowRunning = true
+                totalSteps = template.steps.count
+                currentStepIndex = 0
+
+                await WorkflowExecutionService.shared.executeWorkflow(
                     template: template,
                     inputURLs: secureURLs,
                     jobManager: jobManager
                 )
-                
+
+                isWorkflowRunning = false
+
+                // Check for errors
+                if let error = WorkflowExecutionService.shared.error {
+                    workflowError = error
+                }
+
                 // Release resources after processing
                 for url in secureURLs {
                     url.stopAccessingSecurityScopedResource()
@@ -597,40 +607,79 @@ struct WorkflowTemplate: Identifiable {
     let isPro: Bool
     
     static let defaultTemplates: [WorkflowTemplate] = [
+        // Basic Templates (Free)
         WorkflowTemplate(
-            title: "Document Prepare",
-            description: "Organize, compress, and watermark documents for sharing",
-            icon: "doc.richtext",
+            title: "Quick Share",
+            description: "Compress and watermark documents for quick sharing",
+            icon: "square.and.arrow.up",
             accentColor: OneBoxColors.secureGreen,
-            steps: [.organize, .compress, .watermark],
-            estimatedTime: "2 min",
+            steps: [.compress, .watermark],
+            estimatedTime: "30 sec",
             isPro: false
         ),
         WorkflowTemplate(
-            title: "Legal Package",
-            description: "Sign, watermark, and archive legal documents securely",
+            title: "Image to PDF",
+            description: "Convert images to PDF with compression",
+            icon: "photo.on.rectangle",
+            accentColor: OneBoxColors.warningAmber,
+            steps: [.imagesToPDF, .compress],
+            estimatedTime: "45 sec",
+            isPro: false
+        ),
+
+        // Professional Templates (Pro)
+        WorkflowTemplate(
+            title: "Legal Discovery",
+            description: "Prepare documents for legal discovery: redact PII, add Bates numbers, date stamp, and flatten",
             icon: "scale.3d",
             accentColor: OneBoxColors.primaryGold,
-            steps: [.sign, .watermark, .compress],
+            steps: [.redact, .addPageNumbers, .addDateStamp, .flatten, .compress],
+            estimatedTime: "5 min",
+            isPro: true
+        ),
+        WorkflowTemplate(
+            title: "Contract Execution",
+            description: "Merge contract pages, flatten forms, sign, watermark with EXECUTED, and compress",
+            icon: "doc.text.magnifyingglass",
+            accentColor: OneBoxColors.primaryGold,
+            steps: [.merge, .flatten, .sign, .watermark, .compress],
             estimatedTime: "3 min",
             isPro: true
         ),
         WorkflowTemplate(
-            title: "Image to PDF Pro",
-            description: "Convert images to PDF with compression and watermarking",
-            icon: "photo.on.rectangle",
-            accentColor: OneBoxColors.warningAmber,
-            steps: [.imagesToPDF, .compress, .watermark],
-            estimatedTime: "90 sec",
-            isPro: false
+            title: "Financial Report",
+            description: "Redact account numbers, add CONFIDENTIAL watermark, date stamp, and compress",
+            icon: "chart.bar.doc.horizontal",
+            accentColor: OneBoxColors.secureGreen,
+            steps: [.redact, .watermark, .addDateStamp, .compress],
+            estimatedTime: "4 min",
+            isPro: true
         ),
         WorkflowTemplate(
-            title: "Merge & Secure",
-            description: "Merge multiple PDFs, compress, and add security features",
-            icon: "doc.on.doc",
+            title: "HR Documents",
+            description: "Redact SSN/personal data, watermark INTERNAL, add page numbers, compress",
+            icon: "person.text.rectangle",
             accentColor: OneBoxColors.criticalRed,
-            steps: [.merge, .compress, .sign, .watermark],
+            steps: [.redact, .watermark, .addPageNumbers, .compress],
             estimatedTime: "4 min",
+            isPro: true
+        ),
+        WorkflowTemplate(
+            title: "Medical Records",
+            description: "HIPAA-compliant: redact PHI, add processing date, watermark, flatten, compress",
+            icon: "cross.case",
+            accentColor: OneBoxColors.warningAmber,
+            steps: [.redact, .addDateStamp, .watermark, .flatten, .compress],
+            estimatedTime: "5 min",
+            isPro: true
+        ),
+        WorkflowTemplate(
+            title: "Merge & Archive",
+            description: "Combine documents, add page numbers, date stamp, compress for archival",
+            icon: "archivebox",
+            accentColor: OneBoxColors.secondaryGold,
+            steps: [.merge, .addPageNumbers, .addDateStamp, .compress],
+            estimatedTime: "3 min",
             isPro: true
         )
     ]
@@ -673,10 +722,10 @@ struct WorkflowSuggestion: Identifiable {
 }
 
 enum WorkflowStep: String, CaseIterable, Identifiable, Codable {
-    case organize, compress, watermark, sign, merge, split, imagesToPDF
-    
+    case organize, compress, watermark, sign, merge, split, imagesToPDF, redact, addPageNumbers, addDateStamp, flatten
+
     var id: String { rawValue }
-    
+
     var title: String {
         switch self {
         case .organize: return "Organize"
@@ -686,9 +735,13 @@ enum WorkflowStep: String, CaseIterable, Identifiable, Codable {
         case .merge: return "Merge"
         case .split: return "Split"
         case .imagesToPDF: return "Images to PDF"
+        case .redact: return "Redact"
+        case .addPageNumbers: return "Add Page Numbers"
+        case .addDateStamp: return "Add Date Stamp"
+        case .flatten: return "Flatten Forms"
         }
     }
-    
+
     var icon: String {
         switch self {
         case .organize: return "square.grid.2x2"
@@ -698,6 +751,26 @@ enum WorkflowStep: String, CaseIterable, Identifiable, Codable {
         case .merge: return "doc.on.doc"
         case .split: return "scissors"
         case .imagesToPDF: return "photo.on.rectangle"
+        case .redact: return "eye.slash.fill"
+        case .addPageNumbers: return "number"
+        case .addDateStamp: return "calendar.badge.clock"
+        case .flatten: return "square.on.square.dashed"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .organize: return "Reorder, rotate, or remove pages"
+        case .compress: return "Reduce file size while maintaining quality"
+        case .watermark: return "Add text or image watermarks"
+        case .sign: return "Add digital signature"
+        case .merge: return "Combine multiple PDFs into one"
+        case .split: return "Split PDF into separate files"
+        case .imagesToPDF: return "Convert images to PDF document"
+        case .redact: return "Permanently remove sensitive information"
+        case .addPageNumbers: return "Add page numbers (Bates numbering for legal)"
+        case .addDateStamp: return "Add processing date to documents"
+        case .flatten: return "Flatten form fields and annotations"
         }
     }
 }

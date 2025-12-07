@@ -278,7 +278,7 @@ public actor PDFProcessor {
         let chunkSize = useChunkedProcessing ? 50 : pageCount // Process 50 pages at a time for large PDFs
 
         UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
-        defer { UIGraphicsEndPDFContext() }
+        // NOTE: Explicit close at end of function - no defer needed
 
         // Process in chunks to manage memory
         var processedPages = 0
@@ -576,7 +576,7 @@ public actor PDFProcessor {
         }
 
         UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
-        defer { UIGraphicsEndPDFContext() }
+        // NOTE: Do NOT use defer here - context must close BEFORE returning
 
         // Process pages with memory management and debugging
         for pageIndex in 0..<pageCount {
@@ -616,7 +616,7 @@ public actor PDFProcessor {
 
                 if let text = text {
                     print("🎨 CorePDF: Drawing text watermark on page \(pageIndex)")
-                    drawTextWatermark(text, in: pageBounds, position: position, tileDensity: tileDensity)
+                    drawTextWatermark(text, in: pageBounds, position: position, size: size, tileDensity: tileDensity)
                 } else if let image = image {
                     print("🎨 CorePDF: Drawing image watermark on page \(pageIndex)")
                     drawImageWatermark(image, in: pageBounds, position: position, size: size, tileDensity: tileDensity)
@@ -633,28 +633,36 @@ public actor PDFProcessor {
             await Task.yield()
         }
 
+        // Close PDF context before returning
+        UIGraphicsEndPDFContext()
+
         return outputURL
     }
 
-    private func drawTextWatermark(_ text: String, in bounds: CGRect, position: WatermarkPosition, tileDensity: Double) {
-        print("🎨 CorePDF: Drawing text watermark '\(text)' at position \(position)")
-        
-        let fontSize: CGFloat = bounds.height * 0.05
+    private func drawTextWatermark(_ text: String, in bounds: CGRect, position: WatermarkPosition, size: Double, tileDensity: Double) {
+        print("🎨 CorePDF: Drawing text watermark '\(text)' at position \(position), size: \(size), density: \(tileDensity)")
+
+        // IMPROVED: Size now dramatically affects font size
+        // At size 0.0: 2% of page height (small)
+        // At size 1.0: 15% of page height (large)
+        let fontSize: CGFloat = bounds.height * CGFloat(0.02 + size * 0.13)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: fontSize, weight: .bold),
             .foregroundColor: UIColor.gray
         ]
 
         let textSize = (text as NSString).size(withAttributes: attributes)
-        print("🎨 CorePDF: Text size: \(textSize), bounds: \(bounds)")
+        print("🎨 CorePDF: Text size: \(textSize), fontSize: \(fontSize), bounds: \(bounds)")
 
         if position == .tiled {
             print("🎨 CorePDF: Drawing tiled watermark with density \(tileDensity)")
-            
-            // Calculate spacing for tiled watermarks based on density
-            let spacingMultiplier = 2.0 + (1.0 - tileDensity) * 3.0 // Higher density = smaller spacing
+
+            // IMPROVED: Density now has much more dramatic effect
+            // At density 1.0: spacing = 0.8x text size (watermarks overlap slightly)
+            // At density 0.0: spacing = 6x text size (very sparse)
+            let spacingMultiplier = 0.8 + (1.0 - tileDensity) * 5.2
             let horizontalSpacing = textSize.width * CGFloat(spacingMultiplier)
-            let verticalSpacing = textSize.height * CGFloat(spacingMultiplier * 2.0)
+            let verticalSpacing = textSize.height * CGFloat(spacingMultiplier * 1.5)
 
             // Prevent excessive tiling that could cause memory issues
             guard horizontalSpacing > 0 && verticalSpacing > 0 else {
@@ -662,26 +670,30 @@ public actor PDFProcessor {
                 return
             }
 
-            // Calculate how many fit, ensuring at least 1 and capping to prevent memory issues
-            let cols = max(1, min(20, Int(ceil(bounds.width / horizontalSpacing)))) // Reduced cap to 20 cols
-            let rows = max(1, min(20, Int(ceil(bounds.height / verticalSpacing)))) // Reduced cap to 20 rows
-            
-            print("🎨 CorePDF: Tiling \(rows) rows x \(cols) cols (spacing: h=\(horizontalSpacing), v=\(verticalSpacing))")
+            // FIXED: Reduced cap to 15 for consistency with image watermarks
+            // 15x15 = 225 max operations per page
+            let cols = max(1, min(15, Int(ceil(bounds.width / horizontalSpacing))))
+            let rows = max(1, min(15, Int(ceil(bounds.height / verticalSpacing))))
+
+            print("🎨 CorePDF: Tiling \(rows) rows x \(cols) cols")
 
             for row in 0..<rows {
-                for col in 0..<cols {
-                    let x = bounds.minX + CGFloat(col) * horizontalSpacing + textSize.width * 0.5
-                    let y = bounds.minY + CGFloat(row) * verticalSpacing + textSize.height * 0.5
-                    (text as NSString).draw(at: CGPoint(x: x, y: y), withAttributes: attributes)
+                // Use autoreleasepool for each row to manage memory
+                autoreleasepool {
+                    for col in 0..<cols {
+                        let x = bounds.minX + CGFloat(col) * horizontalSpacing + textSize.width * 0.5
+                        let y = bounds.minY + CGFloat(row) * verticalSpacing + textSize.height * 0.5
+                        (text as NSString).draw(at: CGPoint(x: x, y: y), withAttributes: attributes)
+                    }
                 }
             }
-            
-            print("🎨 CorePDF: Completed tiled watermark")
+
+            print("✅ CorePDF: Completed tiled text watermark")
         } else {
             print("🎨 CorePDF: Drawing single position watermark at \(position)")
             let point = positionForWatermark(textSize, in: bounds, position: position)
             (text as NSString).draw(at: point, withAttributes: attributes)
-            print("🎨 CorePDF: Completed single watermark")
+            print("✅ CorePDF: Completed single watermark")
         }
     }
 
@@ -691,36 +703,55 @@ public actor PDFProcessor {
             print("⚠️ CorePDF: Invalid image dimensions for watermark")
             return
         }
-        
+
+        print("🎨 CorePDF: Drawing image watermark with size: \(size), density: \(tileDensity)")
+
         let aspectRatio = image.size.height / image.size.width
+
+        // IMPROVED: Size now has much more dramatic effect
+        // At size 0.0: 5% of page width (small logo)
+        // At size 1.0: 50% of page width (large watermark)
+        let effectiveSize = 0.05 + size * 0.45
         let watermarkSize = CGSize(
-            width: bounds.width * CGFloat(size),
-            height: bounds.width * CGFloat(size) * aspectRatio
+            width: bounds.width * CGFloat(effectiveSize),
+            height: bounds.width * CGFloat(effectiveSize) * aspectRatio
         )
 
+        print("🎨 CorePDF: Watermark size: \(watermarkSize), effectiveSize: \(effectiveSize)")
+
         if position == .tiled {
-            // Calculate spacing for tiled images based on density
-            let spacingMultiplier = 1.0 + (1.0 - tileDensity) * 2.0 // Higher density = smaller spacing
+            // IMPROVED: Density now has much more dramatic effect
+            // At density 1.0: spacing = 0.6x size (watermarks overlap significantly)
+            // At density 0.0: spacing = 5x size (very sparse)
+            let spacingMultiplier = 0.6 + (1.0 - tileDensity) * 4.4
             let horizontalSpacing = watermarkSize.width * CGFloat(spacingMultiplier)
             let verticalSpacing = watermarkSize.height * CGFloat(spacingMultiplier)
-            
+
             // Prevent excessive tiling that could cause memory issues
             guard horizontalSpacing > 0 && verticalSpacing > 0 else {
                 print("⚠️ CorePDF: Invalid spacing for tiled watermark")
                 return
             }
-            
-            let rows = max(1, min(50, Int(bounds.height / verticalSpacing) + 1)) // Cap at 50 rows
-            let cols = max(1, min(50, Int(bounds.width / horizontalSpacing) + 1)) // Cap at 50 cols
+
+            // FIXED: Reduced from 50 to 15 to prevent memory issues and freezing
+            // 15x15 = 225 max operations per page (vs 2500 before)
+            let rows = max(1, min(15, Int(bounds.height / verticalSpacing) + 1))
+            let cols = max(1, min(15, Int(bounds.width / horizontalSpacing) + 1))
+
+            print("🎨 CorePDF: Drawing tiled image watermark - \(rows) rows x \(cols) cols")
 
             for row in 0..<rows {
-                for col in 0..<cols {
-                    let x = bounds.minX + CGFloat(col) * horizontalSpacing
-                    let y = bounds.minY + CGFloat(row) * verticalSpacing
-                    let rect = CGRect(origin: CGPoint(x: x, y: y), size: watermarkSize)
-                    image.draw(in: rect)
+                // Use autoreleasepool for each row to manage memory
+                autoreleasepool {
+                    for col in 0..<cols {
+                        let x = bounds.minX + CGFloat(col) * horizontalSpacing
+                        let y = bounds.minY + CGFloat(row) * verticalSpacing
+                        let rect = CGRect(origin: CGPoint(x: x, y: y), size: watermarkSize)
+                        image.draw(in: rect)
+                    }
                 }
             }
+            print("✅ CorePDF: Completed tiled image watermark")
         } else {
             let origin = positionForWatermark(watermarkSize, in: bounds, position: position)
             let rect = CGRect(origin: origin, size: watermarkSize)
@@ -1283,44 +1314,89 @@ public actor PDFProcessor {
         redactionColor: UIColor = .black,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
-        
+
+        print("🔵 CorePDF.redactPDF: Starting with \(redactionItems.count) items")
+        print("🔵 CorePDF.redactPDF: Input PDF: \(pdfURL.path)")
+        print("🔵 CorePDF.redactPDF: Redaction items: \(redactionItems)")
+
         guard let sourcePDF = PDFDocument(url: pdfURL) else {
+            print("❌ CorePDF.redactPDF: Failed to load source PDF")
             throw PDFError.invalidPDF(pdfURL.lastPathComponent)
         }
-        
+
         let outputURL = temporaryOutputURL(prefix: "redacted")
         let pageCount = sourcePDF.pageCount
-        
+
+        print("🔵 CorePDF.redactPDF: Output URL: \(outputURL.path)")
+        print("🔵 CorePDF.redactPDF: Processing \(pageCount) pages")
+
         UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
-        defer { UIGraphicsEndPDFContext() }
-        
+        // NOTE: Do NOT use defer here - we need to close context BEFORE file verification
+
         for pageIndex in 0..<pageCount {
             guard let page = sourcePDF.page(at: pageIndex) else { continue }
-            
+
             let pageBounds = page.bounds(for: .mediaBox)
             UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
-            
+
             guard let context = UIGraphicsGetCurrentContext() else { continue }
-            
+
             // Draw original page
             context.saveGState()
             context.translateBy(x: 0, y: pageBounds.size.height)
             context.scaleBy(x: 1.0, y: -1.0)
             page.draw(with: .mediaBox, to: context)
             context.restoreGState()
-            
+
             // Apply redactions
             if let pageText = page.string {
+                print("🔵 CorePDF.redactPDF: Page \(pageIndex + 1) has text, applying \(redactionItems.count) redactions")
                 for redactionItem in redactionItems {
                     if !redactionItem.isEmpty {
                         drawRedactionBoxes(for: redactionItem, in: pageText, pageBounds: pageBounds, context: context, redactionColor: redactionColor)
                     }
                 }
+            } else {
+                print("⚠️ CorePDF.redactPDF: Page \(pageIndex + 1) has no text (image-based)")
             }
-            
+
             progressHandler(Double(pageIndex + 1) / Double(pageCount))
         }
-        
+
+        // CRITICAL: Close PDF context BEFORE file verification
+        // This ensures the file is fully written to disk before we check/return it
+        UIGraphicsEndPDFContext()
+        print("🔵 CorePDF.redactPDF: PDF context closed")
+
+        // Verify output file was created
+        let fileExists = FileManager.default.fileExists(atPath: outputURL.path)
+        print("🔵 CorePDF.redactPDF: Output file exists: \(fileExists)")
+
+        guard fileExists else {
+            print("❌ CorePDF.redactPDF: Output file was not created!")
+            throw PDFError.writeFailed
+        }
+
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: outputURL.path) {
+            let fileSize = attrs[.size] ?? 0
+            print("🔵 CorePDF.redactPDF: Output file size: \(fileSize) bytes")
+
+            // Verify file is not empty
+            if fileSize as! Int64 == 0 {
+                print("❌ CorePDF.redactPDF: Output file is empty!")
+                try? FileManager.default.removeItem(at: outputURL)
+                throw PDFError.writeFailed
+            }
+        }
+
+        // Verify it's a valid PDF
+        guard let createdPDF = PDFDocument(url: outputURL), createdPDF.pageCount > 0 else {
+            print("❌ CorePDF.redactPDF: Created file is not a valid PDF")
+            try? FileManager.default.removeItem(at: outputURL)
+            throw PDFError.writeFailed
+        }
+
+        print("✅ CorePDF.redactPDF: Successfully created redacted PDF with \(createdPDF.pageCount) pages")
         return outputURL
     }
     
@@ -1384,10 +1460,10 @@ public actor PDFProcessor {
         
         let outputURL = temporaryOutputURL(prefix: "form_filled")
         let pageCount = sourcePDF.pageCount
-        
+
         UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
-        defer { UIGraphicsEndPDFContext() }
-        
+        // NOTE: Do NOT use defer here - context must close BEFORE returning
+
         for pageIndex in 0..<pageCount {
             guard let page = sourcePDF.page(at: pageIndex) else { continue }
             
@@ -1405,10 +1481,13 @@ public actor PDFProcessor {
             
             // Apply form data and stamps (simplified implementation)
             // In a full implementation, this would use form field coordinates and proper rendering
-            
+
             progressHandler(Double(pageIndex + 1) / Double(pageCount))
         }
-        
+
+        // Close PDF context before returning
+        UIGraphicsEndPDFContext()
+
         return outputURL
     }
 

@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import JobEngine
 
 struct ContentView: View {
     @EnvironmentObject var coordinator: AppCoordinator

@@ -94,6 +94,15 @@ public enum JobStatus: String, Codable {
     case failed
 }
 
+// MARK: - Workflow Redaction Preset
+public enum WorkflowRedactionPreset: String, Codable, CaseIterable {
+    case legal      // SSN, dates, names, addresses, case numbers
+    case finance    // Account numbers, amounts, SSN
+    case hr         // SSN, DOB, salary, addresses
+    case medical    // PHI, patient IDs, dates (HIPAA)
+    case custom     // User-defined patterns
+}
+
 // MARK: - Job Settings
 public struct JobSettings {
     // PDF Settings
@@ -139,6 +148,19 @@ public struct JobSettings {
     public var redactionItems: [String] = [] // Text patterns to redact
     public var redactionMode: String = "automatic" // automatic, manual, combined
     public var redactionColor: String = "#000000" // Color of redaction boxes
+    public var redactionPreset: WorkflowRedactionPreset = .custom // For workflow automation
+
+    // Page Numbering / Bates Stamping Settings
+    public var isPageNumbering: Bool = false
+    public var batesPrefix: String?
+    public var batesStartNumber: Int = 1
+
+    // Date Stamp Settings
+    public var isDateStamp: Bool = false
+
+    // Form Flattening Settings
+    public var flattenFormFields: Bool = false
+    public var flattenAnnotations: Bool = false
     
     // Privacy Settings
     public var enableSecureVault: Bool = false
@@ -162,7 +184,10 @@ extension JobSettings: Codable {
         case watermarkText, watermarkPosition, watermarkOpacity, watermarkSize, watermarkTileDensity
         case splitRanges, selectAllPages
         case signatureText, signatureImageData, signaturePosition, signatureCustomPosition, signaturePageIndex, signatureOpacity, signatureSize
-        case redactionItems, redactionMode, redactionColor
+        case redactionItems, redactionMode, redactionColor, redactionPreset
+        case isPageNumbering, batesPrefix, batesStartNumber
+        case isDateStamp
+        case flattenFormFields, flattenAnnotations
         case enableSecureVault, enableZeroTrace, enableBiometricLock, enableStealthMode
         case enableDocumentSanitization, enableEncryption, encryptionPassword, complianceMode
     }
@@ -215,6 +240,16 @@ extension JobSettings: Codable {
         redactionItems = try container.decodeIfPresent([String].self, forKey: .redactionItems) ?? []
         redactionMode = try container.decodeIfPresent(String.self, forKey: .redactionMode) ?? "automatic"
         redactionColor = try container.decodeIfPresent(String.self, forKey: .redactionColor) ?? "#000000"
+        redactionPreset = try container.decodeIfPresent(WorkflowRedactionPreset.self, forKey: .redactionPreset) ?? .custom
+
+        isPageNumbering = try container.decodeIfPresent(Bool.self, forKey: .isPageNumbering) ?? false
+        batesPrefix = try container.decodeIfPresent(String.self, forKey: .batesPrefix)
+        batesStartNumber = try container.decodeIfPresent(Int.self, forKey: .batesStartNumber) ?? 1
+
+        isDateStamp = try container.decodeIfPresent(Bool.self, forKey: .isDateStamp) ?? false
+
+        flattenFormFields = try container.decodeIfPresent(Bool.self, forKey: .flattenFormFields) ?? false
+        flattenAnnotations = try container.decodeIfPresent(Bool.self, forKey: .flattenAnnotations) ?? false
         
         enableSecureVault = try container.decodeIfPresent(Bool.self, forKey: .enableSecureVault) ?? false
         enableZeroTrace = try container.decodeIfPresent(Bool.self, forKey: .enableZeroTrace) ?? false
@@ -271,7 +306,17 @@ extension JobSettings: Codable {
         try container.encode(redactionItems, forKey: .redactionItems)
         try container.encode(redactionMode, forKey: .redactionMode)
         try container.encode(redactionColor, forKey: .redactionColor)
-        
+        try container.encode(redactionPreset, forKey: .redactionPreset)
+
+        try container.encode(isPageNumbering, forKey: .isPageNumbering)
+        try container.encodeIfPresent(batesPrefix, forKey: .batesPrefix)
+        try container.encode(batesStartNumber, forKey: .batesStartNumber)
+
+        try container.encode(isDateStamp, forKey: .isDateStamp)
+
+        try container.encode(flattenFormFields, forKey: .flattenFormFields)
+        try container.encode(flattenAnnotations, forKey: .flattenAnnotations)
+
         try container.encode(enableSecureVault, forKey: .enableSecureVault)
         try container.encode(enableZeroTrace, forKey: .enableZeroTrace)
         try container.encode(enableBiometricLock, forKey: .enableBiometricLock)
@@ -422,11 +467,15 @@ public class JobManager: ObservableObject {
                 }
             )
 
+            // Save output files to Documents/Exports for persistence
+            // Files in temp directory get cleaned up by iOS automatically
+            let persistedURLs = saveOutputFilesToDocuments(outputURLs, jobType: job.type)
+
             jobs[index].status = .success
             jobs[index].progress = 1.0
-            jobs[index].outputURLs = outputURLs
+            jobs[index].outputURLs = persistedURLs
             jobs[index].completedAt = Date()
-            
+
             // Clean up secure files if secure vault was enabled
             if job.settings.enableSecureVault {
                 privacyDelegate?.performSecureFilesCleanup()
@@ -489,6 +538,75 @@ public class JobManager: ObservableObject {
     private func processNextPendingJob() async {
         guard let nextJob = jobs.first(where: { $0.status == .pending }) else { return }
         await processJob(nextJob)
+    }
+
+    /// Saves output files from temp directory to Documents/Exports for persistence
+    /// Files in temp directory get cleaned up by iOS, so we need to copy them
+    private func saveOutputFilesToDocuments(_ tempURLs: [URL], jobType: JobType) -> [URL] {
+        let fileManager = FileManager.default
+
+        guard let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("❌ JobEngine: Could not get Documents directory")
+            return tempURLs
+        }
+
+        let exportsURL = documentsURL.appendingPathComponent("Exports", isDirectory: true)
+
+        // Create Exports directory if it doesn't exist
+        do {
+            try fileManager.createDirectory(at: exportsURL, withIntermediateDirectories: true, attributes: nil)
+        } catch {
+            print("❌ JobEngine: Failed to create Exports directory: \(error)")
+            return tempURLs
+        }
+
+        var persistedURLs: [URL] = []
+
+        for tempURL in tempURLs {
+            // Check if file exists
+            guard fileManager.fileExists(atPath: tempURL.path) else {
+                print("⚠️ JobEngine: Temp file doesn't exist: \(tempURL.path)")
+                continue
+            }
+
+            // Skip files that are already in Documents directory
+            if tempURL.path.hasPrefix(documentsURL.path) {
+                print("📁 JobEngine: File already in Documents: \(tempURL.path)")
+                persistedURLs.append(tempURL)
+                continue
+            }
+
+            // Create clean filename with job type and timestamp
+            let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .short)
+                .replacingOccurrences(of: "/", with: "-")
+                .replacingOccurrences(of: ":", with: "-")
+                .replacingOccurrences(of: " ", with: "_")
+                .replacingOccurrences(of: ",", with: "")
+
+            let jobPrefix = jobType.displayName.lowercased().replacingOccurrences(of: " ", with: "_")
+            let ext = tempURL.pathExtension
+            let newFilename = "\(jobPrefix)_\(timestamp).\(ext)"
+            let destinationURL = exportsURL.appendingPathComponent(newFilename)
+
+            do {
+                // Remove existing file if present
+                if fileManager.fileExists(atPath: destinationURL.path) {
+                    try fileManager.removeItem(at: destinationURL)
+                }
+
+                // Copy file to persistent location
+                try fileManager.copyItem(at: tempURL, to: destinationURL)
+                print("✅ JobEngine: Saved file to: \(destinationURL.path)")
+                persistedURLs.append(destinationURL)
+
+            } catch {
+                print("❌ JobEngine: Failed to save file: \(error)")
+                // Fall back to temp URL if copy fails
+                persistedURLs.append(tempURL)
+            }
+        }
+
+        return persistedURLs.isEmpty ? tempURLs : persistedURLs
     }
 }
 

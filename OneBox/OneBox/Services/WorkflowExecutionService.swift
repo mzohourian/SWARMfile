@@ -107,54 +107,115 @@ class WorkflowExecutionService: ObservableObject {
     private func configureJobForStep(_ step: WorkflowStep) -> (JobType, JobSettings) {
         var settings: JobSettings = JobSettings()
         let jobType: JobType
-        
+
         switch step {
         case .organize:
-            // Organization usually requires UI interaction. 
-            // In an automated workflow, this might be a "pass-through" or auto-sort if implemented.
-            // For now, we'll treat it as a no-op or basic merge if multiple files.
-            jobType = .pdfMerge
-            
+            // Use pdfOrganize for proper page organization
+            jobType = .pdfOrganize
+            // In automated workflow, pass through without changes
+            // User should use the interactive organizer for custom ordering
+
         case .compress:
             jobType = .pdfCompress
             settings.compressionQuality = .medium
-            settings.targetSizeMB = nil // Auto
-            
+            settings.targetSizeMB = nil // Auto-optimize
+
         case .watermark:
             jobType = .pdfWatermark
-            settings.watermarkText = "CONFIDENTIAL"
-            settings.watermarkPosition = .center
-            settings.watermarkOpacity = 0.3
-            
+            // Use configurable watermark text from step config
+            settings.watermarkText = stepConfig?.watermarkText ?? "PROCESSED"
+            settings.watermarkPosition = stepConfig?.watermarkPosition ?? .center
+            settings.watermarkOpacity = stepConfig?.watermarkOpacity ?? 0.3
+
         case .sign:
             jobType = .pdfSign
-            // In automated flow, we can't easily prompt for signature.
-            // We'll skip actual signing or use a placeholder if configured.
-            // Ideally, we'd have a stored signature profile.
-            // For this implementation, we'll assume a text signature.
-            settings.signatureText = "Digitally Processed"
-            settings.signaturePosition = .bottomRight
-            
+            // Use saved signature if available, otherwise use date stamp
+            settings.signatureText = stepConfig?.signatureText ?? "Signed: \(DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short))"
+            settings.signaturePosition = stepConfig?.signaturePosition ?? .bottomRight
+
         case .merge:
             jobType = .pdfMerge
-            
+
         case .split:
             jobType = .pdfSplit
-            // Split requires ranges. Default to splitting all pages? 
-            // Or maybe this step shouldn't be in a linear auto-workflow without config.
-            // Let's default to no-op (pass through) or specific behavior?
-            // Actually, split produces multiple files. Subsequent steps need to handle multiple files.
-            // Our JobEngine handles [URL] inputs, so it's fine.
-            // Default: Split into single pages
-            settings.splitRanges = [] // Empty implies all pages
-            
+            // Default: split into individual pages
+            settings.splitRanges = stepConfig?.splitRanges ?? []
+
         case .imagesToPDF:
             jobType = .imagesToPDF
             settings.pageSize = .a4
+
+        case .redact:
+            jobType = .pdfRedact
+            // Use automatic redaction with legal preset by default
+            settings.redactionPreset = stepConfig?.redactionPreset ?? .legal
+            settings.stripMetadata = true
+            settings.enableDocumentSanitization = true
+
+        case .addPageNumbers:
+            // Page numbering uses watermark job type with special configuration
+            jobType = .pdfWatermark
+            settings.watermarkText = stepConfig?.pageNumberFormat ?? "Page {page} of {total}"
+            settings.watermarkPosition = .bottomCenter
+            settings.watermarkOpacity = 1.0
+            settings.isPageNumbering = true
+            // For Bates numbering in legal workflows
+            settings.batesPrefix = stepConfig?.batesPrefix
+            settings.batesStartNumber = stepConfig?.batesStartNumber ?? 1
+
+        case .addDateStamp:
+            // Date stamp uses watermark job type with date text
+            jobType = .pdfWatermark
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateStyle = .long
+            dateFormatter.timeStyle = .short
+            settings.watermarkText = "Processed: \(dateFormatter.string(from: Date()))"
+            settings.watermarkPosition = stepConfig?.dateStampPosition ?? .topRight
+            settings.watermarkOpacity = 0.8
+            settings.isDateStamp = true
+
+        case .flatten:
+            // Flatten uses fillForm job type with flatten option
+            jobType = .fillForm
+            settings.flattenFormFields = true
+            settings.flattenAnnotations = true
         }
-        
+
         return (jobType, settings)
     }
+
+    // Step configuration passed from workflow template
+    private var stepConfig: StepConfiguration?
+
+    func setStepConfiguration(_ config: StepConfiguration?) {
+        self.stepConfig = config
+    }
+}
+
+// MARK: - Step Configuration
+struct StepConfiguration {
+    // Watermark settings
+    var watermarkText: String?
+    var watermarkPosition: WatermarkPosition?
+    var watermarkOpacity: Double?
+
+    // Signature settings
+    var signatureText: String?
+    var signaturePosition: WatermarkPosition?
+
+    // Split settings
+    var splitRanges: [[Int]]?
+
+    // Redaction settings
+    var redactionPreset: WorkflowRedactionPreset?
+
+    // Page numbering settings
+    var pageNumberFormat: String?
+    var batesPrefix: String?
+    var batesStartNumber: Int?
+
+    // Date stamp settings
+    var dateStampPosition: WatermarkPosition?
 }
 
 enum WorkflowError: LocalizedError {

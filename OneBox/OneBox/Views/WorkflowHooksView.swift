@@ -213,25 +213,30 @@ struct WorkflowHooksView: View {
         // Save workflow to UserDefaults (on-device only)
         let defaults = UserDefaults.standard
         var savedWorkflows: [CustomWorkflowData] = []
-        
+
         if let data = defaults.data(forKey: "saved_custom_workflows"),
            let decoded = try? JSONDecoder().decode([CustomWorkflowData].self, from: data) {
             savedWorkflows = decoded
         }
-        
+
+        // Convert workflow steps to configured steps with default configurations
+        let configuredSteps = workflowSteps.map { step in
+            ConfiguredStepData(step: step, config: WorkflowStepConfig.defaultConfig(for: step))
+        }
+
         let newWorkflow = CustomWorkflowData(
             id: UUID(),
             name: workflowName.isEmpty ? "Workflow from \(tool.displayName)" : workflowName,
-            steps: workflowSteps,
+            configuredSteps: configuredSteps,
             lastUsed: Date()
         )
-        
+
         savedWorkflows.append(newWorkflow)
-        
+
         if let encoded = try? JSONEncoder().encode(savedWorkflows) {
             defaults.set(encoded, forKey: "saved_custom_workflows")
         }
-        
+
         HapticManager.shared.notification(.success)
         dismiss()
     }

@@ -204,26 +204,33 @@ class WorkflowExecutionService: ObservableObject {
             // Use saved signature position
             settings.signaturePosition = WatermarkPosition(rawValue: config.signaturePosition) ?? .bottomRight
 
-            // Priority: saved signature image > custom text > auto-generated text
+            // Priority: drawn signature > saved signature > custom text > auto-generated text
             var hasSignature = false
 
-            // Try to use saved signature image first
-            if config.useStoredSignature {
+            // First: Check for signature drawn in workflow config
+            if let drawnSignature = config.drawnSignatureData {
+                settings.signatureImageData = drawnSignature
+                hasSignature = true
+                print("Workflow: Using drawn signature from workflow config")
+            }
+
+            // Second: Try saved signature from Settings
+            if !hasSignature && config.useStoredSignature {
                 if let signatureData = SignatureManager.shared.getSavedSignatureImage() {
                     settings.signatureImageData = signatureData
                     hasSignature = true
-                    print("Workflow: Using saved signature image")
+                    print("Workflow: Using saved signature from Settings")
                 }
             }
 
-            // If no saved signature, try custom text
+            // Third: Use custom text
             if !hasSignature && !config.signatureText.isEmpty {
                 settings.signatureText = config.signatureText
                 hasSignature = true
                 print("Workflow: Using custom signature text: \(config.signatureText)")
             }
 
-            // Always ensure a fallback signature text exists
+            // Fallback: Auto-generated text
             if !hasSignature {
                 let dateStr = DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short)
                 settings.signatureText = "Signed: \(dateStr)"
@@ -264,11 +271,11 @@ class WorkflowExecutionService: ObservableObject {
         case .addDateStamp:
             jobType = .pdfWatermark
             let dateFormatter = DateFormatter()
-            dateFormatter.dateStyle = .long
-            dateFormatter.timeStyle = .short
-            settings.watermarkText = "Processed: \(dateFormatter.string(from: Date()))"
+            dateFormatter.dateStyle = .medium
+            dateFormatter.timeStyle = .none
+            settings.watermarkText = dateFormatter.string(from: Date())
             settings.watermarkPosition = WatermarkPosition(rawValue: config.dateStampPosition) ?? .topRight
-            settings.watermarkOpacity = 0.8
+            settings.watermarkOpacity = 0.7
             settings.isDateStamp = true
 
         case .flatten:

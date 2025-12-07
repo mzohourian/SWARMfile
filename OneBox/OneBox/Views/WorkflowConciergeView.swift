@@ -1309,6 +1309,7 @@ struct WorkflowStepConfig: Codable {
     var signaturePosition: String = "bottomRight"
     var useStoredSignature: Bool = true // Use user's saved signature
     var signatureText: String = "" // Fallback text if no saved signature
+    var drawnSignatureData: Data? = nil // Signature drawn in workflow config
 
     // Page numbers settings
     var pageNumberPosition: String = "bottomCenter"
@@ -1357,6 +1358,8 @@ struct StepConfigurationView: View {
     let onSave: () -> Void
     let onCancel: () -> Void
 
+    @State private var showingSignatureCanvas = false
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -1383,6 +1386,15 @@ struct StepConfigurationView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Add Step") { onSave() }
                         .foregroundColor(OneBoxColors.primaryGold)
+                }
+            }
+            .sheet(isPresented: $showingSignatureCanvas) {
+                EnhancedSignatureCanvasView(signatureData: $config.drawnSignatureData) { data in
+                    if let data = data {
+                        config.drawnSignatureData = data
+                        config.useStoredSignature = false // Use drawn signature instead
+                    }
+                    showingSignatureCanvas = false
                 }
             }
         }
@@ -1423,8 +1435,31 @@ struct StepConfigurationView: View {
             dateStampOptions
         case .redact:
             redactOptions
+        case .organize:
+            organizeInfo
         default:
             simpleStepInfo
+        }
+    }
+
+    private var organizeInfo: some View {
+        OneBoxCard(style: .standard) {
+            VStack(spacing: OneBoxSpacing.medium) {
+                Image(systemName: "square.grid.2x2")
+                    .font(.system(size: 48))
+                    .foregroundColor(OneBoxColors.warningAmber)
+
+                Text("Interactive Step")
+                    .font(OneBoxTypography.cardTitle)
+                    .foregroundColor(OneBoxColors.primaryText)
+
+                Text("Page organization requires the interactive organizer.\n\nIn a workflow, this step will open the Page Organizer where you can reorder, rotate, or delete pages before continuing.")
+                    .font(OneBoxTypography.caption)
+                    .foregroundColor(OneBoxColors.secondaryText)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(OneBoxSpacing.large)
         }
     }
 
@@ -1535,37 +1570,74 @@ struct StepConfigurationView: View {
 
     private var signOptions: some View {
         VStack(spacing: OneBoxSpacing.medium) {
+            // Draw signature option
             OneBoxCard(style: .standard) {
                 VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
-                    Toggle(isOn: $config.useStoredSignature) {
-                        VStack(alignment: .leading) {
-                            Text("Use Saved Signature")
-                                .foregroundColor(OneBoxColors.primaryText)
-                            Text("Use your signature from Settings")
-                                .font(OneBoxTypography.micro)
-                                .foregroundColor(OneBoxColors.secondaryText)
+                    Text("Signature")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.secondaryText)
+
+                    Button(action: { showingSignatureCanvas = true }) {
+                        HStack {
+                            Image(systemName: config.drawnSignatureData != nil ? "checkmark.circle.fill" : "pencil.tip.crop.circle")
+                                .font(.system(size: 24))
+                                .foregroundColor(config.drawnSignatureData != nil ? OneBoxColors.secureGreen : OneBoxColors.primaryGold)
+
+                            VStack(alignment: .leading) {
+                                Text(config.drawnSignatureData != nil ? "Signature Drawn" : "Draw Your Signature")
+                                    .font(OneBoxTypography.body)
+                                    .foregroundColor(OneBoxColors.primaryText)
+                                Text(config.drawnSignatureData != nil ? "Tap to redraw" : "Tap to open signature canvas")
+                                    .font(OneBoxTypography.micro)
+                                    .foregroundColor(OneBoxColors.secondaryText)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(OneBoxColors.tertiaryText)
                         }
+                        .padding(OneBoxSpacing.small)
                     }
-                    .tint(OneBoxColors.primaryGold)
                 }
             }
 
-            if !config.useStoredSignature {
+            // Or use saved signature
+            if config.drawnSignatureData == nil {
                 OneBoxCard(style: .standard) {
                     VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
-                        Text("Signature Text")
-                            .font(OneBoxTypography.caption)
-                            .foregroundColor(OneBoxColors.secondaryText)
-                        TextField("Enter signature text", text: $config.signatureText)
-                            .font(OneBoxTypography.body)
-                            .foregroundColor(OneBoxColors.primaryText)
-                            .padding(OneBoxSpacing.small)
-                            .background(OneBoxColors.surfaceGraphite.opacity(0.3))
-                            .cornerRadius(OneBoxRadius.small)
+                        Toggle(isOn: $config.useStoredSignature) {
+                            VStack(alignment: .leading) {
+                                Text("Use Saved Signature")
+                                    .foregroundColor(OneBoxColors.primaryText)
+                                Text("Use your signature from Settings (if available)")
+                                    .font(OneBoxTypography.micro)
+                                    .foregroundColor(OneBoxColors.secondaryText)
+                            }
+                        }
+                        .tint(OneBoxColors.primaryGold)
+                    }
+                }
+
+                // Text fallback
+                if !config.useStoredSignature {
+                    OneBoxCard(style: .standard) {
+                        VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
+                            Text("Signature Text (Fallback)")
+                                .font(OneBoxTypography.caption)
+                                .foregroundColor(OneBoxColors.secondaryText)
+                            TextField("Enter signature text", text: $config.signatureText)
+                                .font(OneBoxTypography.body)
+                                .foregroundColor(OneBoxColors.primaryText)
+                                .padding(OneBoxSpacing.small)
+                                .background(OneBoxColors.surfaceGraphite.opacity(0.3))
+                                .cornerRadius(OneBoxRadius.small)
+                        }
                     }
                 }
             }
 
+            // Position
             OneBoxCard(style: .standard) {
                 VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
                     Text("Position")

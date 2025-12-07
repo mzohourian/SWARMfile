@@ -635,10 +635,14 @@ actor JobProcessor {
         case .pdfSign:
             return try await processPDFSign(job: job, progressHandler: progressHandler)
         case .pdfOrganize:
-            // Page Organizer is handled through interactive UI (PageOrganizerView)
-            // Jobs are created after user completes organization, already processed
-            // This case should not normally be reached through standard job flow
-            return job.outputURLs
+            // Page Organizer is normally handled through interactive UI (PageOrganizerView)
+            // In automated workflows, just pass through the input files unchanged
+            // since page organization requires user interaction
+            progressHandler(1.0)
+            if !job.outputURLs.isEmpty {
+                return job.outputURLs // Use existing outputs if available (from interactive UI)
+            }
+            return job.inputs // Pass through inputs for automated workflow
         case .fillForm:
             return try await processFormFilling(job: job, progressHandler: progressHandler)
         case .imageResize:

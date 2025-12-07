@@ -483,8 +483,12 @@ struct WorkflowConciergeView: View {
     
     private func analyzePattern(_ jobs: ArraySlice<Job>, firstType: JobType, secondType: JobType) -> Bool {
         let jobArray = Array(jobs)
+
+        // Need at least 2 jobs to analyze patterns
+        guard jobArray.count >= 2 else { return false }
+
         var patternCount = 0
-        
+
         for i in 0..<(jobArray.count - 1) {
             if jobArray[i].type == firstType && jobArray[i + 1].type == secondType {
                 let timeDiff = jobArray[i + 1].createdAt.timeIntervalSince(jobArray[i].createdAt)

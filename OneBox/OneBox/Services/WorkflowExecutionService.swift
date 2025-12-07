@@ -10,20 +10,25 @@ import JobEngine
 import CommonTypes
 import UIKit // For UIImage if needed
 
+// Import the ConfiguredStepData and WorkflowStepConfig types
+// These are defined in WorkflowConciergeView.swift
+
 @MainActor
 class WorkflowExecutionService: ObservableObject {
     static let shared = WorkflowExecutionService()
-    
+
     @Published var currentWorkflowId: UUID?
     @Published var currentStepIndex: Int = 0
     @Published var totalSteps: Int = 0
     @Published var isRunning = false
     @Published var error: String?
-    
+
     private init() {}
-    
-    func executeWorkflow(
-        template: WorkflowTemplate,
+
+    /// Execute a workflow with user-configured step settings
+    func executeConfiguredWorkflow(
+        name: String,
+        configuredSteps: [ConfiguredStepData],
         inputURLs: [URL],
         jobManager: JobManager
     ) async {
@@ -31,10 +36,15 @@ class WorkflowExecutionService: ObservableObject {
             self.error = "No input files provided"
             return
         }
-        
+
+        guard !configuredSteps.isEmpty else {
+            self.error = "No workflow steps configured"
+            return
+        }
+
         isRunning = true
         currentWorkflowId = UUID()
-        totalSteps = template.steps.count
+        totalSteps = configuredSteps.count
         currentStepIndex = 0
         error = nil
 
@@ -43,14 +53,12 @@ class WorkflowExecutionService: ObservableObject {
         try? FileManager.default.createDirectory(at: workflowDir, withIntermediateDirectories: true)
 
         // Copy security-scoped input files to temp directory for reliable access
-        // This ensures files remain accessible across actor boundaries
         var currentInputs: [URL] = []
         for inputURL in inputURLs {
             let fileName = inputURL.lastPathComponent
             let tempURL = workflowDir.appendingPathComponent(fileName)
 
             do {
-                // Remove existing file if present
                 if FileManager.default.fileExists(atPath: tempURL.path) {
                     try FileManager.default.removeItem(at: tempURL)
                 }
@@ -59,7 +67,6 @@ class WorkflowExecutionService: ObservableObject {
                 print("Workflow: Copied input file to: \(tempURL.path)")
             } catch {
                 print("Workflow: Failed to copy input file \(inputURL.lastPathComponent): \(error.localizedDescription)")
-                // Try to use original URL as fallback
                 if FileManager.default.fileExists(atPath: inputURL.path) {
                     currentInputs.append(inputURL)
                 }
@@ -72,54 +79,66 @@ class WorkflowExecutionService: ObservableObject {
             currentWorkflowId = nil
             return
         }
-        
-        do {
-            for (index, step) in template.steps.enumerated() {
-                currentStepIndex = index
-                print("Workflow: Executing step \(index + 1)/\(template.steps.count): \(step.title)")
 
-                // 0. Verify input files exist before processing
-                let validInputs = currentInputs.filter { url in
-                    FileManager.default.fileExists(atPath: url.path)
-                }
+        do {
+            for (index, configuredStep) in configuredSteps.enumerated() {
+                currentStepIndex = index
+                print("Workflow: Executing step \(index + 1)/\(configuredSteps.count): \(configuredStep.step.title)")
+
+                // Verify input files exist
+                let validInputs = currentInputs.filter { FileManager.default.fileExists(atPath: $0.path) }
 
                 if validInputs.isEmpty {
                     print("Workflow: No valid input files for step \(index + 1)")
-                    print("Workflow: Attempted inputs: \(currentInputs)")
-                    throw WorkflowError.stepFailed("No valid input files available for \(step.title)")
+                    throw WorkflowError.stepFailed("No valid input files available for \(configuredStep.step.title)")
                 }
 
                 print("Workflow: Processing \(validInputs.count) file(s)")
 
-                // 1. Determine Job Type & Settings
-                let (jobType, settings) = configureJobForStep(step)
+                // Configure job using user's saved settings
+                let (jobType, settings) = configureJobWithUserSettings(
+                    step: configuredStep.step,
+                    config: configuredStep.config
+                )
 
-                // 2. Create Job with validated inputs
                 let job = Job(
                     type: jobType,
                     inputs: validInputs,
                     settings: settings
                 )
 
-                // 3. Submit to JobManager
                 await jobManager.submitJob(job)
-
-                // 4. Wait for completion
                 let outputURLs = try await waitForJobCompletion(jobId: job.id, jobManager: jobManager)
-
-                // 5. Update inputs for next step
                 currentInputs = outputURLs
             }
-            
+
             print("Workflow: Completed successfully. Final outputs: \(currentInputs)")
-            
+
         } catch {
             print("Workflow: Failed with error: \(error.localizedDescription)")
             self.error = error.localizedDescription
         }
-        
+
         isRunning = false
         currentWorkflowId = nil
+    }
+
+    /// Legacy method for backwards compatibility
+    func executeWorkflow(
+        template: WorkflowTemplate,
+        inputURLs: [URL],
+        jobManager: JobManager
+    ) async {
+        // Convert to configured steps with defaults and execute
+        let configuredSteps = template.steps.map { step in
+            ConfiguredStepData(step: step, config: WorkflowStepConfig.defaultConfig(for: step))
+        }
+        await executeConfiguredWorkflow(
+            name: template.title,
+            configuredSteps: configuredSteps,
+            inputURLs: inputURLs,
+            jobManager: jobManager
+        )
     }
     
     private func waitForJobCompletion(jobId: UUID, jobManager: JobManager) async throws -> [URL] {
@@ -157,34 +176,44 @@ class WorkflowExecutionService: ObservableObject {
         }
     }
     
-    private func configureJobForStep(_ step: WorkflowStep) -> (JobType, JobSettings) {
-        var settings: JobSettings = JobSettings()
+    /// Configure job settings based on user's saved configuration
+    private func configureJobWithUserSettings(step: WorkflowStep, config: WorkflowStepConfig) -> (JobType, JobSettings) {
+        var settings = JobSettings()
         let jobType: JobType
 
         switch step {
         case .organize:
-            // Use pdfOrganize for proper page organization
+            // Organize step should not be in configured workflows (requires interactive UI)
+            // But handle it gracefully by passing through
             jobType = .pdfOrganize
-            // In automated workflow, pass through without changes
-            // User should use the interactive organizer for custom ordering
 
         case .compress:
             jobType = .pdfCompress
-            settings.compressionQuality = .medium
+            // Convert string to enum
+            settings.compressionQuality = CompressionQuality(rawValue: config.compressionQuality) ?? .medium
             settings.targetSizeMB = nil // Auto-optimize
 
         case .watermark:
             jobType = .pdfWatermark
-            // Use configurable watermark text from step config
-            settings.watermarkText = stepConfig?.watermarkText ?? "PROCESSED"
-            settings.watermarkPosition = stepConfig?.watermarkPosition ?? .center
-            settings.watermarkOpacity = stepConfig?.watermarkOpacity ?? 0.3
+            settings.watermarkText = config.watermarkText
+            settings.watermarkPosition = WatermarkPosition(rawValue: config.watermarkPosition) ?? .center
+            settings.watermarkOpacity = config.watermarkOpacity
 
         case .sign:
             jobType = .pdfSign
-            // Use saved signature if available, otherwise use date stamp
-            settings.signatureText = stepConfig?.signatureText ?? "Signed: \(DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short))"
-            settings.signaturePosition = stepConfig?.signaturePosition ?? .bottomRight
+            // Use saved signature position
+            settings.signaturePosition = WatermarkPosition(rawValue: config.signaturePosition) ?? .bottomRight
+            // Use signature: stored image > custom text > date stamp
+            if config.useStoredSignature, let signatureData = SignatureManager.shared.getSavedSignatureImage() {
+                // Use stored signature image
+                settings.signatureImageData = signatureData
+            } else if !config.signatureText.isEmpty {
+                // Use custom text
+                settings.signatureText = config.signatureText
+            } else {
+                // Fallback to date stamp
+                settings.signatureText = "Signed: \(DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short))"
+            }
 
         case .merge:
             jobType = .pdfMerge
@@ -192,7 +221,7 @@ class WorkflowExecutionService: ObservableObject {
         case .split:
             jobType = .pdfSplit
             // Default: split into individual pages
-            settings.splitRanges = stepConfig?.splitRanges ?? []
+            settings.splitRanges = []
 
         case .imagesToPDF:
             jobType = .imagesToPDF
@@ -200,35 +229,34 @@ class WorkflowExecutionService: ObservableObject {
 
         case .redact:
             jobType = .pdfRedact
-            // Use automatic redaction with legal preset by default
-            settings.redactionPreset = stepConfig?.redactionPreset ?? .legal
+            // Convert string preset to enum
+            settings.redactionPreset = WorkflowRedactionPreset(rawValue: config.redactionPreset) ?? .legal
             settings.stripMetadata = true
             settings.enableDocumentSanitization = true
 
         case .addPageNumbers:
-            // Page numbering uses watermark job type with special configuration
             jobType = .pdfWatermark
-            settings.watermarkText = stepConfig?.pageNumberFormat ?? "Page {page} of {total}"
-            settings.watermarkPosition = .bottomCenter
+            settings.watermarkText = config.pageNumberFormat
+            settings.watermarkPosition = WatermarkPosition(rawValue: config.pageNumberPosition) ?? .bottomCenter
             settings.watermarkOpacity = 1.0
             settings.isPageNumbering = true
-            // For Bates numbering in legal workflows
-            settings.batesPrefix = stepConfig?.batesPrefix
-            settings.batesStartNumber = stepConfig?.batesStartNumber ?? 1
+            // For Bates numbering
+            if !config.batesPrefix.isEmpty {
+                settings.batesPrefix = config.batesPrefix
+            }
+            settings.batesStartNumber = config.batesStartNumber
 
         case .addDateStamp:
-            // Date stamp uses watermark job type with date text
             jobType = .pdfWatermark
             let dateFormatter = DateFormatter()
             dateFormatter.dateStyle = .long
             dateFormatter.timeStyle = .short
             settings.watermarkText = "Processed: \(dateFormatter.string(from: Date()))"
-            settings.watermarkPosition = stepConfig?.dateStampPosition ?? .topRight
+            settings.watermarkPosition = WatermarkPosition(rawValue: config.dateStampPosition) ?? .topRight
             settings.watermarkOpacity = 0.8
             settings.isDateStamp = true
 
         case .flatten:
-            // Flatten uses fillForm job type with flatten option
             jobType = .fillForm
             settings.flattenFormFields = true
             settings.flattenAnnotations = true
@@ -236,39 +264,6 @@ class WorkflowExecutionService: ObservableObject {
 
         return (jobType, settings)
     }
-
-    // Step configuration passed from workflow template
-    private var stepConfig: StepConfiguration?
-
-    func setStepConfiguration(_ config: StepConfiguration?) {
-        self.stepConfig = config
-    }
-}
-
-// MARK: - Step Configuration
-struct StepConfiguration {
-    // Watermark settings
-    var watermarkText: String?
-    var watermarkPosition: WatermarkPosition?
-    var watermarkOpacity: Double?
-
-    // Signature settings
-    var signatureText: String?
-    var signaturePosition: WatermarkPosition?
-
-    // Split settings
-    var splitRanges: [[Int]]?
-
-    // Redaction settings
-    var redactionPreset: WorkflowRedactionPreset?
-
-    // Page numbering settings
-    var pageNumberFormat: String?
-    var batesPrefix: String?
-    var batesStartNumber: Int?
-
-    // Date stamp settings
-    var dateStampPosition: WatermarkPosition?
 }
 
 enum WorkflowError: LocalizedError {

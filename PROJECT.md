@@ -62,11 +62,11 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **Workflow "Add Step" button not working** - Button set state variable that was never used, and available steps grid was hidden when no steps selected. Fixed by always showing steps grid.
-- **Workflow completing silently** - After workflow ran, no success feedback was shown. Added success alert with "Share Result" option.
-- **Custom workflow not showing after save** - Parent view only loaded workflows onAppear. Added onChange to reload when builder sheet dismisses.
-- **Workflow "Invalid input files" error** - Security-scoped URLs not accessible across actor boundaries. Fixed by copying input files to temp directory before processing.
-- **Workflow slowness** - Reduced polling interval from 500ms to 100ms for job completion, and 200ms to 50ms for UI updates.
+- **Workflow "Configure-Once, Run-Many" redesign** - Major workflow architecture change:
+  - Users now configure each step's settings when creating a workflow
+  - Settings are saved and applied consistently on each run
+  - Removed "Organize" step (requires interactive UI, doesn't fit automated workflow)
+- All previous workflow fixes from earlier sessions remain in place
 
 ---
 
@@ -75,39 +75,44 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-07
 
 **What Was Done:**
-- **Fixed Workflow "Create Custom Workflow" - Add Step button:**
-  1. Removed unused `showingStepPicker` state variable
-  2. Changed layout to always show available steps grid (was hidden when no steps selected)
-  3. Users can now tap any step to add it to their workflow
-- **Fixed Workflow success feedback:**
-  1. Added success alert when workflow completes ("Workflow Complete")
-  2. Added "Share Result" button to share processed files
-  3. Added progress monitoring to show correct step number during execution
-- **Fixed custom workflow not appearing after save:**
-  1. Added onChange handler to reload workflows when builder sheet dismisses
-- **Fixed "Invalid input files" error:**
-  1. Copy security-scoped input files to temp directory before processing
-  2. Added validation that output files exist before passing to next step
-  3. Added validation that input files exist before submitting jobs
-- **Improved workflow speed:**
-  1. Reduced job completion polling from 500ms to 100ms
-  2. Reduced UI update polling from 200ms to 50ms
+- **Redesigned workflow system to "Configure-Once, Run-Many" approach:**
+  1. Created `ConfiguredStepData` and `WorkflowStepConfig` data models
+  2. Added `StepConfigurationView` with configuration UI for each step type:
+     - Compress: Quality selection (low/medium/high/maximum)
+     - Watermark: Text, position, opacity settings
+     - Sign: Position, use saved signature toggle, fallback text
+     - Page Numbers: Position, format, Bates numbering prefix/start
+     - Date Stamp: Position selection
+     - Redact: Preset selection (legal/finance/hr/medical)
+  3. Updated `CustomWorkflowData` with migration support for old format
+  4. Updated `WorkflowBuilderView` to use configured steps
+  5. Added `executeConfiguredWorkflow()` method to execution service
+  6. Removed "Organize" step from available steps (requires interactive UI)
+
+- **Previous session fixes (preserved):**
+  - Fixed Add Step button
+  - Added success feedback with share option
+  - Fixed custom workflow persistence
+  - Fixed file access across actor boundaries
+  - Improved polling speed
 
 **What's Unfinished:**
-- Workflow templates need user testing to verify they run correctly
+- Build not verified (no Xcode in environment) - user should build and test
+- Custom workflows need testing with new configuration UI
 - Redact PDF needs user testing
 
 **Files Modified:**
-- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Fixed Add Step, success feedback, reload on dismiss
-- `OneBox/OneBox/Services/WorkflowExecutionService.swift` - Fixed file access, added validation, improved speed
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Major restructure for configured steps
+- `OneBox/OneBox/Services/WorkflowExecutionService.swift` - New executeConfiguredWorkflow method
 
 ---
 
 ## Next Steps (Priority Order)
 
-1. **Test Redact PDF** - Verify file saving/sharing now works correctly
-2. Test all features end-to-end
-3. Address Swift 6 warnings (optional, non-blocking)
+1. **Build and test in Xcode** - Verify all changes compile
+2. **Test new workflow configuration UI** - Create a custom workflow and verify settings are applied
+3. **Test Redact PDF** - Verify file saving/sharing now works correctly
+4. Address Swift 6 warnings (optional, non-blocking)
 
 ---
 

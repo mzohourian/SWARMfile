@@ -22,6 +22,7 @@ struct WorkflowConciergeView: View {
     // Workflow Execution
     @State private var showingFilePicker = false
     @State private var activeTemplate: WorkflowTemplate?
+    @State private var activeConfiguredSteps: [ConfiguredStepData] = [] // Stores step configs for execution
     @State private var isWorkflowRunning = false
     @State private var workflowError: String?
     @State private var currentStepIndex = 0
@@ -446,12 +447,12 @@ struct WorkflowConciergeView: View {
             customWorkflows = []
             return
         }
-        
+
         customWorkflows = decoded.map { data in
             CustomWorkflow(
                 id: data.id,
                 name: data.name,
-                steps: data.steps,
+                configuredSteps: data.configuredSteps,
                 lastUsed: data.lastUsed
             )
         }
@@ -463,11 +464,11 @@ struct WorkflowConciergeView: View {
             CustomWorkflowData(
                 id: workflow.id,
                 name: workflow.name,
-                steps: workflow.steps,
+                configuredSteps: workflow.configuredSteps,
                 lastUsed: workflow.lastUsed
             )
         }
-        
+
         if let encoded = try? JSONEncoder().encode(data) {
             defaults.set(encoded, forKey: "saved_custom_workflows")
         }
@@ -544,20 +545,23 @@ struct WorkflowConciergeView: View {
     
     private func runCustomWorkflow(_ workflow: CustomWorkflow) {
         HapticManager.shared.impact(.medium)
-        
+
         // Update last used date
         if let index = customWorkflows.firstIndex(where: { $0.id == workflow.id }) {
-            // Create new CustomWorkflow with updated lastUsed date, preserving the original id
+            // Create new CustomWorkflow with updated lastUsed date, preserving configurations
             customWorkflows[index] = CustomWorkflow(
                 id: workflow.id,
                 name: workflow.name,
-                steps: workflow.steps,
+                configuredSteps: workflow.configuredSteps,
                 lastUsed: Date()
             )
             saveCustomWorkflows()
         }
-        
-        // Convert CustomWorkflow to WorkflowTemplate (temporary) to run
+
+        // Store configured steps for execution
+        activeConfiguredSteps = workflow.configuredSteps
+
+        // Create template for workflow execution (steps only, configs passed separately)
         let template = WorkflowTemplate(
             title: workflow.name,
             description: "Custom Workflow",
@@ -567,12 +571,21 @@ struct WorkflowConciergeView: View {
             estimatedTime: "Unknown",
             isPro: false
         )
-        
+
         startWorkflow(template)
     }
     
     private func startWorkflow(_ template: WorkflowTemplate) {
         activeTemplate = template
+
+        // If activeConfiguredSteps is empty (template workflow, not custom),
+        // create default configurations for each step
+        if activeConfiguredSteps.isEmpty {
+            activeConfiguredSteps = template.steps.map { step in
+                ConfiguredStepData(step: step, config: WorkflowStepConfig.defaultConfig(for: step))
+            }
+        }
+
         showingFilePicker = true
     }
     
@@ -580,6 +593,12 @@ struct WorkflowConciergeView: View {
         switch result {
         case .success(let urls):
             guard let template = activeTemplate else { return }
+
+            // Capture configured steps for this execution
+            let stepsToExecute = activeConfiguredSteps
+
+            // Clear for next workflow
+            activeConfiguredSteps = []
 
             // Access security scoped resources
             let secureURLs = urls.map { url -> URL in
@@ -604,8 +623,10 @@ struct WorkflowConciergeView: View {
                     }
                 }
 
-                await WorkflowExecutionService.shared.executeWorkflow(
-                    template: template,
+                // Execute with configured steps
+                await WorkflowExecutionService.shared.executeConfiguredWorkflow(
+                    name: template.title,
+                    configuredSteps: stepsToExecute,
                     inputURLs: secureURLs,
                     jobManager: jobManager
                 )
@@ -753,8 +774,13 @@ struct WorkflowTemplate: Identifiable {
 struct CustomWorkflow: Identifiable {
     let id: UUID
     let name: String
-    let steps: [WorkflowStep]
+    let configuredSteps: [ConfiguredStepData]
     let lastUsed: Date
+
+    // Convenience property for step list (used in UI)
+    var steps: [WorkflowStep] {
+        configuredSteps.map { $0.step }
+    }
 }
 
 struct WorkflowSuggestion: Identifiable {
@@ -826,30 +852,37 @@ struct WorkflowBuilderView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var jobManager: JobManager
     @State private var workflowName = ""
-    @State private var selectedSteps: [WorkflowStep] = []
-    @State private var availableSteps: [WorkflowStep] = WorkflowStep.allCases
-    
+    @State private var configuredSteps: [ConfiguredStepData] = []
+    @State private var showingStepConfig = false
+    @State private var stepBeingConfigured: WorkflowStep?
+    @State private var currentStepConfig = WorkflowStepConfig()
+
+    // Available steps - exclude Organize (requires interactive UI)
+    private var availableSteps: [WorkflowStep] {
+        WorkflowStep.allCases.filter { $0 != .organize }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
                 OneBoxColors.primaryGraphite.ignoresSafeArea()
-                
+
                 ScrollView {
                     VStack(spacing: OneBoxSpacing.large) {
                         // Header
                         workflowBuilderHeader
-                        
+
                         // Workflow Name
                         workflowNameSection
-                        
-                        // Selected Steps
+
+                        // Selected Steps with configurations
                         selectedStepsSection
-                        
+
                         // Available Steps (always show so user can add steps)
                         availableStepsSection
 
-                        // Add Step Button (shows after steps are selected)
-                        if !selectedSteps.isEmpty {
+                        // Tip
+                        if !configuredSteps.isEmpty {
                             addStepButton
                         }
                     }
@@ -865,20 +898,42 @@ struct WorkflowBuilderView: View {
                     }
                     .foregroundColor(OneBoxColors.primaryText)
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         saveWorkflow()
                     }
                     .foregroundColor(OneBoxColors.primaryGold)
-                    .disabled(workflowName.isEmpty || selectedSteps.isEmpty)
+                    .disabled(workflowName.isEmpty || configuredSteps.isEmpty)
+                }
+            }
+            .sheet(isPresented: $showingStepConfig) {
+                if let step = stepBeingConfigured {
+                    StepConfigurationView(
+                        step: step,
+                        config: $currentStepConfig,
+                        onSave: {
+                            let configured = ConfiguredStepData(step: step, config: currentStepConfig)
+                            configuredSteps.append(configured)
+                            showingStepConfig = false
+                            stepBeingConfigured = nil
+                            HapticManager.shared.notification(.success)
+                        },
+                        onCancel: {
+                            showingStepConfig = false
+                            stepBeingConfigured = nil
+                        }
+                    )
                 }
             }
         }
         .onAppear {
             if let template = template {
                 workflowName = template.title
-                selectedSteps = template.steps
+                // Convert template steps to configured steps with default configs
+                configuredSteps = template.steps.map { step in
+                    ConfiguredStepData(step: step, config: WorkflowStepConfig.defaultConfig(for: step))
+                }
             }
         }
     }
@@ -926,19 +981,19 @@ struct WorkflowBuilderView: View {
     
     private var selectedStepsSection: some View {
         VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
-            if !selectedSteps.isEmpty {
+            if !configuredSteps.isEmpty {
                 Text("Workflow Steps")
                     .font(OneBoxTypography.cardTitle)
                     .foregroundColor(OneBoxColors.primaryText)
-                
-                ForEach(Array(selectedSteps.enumerated()), id: \.offset) { index, step in
-                    stepRow(step, index: index)
+
+                ForEach(Array(configuredSteps.enumerated()), id: \.element.id) { index, configured in
+                    configuredStepRow(configured, index: index)
                 }
             }
         }
     }
-    
-    private func stepRow(_ step: WorkflowStep, index: Int) -> some View {
+
+    private func configuredStepRow(_ configured: ConfiguredStepData, index: Int) -> some View {
         OneBoxCard(style: .interactive) {
             HStack(spacing: OneBoxSpacing.medium) {
                 // Step number
@@ -946,26 +1001,27 @@ struct WorkflowBuilderView: View {
                     Circle()
                         .fill(OneBoxColors.primaryGold.opacity(0.2))
                         .frame(width: 32, height: 32)
-                    
+
                     Text("\(index + 1)")
                         .font(OneBoxTypography.caption)
                         .fontWeight(.bold)
                         .foregroundColor(OneBoxColors.primaryGold)
                 }
-                
-                // Step info
+
+                // Step info with config summary
                 VStack(alignment: .leading, spacing: OneBoxSpacing.tiny) {
-                    Text(step.title)
+                    Text(configured.step.title)
                         .font(OneBoxTypography.body)
                         .foregroundColor(OneBoxColors.primaryText)
-                    
-                    Text("Step \(index + 1) of \(selectedSteps.count)")
+
+                    Text(configSummary(for: configured))
                         .font(OneBoxTypography.micro)
                         .foregroundColor(OneBoxColors.secondaryText)
+                        .lineLimit(1)
                 }
-                
+
                 Spacer()
-                
+
                 // Reorder controls
                 HStack(spacing: OneBoxSpacing.tiny) {
                     if index > 0 {
@@ -977,8 +1033,8 @@ struct WorkflowBuilderView: View {
                                 .foregroundColor(OneBoxColors.secondaryText)
                         }
                     }
-                    
-                    if index < selectedSteps.count - 1 {
+
+                    if index < configuredSteps.count - 1 {
                         Button(action: {
                             moveStep(from: index, to: index + 1)
                         }) {
@@ -1019,7 +1075,7 @@ struct WorkflowBuilderView: View {
                 .font(OneBoxTypography.cardTitle)
                 .foregroundColor(OneBoxColors.primaryText)
 
-            Text("Tap a step to add it to your workflow")
+            Text("Tap a step to configure and add it")
                 .font(OneBoxTypography.caption)
                 .foregroundColor(OneBoxColors.secondaryText)
 
@@ -1027,13 +1083,13 @@ struct WorkflowBuilderView: View {
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: OneBoxSpacing.small) {
-                ForEach(availableSteps.filter { !selectedSteps.contains($0) }, id: \.id) { step in
+                ForEach(availableSteps, id: \.id) { step in
                     availableStepCard(step)
                 }
             }
         }
     }
-    
+
     private func availableStepCard(_ step: WorkflowStep) -> some View {
         Button(action: {
             addStep(step)
@@ -1042,7 +1098,7 @@ struct WorkflowBuilderView: View {
                 Image(systemName: step.icon)
                     .font(.system(size: 24, weight: .medium))
                     .foregroundColor(OneBoxColors.primaryGold)
-                
+
                 Text(step.title)
                     .font(OneBoxTypography.caption)
                     .foregroundColor(OneBoxColors.primaryText)
@@ -1055,51 +1111,82 @@ struct WorkflowBuilderView: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-    
+
     private func addStep(_ step: WorkflowStep) {
-        selectedSteps.append(step)
+        // Show configuration sheet for the step
+        stepBeingConfigured = step
+        currentStepConfig = WorkflowStepConfig.defaultConfig(for: step)
+        showingStepConfig = true
         HapticManager.shared.selection()
     }
     
     private func removeStep(at index: Int) {
-        selectedSteps.remove(at: index)
+        configuredSteps.remove(at: index)
         HapticManager.shared.impact(.light)
     }
     
     private func moveStep(from: Int, to: Int) {
-        guard from >= 0 && from < selectedSteps.count,
-              to >= 0 && to < selectedSteps.count else { return }
-        
-        let step = selectedSteps.remove(at: from)
-        selectedSteps.insert(step, at: to)
+        guard from >= 0 && from < configuredSteps.count,
+              to >= 0 && to < configuredSteps.count else { return }
+
+        let step = configuredSteps.remove(at: from)
+        configuredSteps.insert(step, at: to)
         HapticManager.shared.impact(.light)
     }
-    
+
+    private func configSummary(for configured: ConfiguredStepData) -> String {
+        let config = configured.config
+        switch configured.step {
+        case .compress:
+            return "Quality: \(config.compressionQuality.capitalized)"
+        case .watermark:
+            return "\"\(config.watermarkText)\" • \(config.watermarkPosition) • \(Int(config.watermarkOpacity * 100))%"
+        case .sign:
+            return config.useStoredSignature ? "Saved signature • \(config.signaturePosition)" : "Text: \(config.signatureText)"
+        case .addPageNumbers:
+            return config.batesPrefix.isEmpty ? "Page X of Y • \(config.pageNumberPosition)" : "Bates: \(config.batesPrefix)"
+        case .addDateStamp:
+            return "Position: \(config.dateStampPosition)"
+        case .redact:
+            return "Preset: \(config.redactionPreset.capitalized)"
+        case .merge:
+            return "Combine all files"
+        case .split:
+            return "Split into pages"
+        case .imagesToPDF:
+            return "Convert images"
+        case .flatten:
+            return "Flatten forms & annotations"
+        default:
+            return configured.step.description
+        }
+    }
+
     private func saveWorkflow() {
-        guard !workflowName.isEmpty && !selectedSteps.isEmpty else { return }
-        
+        guard !workflowName.isEmpty && !configuredSteps.isEmpty else { return }
+
         // Save to UserDefaults
         let defaults = UserDefaults.standard
         var savedWorkflows: [CustomWorkflowData] = []
-        
+
         if let data = defaults.data(forKey: "saved_custom_workflows"),
            let decoded = try? JSONDecoder().decode([CustomWorkflowData].self, from: data) {
             savedWorkflows = decoded
         }
-        
+
         let newWorkflow = CustomWorkflowData(
             id: UUID(),
             name: workflowName,
-            steps: selectedSteps,
+            configuredSteps: configuredSteps,
             lastUsed: Date()
         )
-        
+
         savedWorkflows.append(newWorkflow)
-        
+
         if let encoded = try? JSONEncoder().encode(savedWorkflows) {
             defaults.set(encoded, forKey: "saved_custom_workflows")
         }
-        
+
         HapticManager.shared.notification(.success)
         dismiss()
     }
@@ -1109,8 +1196,478 @@ struct WorkflowBuilderView: View {
 struct CustomWorkflowData: Codable {
     let id: UUID
     let name: String
-    let steps: [WorkflowStep]
+    let configuredSteps: [ConfiguredStepData]
     let lastUsed: Date
+
+    // Migration: Support old format without configurations
+    init(id: UUID, name: String, configuredSteps: [ConfiguredStepData], lastUsed: Date) {
+        self.id = id
+        self.name = name
+        self.configuredSteps = configuredSteps
+        self.lastUsed = lastUsed
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        lastUsed = try container.decode(Date.self, forKey: .lastUsed)
+
+        // Try new format first, fall back to old format
+        if let configured = try? container.decode([ConfiguredStepData].self, forKey: .configuredSteps) {
+            configuredSteps = configured
+        } else if let oldSteps = try? container.decode([WorkflowStep].self, forKey: .steps) {
+            // Migrate old format to new format with default configs
+            configuredSteps = oldSteps.map { ConfiguredStepData(step: $0, config: WorkflowStepConfig.defaultConfig(for: $0)) }
+        } else {
+            configuredSteps = []
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, configuredSteps, steps, lastUsed
+    }
+}
+
+// MARK: - Configured Step (Step + Configuration)
+struct ConfiguredStepData: Codable, Identifiable {
+    let id: UUID
+    let step: WorkflowStep
+    var config: WorkflowStepConfig
+
+    init(step: WorkflowStep, config: WorkflowStepConfig) {
+        self.id = UUID()
+        self.step = step
+        self.config = config
+    }
+}
+
+// MARK: - Step Configuration
+struct WorkflowStepConfig: Codable {
+    // Compression settings
+    var compressionQuality: String = "medium" // low, medium, high, maximum
+
+    // Watermark settings
+    var watermarkText: String = "CONFIDENTIAL"
+    var watermarkPosition: String = "center" // center, topLeft, topRight, bottomLeft, bottomRight, tiled
+    var watermarkOpacity: Double = 0.3
+    var watermarkSize: Double = 0.15
+
+    // Sign settings
+    var signaturePosition: String = "bottomRight"
+    var useStoredSignature: Bool = true // Use user's saved signature
+    var signatureText: String = "" // Fallback text if no saved signature
+
+    // Page numbers settings
+    var pageNumberPosition: String = "bottomCenter"
+    var pageNumberFormat: String = "Page {page} of {total}"
+    var batesPrefix: String = ""
+    var batesStartNumber: Int = 1
+
+    // Date stamp settings
+    var dateStampPosition: String = "topRight"
+
+    // Redaction settings
+    var redactionPreset: String = "legal" // legal, finance, hr, medical, custom
+
+    // Default configurations per step type
+    static func defaultConfig(for step: WorkflowStep) -> WorkflowStepConfig {
+        var config = WorkflowStepConfig()
+
+        switch step {
+        case .compress:
+            config.compressionQuality = "medium"
+        case .watermark:
+            config.watermarkText = "CONFIDENTIAL"
+            config.watermarkPosition = "tiled"
+            config.watermarkOpacity = 0.3
+        case .sign:
+            config.signaturePosition = "bottomRight"
+            config.useStoredSignature = true
+        case .addPageNumbers:
+            config.pageNumberPosition = "bottomCenter"
+        case .addDateStamp:
+            config.dateStampPosition = "topRight"
+        case .redact:
+            config.redactionPreset = "legal"
+        default:
+            break
+        }
+
+        return config
+    }
+}
+
+// MARK: - Step Configuration View
+struct StepConfigurationView: View {
+    let step: WorkflowStep
+    @Binding var config: WorkflowStepConfig
+    let onSave: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                OneBoxColors.primaryGraphite.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: OneBoxSpacing.large) {
+                        // Step header
+                        stepHeader
+
+                        // Configuration options based on step type
+                        configurationOptions
+                    }
+                    .padding(OneBoxSpacing.medium)
+                }
+            }
+            .navigationTitle("Configure \(step.title)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { onCancel() }
+                        .foregroundColor(OneBoxColors.primaryText)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Add Step") { onSave() }
+                        .foregroundColor(OneBoxColors.primaryGold)
+                }
+            }
+        }
+    }
+
+    private var stepHeader: some View {
+        OneBoxCard(style: .standard) {
+            HStack(spacing: OneBoxSpacing.medium) {
+                Image(systemName: step.icon)
+                    .font(.system(size: 32))
+                    .foregroundColor(OneBoxColors.primaryGold)
+
+                VStack(alignment: .leading, spacing: OneBoxSpacing.tiny) {
+                    Text(step.title)
+                        .font(OneBoxTypography.cardTitle)
+                        .foregroundColor(OneBoxColors.primaryText)
+                    Text(step.description)
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.secondaryText)
+                }
+                Spacer()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var configurationOptions: some View {
+        switch step {
+        case .compress:
+            compressOptions
+        case .watermark:
+            watermarkOptions
+        case .sign:
+            signOptions
+        case .addPageNumbers:
+            pageNumberOptions
+        case .addDateStamp:
+            dateStampOptions
+        case .redact:
+            redactOptions
+        default:
+            simpleStepInfo
+        }
+    }
+
+    private var compressOptions: some View {
+        OneBoxCard(style: .standard) {
+            VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
+                Text("Compression Quality")
+                    .font(OneBoxTypography.cardTitle)
+                    .foregroundColor(OneBoxColors.primaryText)
+
+                ForEach(["low", "medium", "high", "maximum"], id: \.self) { quality in
+                    Button(action: { config.compressionQuality = quality }) {
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(quality.capitalized)
+                                    .foregroundColor(OneBoxColors.primaryText)
+                                Text(qualityDescription(quality))
+                                    .font(OneBoxTypography.micro)
+                                    .foregroundColor(OneBoxColors.secondaryText)
+                            }
+                            Spacer()
+                            if config.compressionQuality == quality {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(OneBoxColors.primaryGold)
+                            }
+                        }
+                        .padding(OneBoxSpacing.small)
+                        .background(config.compressionQuality == quality ? OneBoxColors.primaryGold.opacity(0.1) : Color.clear)
+                        .cornerRadius(OneBoxRadius.small)
+                    }
+                }
+            }
+        }
+    }
+
+    private func qualityDescription(_ quality: String) -> String {
+        switch quality {
+        case "low": return "Smallest file size, lower quality"
+        case "medium": return "Balanced size and quality"
+        case "high": return "Good quality, moderate size"
+        case "maximum": return "Best quality, larger file"
+        default: return ""
+        }
+    }
+
+    private var watermarkOptions: some View {
+        VStack(spacing: OneBoxSpacing.medium) {
+            OneBoxCard(style: .standard) {
+                VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
+                    Text("Watermark Text")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.secondaryText)
+                    TextField("Enter watermark text", text: $config.watermarkText)
+                        .font(OneBoxTypography.body)
+                        .foregroundColor(OneBoxColors.primaryText)
+                        .padding(OneBoxSpacing.small)
+                        .background(OneBoxColors.surfaceGraphite.opacity(0.3))
+                        .cornerRadius(OneBoxRadius.small)
+                }
+            }
+
+            OneBoxCard(style: .standard) {
+                VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
+                    Text("Position")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.secondaryText)
+
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                        ForEach(["topLeft", "topRight", "center", "bottomLeft", "bottomRight", "tiled"], id: \.self) { pos in
+                            Button(action: { config.watermarkPosition = pos }) {
+                                Text(positionLabel(pos))
+                                    .font(OneBoxTypography.micro)
+                                    .padding(8)
+                                    .frame(maxWidth: .infinity)
+                                    .background(config.watermarkPosition == pos ? OneBoxColors.primaryGold : OneBoxColors.surfaceGraphite)
+                                    .foregroundColor(config.watermarkPosition == pos ? .black : OneBoxColors.primaryText)
+                                    .cornerRadius(8)
+                            }
+                        }
+                    }
+                }
+            }
+
+            OneBoxCard(style: .standard) {
+                VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
+                    Text("Opacity: \(Int(config.watermarkOpacity * 100))%")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.secondaryText)
+                    Slider(value: $config.watermarkOpacity, in: 0.1...1.0, step: 0.05)
+                        .tint(OneBoxColors.primaryGold)
+                }
+            }
+        }
+    }
+
+    private func positionLabel(_ pos: String) -> String {
+        switch pos {
+        case "topLeft": return "Top Left"
+        case "topRight": return "Top Right"
+        case "center": return "Center"
+        case "bottomLeft": return "Bottom Left"
+        case "bottomRight": return "Bottom Right"
+        case "bottomCenter": return "Bottom Center"
+        case "tiled": return "Tiled"
+        default: return pos.capitalized
+        }
+    }
+
+    private var signOptions: some View {
+        VStack(spacing: OneBoxSpacing.medium) {
+            OneBoxCard(style: .standard) {
+                VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
+                    Toggle(isOn: $config.useStoredSignature) {
+                        VStack(alignment: .leading) {
+                            Text("Use Saved Signature")
+                                .foregroundColor(OneBoxColors.primaryText)
+                            Text("Use your signature from Settings")
+                                .font(OneBoxTypography.micro)
+                                .foregroundColor(OneBoxColors.secondaryText)
+                        }
+                    }
+                    .tint(OneBoxColors.primaryGold)
+                }
+            }
+
+            if !config.useStoredSignature {
+                OneBoxCard(style: .standard) {
+                    VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
+                        Text("Signature Text")
+                            .font(OneBoxTypography.caption)
+                            .foregroundColor(OneBoxColors.secondaryText)
+                        TextField("Enter signature text", text: $config.signatureText)
+                            .font(OneBoxTypography.body)
+                            .foregroundColor(OneBoxColors.primaryText)
+                            .padding(OneBoxSpacing.small)
+                            .background(OneBoxColors.surfaceGraphite.opacity(0.3))
+                            .cornerRadius(OneBoxRadius.small)
+                    }
+                }
+            }
+
+            OneBoxCard(style: .standard) {
+                VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
+                    Text("Position")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.secondaryText)
+
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                        ForEach(["topLeft", "topRight", "bottomLeft", "bottomRight"], id: \.self) { pos in
+                            Button(action: { config.signaturePosition = pos }) {
+                                Text(positionLabel(pos))
+                                    .font(OneBoxTypography.caption)
+                                    .padding(12)
+                                    .frame(maxWidth: .infinity)
+                                    .background(config.signaturePosition == pos ? OneBoxColors.primaryGold : OneBoxColors.surfaceGraphite)
+                                    .foregroundColor(config.signaturePosition == pos ? .black : OneBoxColors.primaryText)
+                                    .cornerRadius(8)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var pageNumberOptions: some View {
+        VStack(spacing: OneBoxSpacing.medium) {
+            OneBoxCard(style: .standard) {
+                VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
+                    Text("Position")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.secondaryText)
+
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                        ForEach(["bottomLeft", "bottomCenter", "bottomRight"], id: \.self) { pos in
+                            Button(action: { config.pageNumberPosition = pos }) {
+                                Text(positionLabel(pos))
+                                    .font(OneBoxTypography.micro)
+                                    .padding(8)
+                                    .frame(maxWidth: .infinity)
+                                    .background(config.pageNumberPosition == pos ? OneBoxColors.primaryGold : OneBoxColors.surfaceGraphite)
+                                    .foregroundColor(config.pageNumberPosition == pos ? .black : OneBoxColors.primaryText)
+                                    .cornerRadius(8)
+                            }
+                        }
+                    }
+                }
+            }
+
+            OneBoxCard(style: .standard) {
+                VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
+                    Text("Bates Numbering (Optional)")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.secondaryText)
+                    TextField("Prefix (e.g., DOC-)", text: $config.batesPrefix)
+                        .font(OneBoxTypography.body)
+                        .foregroundColor(OneBoxColors.primaryText)
+                        .padding(OneBoxSpacing.small)
+                        .background(OneBoxColors.surfaceGraphite.opacity(0.3))
+                        .cornerRadius(OneBoxRadius.small)
+
+                    if !config.batesPrefix.isEmpty {
+                        Stepper("Start: \(config.batesStartNumber)", value: $config.batesStartNumber, in: 1...99999)
+                            .foregroundColor(OneBoxColors.primaryText)
+                    }
+                }
+            }
+        }
+    }
+
+    private var dateStampOptions: some View {
+        OneBoxCard(style: .standard) {
+            VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
+                Text("Position")
+                    .font(OneBoxTypography.caption)
+                    .foregroundColor(OneBoxColors.secondaryText)
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                    ForEach(["topLeft", "topRight", "bottomLeft", "bottomRight"], id: \.self) { pos in
+                        Button(action: { config.dateStampPosition = pos }) {
+                            Text(positionLabel(pos))
+                                .font(OneBoxTypography.caption)
+                                .padding(12)
+                                .frame(maxWidth: .infinity)
+                                .background(config.dateStampPosition == pos ? OneBoxColors.primaryGold : OneBoxColors.surfaceGraphite)
+                                .foregroundColor(config.dateStampPosition == pos ? .black : OneBoxColors.primaryText)
+                                .cornerRadius(8)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var redactOptions: some View {
+        OneBoxCard(style: .standard) {
+            VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
+                Text("Redaction Preset")
+                    .font(OneBoxTypography.cardTitle)
+                    .foregroundColor(OneBoxColors.primaryText)
+
+                ForEach(["legal", "finance", "hr", "medical"], id: \.self) { preset in
+                    Button(action: { config.redactionPreset = preset }) {
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(preset.capitalized)
+                                    .foregroundColor(OneBoxColors.primaryText)
+                                Text(redactPresetDescription(preset))
+                                    .font(OneBoxTypography.micro)
+                                    .foregroundColor(OneBoxColors.secondaryText)
+                            }
+                            Spacer()
+                            if config.redactionPreset == preset {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(OneBoxColors.primaryGold)
+                            }
+                        }
+                        .padding(OneBoxSpacing.small)
+                        .background(config.redactionPreset == preset ? OneBoxColors.primaryGold.opacity(0.1) : Color.clear)
+                        .cornerRadius(OneBoxRadius.small)
+                    }
+                }
+            }
+        }
+    }
+
+    private func redactPresetDescription(_ preset: String) -> String {
+        switch preset {
+        case "legal": return "SSN, case numbers, names, addresses"
+        case "finance": return "Account numbers, amounts, SSN"
+        case "hr": return "SSN, DOB, salary, personal info"
+        case "medical": return "PHI, patient IDs, dates (HIPAA)"
+        default: return ""
+        }
+    }
+
+    private var simpleStepInfo: some View {
+        OneBoxCard(style: .standard) {
+            VStack(spacing: OneBoxSpacing.medium) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 48))
+                    .foregroundColor(OneBoxColors.secureGreen)
+
+                Text("No configuration needed")
+                    .font(OneBoxTypography.body)
+                    .foregroundColor(OneBoxColors.primaryText)
+
+                Text("This step will be applied automatically")
+                    .font(OneBoxTypography.caption)
+                    .foregroundColor(OneBoxColors.secondaryText)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(OneBoxSpacing.large)
+        }
+    }
 }
 
 #Preview {

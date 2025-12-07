@@ -23,10 +23,7 @@ struct WorkflowConciergeView: View {
     @ObservedObject private var workflowService = WorkflowExecutionService.shared
     @State private var showingFilePicker = false
     @State private var activeTemplate: WorkflowTemplate?
-    
-    // Animation state
-    @State private var workflowAnimationRotation: Double = 0
-    
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -68,8 +65,6 @@ struct WorkflowConciergeView: View {
         }
         .onAppear {
             loadWorkflowData()
-            // Start rotation animation - just set the value, let the .animation modifier handle it
-            workflowAnimationRotation = 360
         }
         .sheet(isPresented: $isCreatingWorkflow) {
             WorkflowBuilderView(template: selectedTemplate)
@@ -114,8 +109,6 @@ struct WorkflowConciergeView: View {
                     Image(systemName: "gear.badge.checkmark")
                         .font(.system(size: 40, weight: .medium))
                         .foregroundColor(OneBoxColors.primaryGold)
-                        .rotationEffect(.degrees(workflowAnimationRotation))
-                        .animation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true), value: workflowAnimationRotation)
                 }
                 
                 // Workflow Stats

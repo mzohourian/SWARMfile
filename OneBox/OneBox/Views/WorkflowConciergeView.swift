@@ -33,6 +33,10 @@ struct WorkflowConciergeView: View {
     @State private var completedOutputURLs: [URL] = []
     @State private var showingShareSheet = false
 
+    // Delete workflow
+    @State private var showingDeleteConfirmation = false
+    @State private var workflowToDelete: CustomWorkflow?
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -113,6 +117,20 @@ struct WorkflowConciergeView: View {
         .sheet(isPresented: $showingShareSheet) {
             if !completedOutputURLs.isEmpty {
                 ShareSheet(items: completedOutputURLs)
+            }
+        }
+        .alert("Delete Workflow", isPresented: $showingDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                if let workflow = workflowToDelete {
+                    deleteWorkflow(workflow)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                workflowToDelete = nil
+            }
+        } message: {
+            if let workflow = workflowToDelete {
+                Text("Are you sure you want to delete \"\(workflow.name)\"? This cannot be undone.")
             }
         }
     }
@@ -348,14 +366,25 @@ struct WorkflowConciergeView: View {
                     Text(workflow.name)
                         .font(OneBoxTypography.cardTitle)
                         .foregroundColor(OneBoxColors.primaryText)
-                    
+
                     Text("\(workflow.steps.count) steps • Last used \(workflow.lastUsed.formatted(.relative(presentation: .named)))")
                         .font(OneBoxTypography.caption)
                         .foregroundColor(OneBoxColors.secondaryText)
                 }
-                
+
                 Spacer()
-                
+
+                // Delete button
+                Button {
+                    workflowToDelete = workflow
+                    showingDeleteConfirmation = true
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 16))
+                        .foregroundColor(OneBoxColors.criticalRed)
+                        .padding(OneBoxSpacing.small)
+                }
+
                 OneBoxButton("Run", icon: "play.fill", style: .secondary) {
                     runCustomWorkflow(workflow)
                 }
@@ -472,6 +501,20 @@ struct WorkflowConciergeView: View {
         if let encoded = try? JSONEncoder().encode(data) {
             defaults.set(encoded, forKey: "saved_custom_workflows")
         }
+    }
+
+    private func deleteWorkflow(_ workflow: CustomWorkflow) {
+        // Remove from local array
+        customWorkflows.removeAll { $0.id == workflow.id }
+
+        // Save updated list
+        saveCustomWorkflows()
+
+        // Clear the workflow to delete
+        workflowToDelete = nil
+
+        // Provide haptic feedback
+        HapticManager.shared.notification(.success)
     }
     
     private func generateWorkflowSuggestions() {
@@ -1222,6 +1265,14 @@ struct CustomWorkflowData: Codable {
         } else {
             configuredSteps = []
         }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(configuredSteps, forKey: .configuredSteps)
+        try container.encode(lastUsed, forKey: .lastUsed)
     }
 
     enum CodingKeys: String, CodingKey {

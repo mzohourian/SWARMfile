@@ -27,6 +27,11 @@ struct WorkflowConciergeView: View {
     @State private var currentStepIndex = 0
     @State private var totalSteps = 0
 
+    // Success state
+    @State private var workflowSucceeded = false
+    @State private var completedOutputURLs: [URL] = []
+    @State private var showingShareSheet = false
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -88,6 +93,19 @@ struct WorkflowConciergeView: View {
         } message: {
             if let error = workflowError {
                 Text(error)
+            }
+        }
+        .alert("Workflow Complete", isPresented: $workflowSucceeded) {
+            Button("Share Result") {
+                showingShareSheet = true
+            }
+            Button("Done", role: .cancel) {}
+        } message: {
+            Text("Your document has been processed successfully and saved to Files.")
+        }
+        .sheet(isPresented: $showingShareSheet) {
+            if !completedOutputURLs.isEmpty {
+                ShareSheet(items: completedOutputURLs)
             }
         }
     }
@@ -556,7 +574,7 @@ struct WorkflowConciergeView: View {
         switch result {
         case .success(let urls):
             guard let template = activeTemplate else { return }
-            
+
             // Access security scoped resources
             let secureURLs = urls.map { url -> URL in
                 if url.startAccessingSecurityScopedResource() {
@@ -564,11 +582,21 @@ struct WorkflowConciergeView: View {
                 }
                 return url
             }
-            
+
             Task {
                 isWorkflowRunning = true
                 totalSteps = template.steps.count
                 currentStepIndex = 0
+
+                // Start monitoring progress
+                let progressTask = Task {
+                    while isWorkflowRunning {
+                        await MainActor.run {
+                            currentStepIndex = WorkflowExecutionService.shared.currentStepIndex
+                        }
+                        try? await Task.sleep(nanoseconds: 200_000_000) // 0.2s
+                    }
+                }
 
                 await WorkflowExecutionService.shared.executeWorkflow(
                     template: template,
@@ -576,11 +604,22 @@ struct WorkflowConciergeView: View {
                     jobManager: jobManager
                 )
 
+                progressTask.cancel()
                 isWorkflowRunning = false
 
-                // Check for errors
+                // Check for errors or success
                 if let error = WorkflowExecutionService.shared.error {
                     workflowError = error
+                } else {
+                    // Success! Get the output files from the last completed job
+                    if let lastJob = jobManager.completedJobs.last,
+                       !lastJob.outputURLs.isEmpty {
+                        completedOutputURLs = lastJob.outputURLs
+                        workflowSucceeded = true
+                    } else {
+                        workflowSucceeded = true
+                        completedOutputURLs = []
+                    }
                 }
 
                 // Release resources after processing
@@ -588,7 +627,7 @@ struct WorkflowConciergeView: View {
                     url.stopAccessingSecurityScopedResource()
                 }
             }
-            
+
         case .failure(let error):
             print("File selection failed: \(error.localizedDescription)")
         }
@@ -783,7 +822,6 @@ struct WorkflowBuilderView: View {
     @State private var workflowName = ""
     @State private var selectedSteps: [WorkflowStep] = []
     @State private var availableSteps: [WorkflowStep] = WorkflowStep.allCases
-    @State private var showingStepPicker = false
     
     var body: some View {
         NavigationStack {
@@ -801,12 +839,12 @@ struct WorkflowBuilderView: View {
                         // Selected Steps
                         selectedStepsSection
                         
-                        // Add Step Button
-                        addStepButton
-                        
-                        // Step Templates
+                        // Available Steps (always show so user can add steps)
+                        availableStepsSection
+
+                        // Add Step Button (shows after steps are selected)
                         if !selectedSteps.isEmpty {
-                            stepTemplatesSection
+                            addStepButton
                         }
                     }
                     .padding(OneBoxSpacing.medium)
@@ -957,17 +995,28 @@ struct WorkflowBuilderView: View {
     }
     
     private var addStepButton: some View {
-        OneBoxButton("Add Step", icon: "plus.circle.fill", style: .primary) {
-            showingStepPicker = true
+        OneBoxCard(style: .standard) {
+            HStack {
+                Image(systemName: "lightbulb.fill")
+                    .foregroundColor(OneBoxColors.primaryGold)
+                Text("Tap any step above to add more to your workflow")
+                    .font(OneBoxTypography.caption)
+                    .foregroundColor(OneBoxColors.secondaryText)
+            }
+            .frame(maxWidth: .infinity)
         }
     }
     
-    private var stepTemplatesSection: some View {
+    private var availableStepsSection: some View {
         VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
             Text("Available Steps")
                 .font(OneBoxTypography.cardTitle)
                 .foregroundColor(OneBoxColors.primaryText)
-            
+
+            Text("Tap a step to add it to your workflow")
+                .font(OneBoxTypography.caption)
+                .foregroundColor(OneBoxColors.secondaryText)
+
             LazyVGrid(columns: [
                 GridItem(.flexible()),
                 GridItem(.flexible())

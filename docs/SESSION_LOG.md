@@ -4,6 +4,46 @@
 
 ---
 
+## 2025-12-07: Workflow Feature - UI Fixes
+
+**Problem:**
+User reported two issues with Workflow feature:
+1. "Create Custom Workflow" - Add Step button doesn't work
+2. "Quick Share" template - runs briefly showing "Step 1/2" then returns to previous page with no feedback
+
+**Root Causes:**
+
+**Issue 1 - Add Step button:**
+- `showingStepPicker` state variable was set to `true` but nothing in the code ever used it
+- The "Available Steps" grid only appeared when `!selectedSteps.isEmpty`, so with zero steps, users couldn't see any steps to add
+- Result: Impossible to add steps when creating a new workflow
+
+**Issue 2 - No success feedback:**
+- After workflow completed, `isWorkflowRunning` was set to `false` and overlay disappeared
+- On success, no message was shown and no results were displayed
+- User had no way to know if workflow succeeded or where to find the processed file
+
+**Fix:**
+
+1. **Add Step button:**
+   - Removed unused `showingStepPicker` state variable
+   - Changed layout to always show "Available Steps" grid
+   - Added helper text: "Tap a step to add it to your workflow"
+   - Changed "Add Step" button to a tip card that shows after steps are added
+
+2. **Success feedback:**
+   - Added `workflowSucceeded` state and `completedOutputURLs` state
+   - Added success alert: "Workflow Complete" with "Share Result" and "Done" buttons
+   - Added ShareSheet to share processed files
+   - Added progress monitoring task to update `currentStepIndex` during execution
+
+**Files Modified:**
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Fixed Add Step, added success feedback
+
+**Status:** Needs user testing
+
+---
+
 ## 2025-12-06: Workflow Feature - Complete Rebuild
 
 **Problem:**

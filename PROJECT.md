@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-06
+**Last Updated:** 2025-12-07
 
 ## What This Is
 **OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -62,52 +62,31 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **Redact PDF - Fixed coordinate transformation bug**:
-  1. Previous issue: Black boxes appeared in wrong positions (random places instead of over sensitive text)
-  2. Root cause: Vision uses bottom-left origin (Y up), UIKit PDF context uses top-left origin (Y down)
-  3. Fix: Proper Y coordinate conversion: `y = pageHeight * (1 - visionY - visionHeight)`
-  4. Added fallback: If character-level bounding box fails, estimate position from character ratios
-  5. Fixed thread safety: Capture OCR results from main thread before processing
-- Organize PDF scrolling not working - Removed conflicting DragGesture that consumed scroll events
-- Organize PDF selection cleared after rotation - Kept selection after rotate left/right
-- Organize PDF false anomaly detection - Disabled feature (too many false positives, no solutions)
-- Organize PDF not saving to Files - PageOrganizerView was bypassing JobEngine's file persistence
-- Organize PDF multi-page rotation bug - Rotating multiple pages only kept last rotation
-- Processed files not saving to Files app - Files now auto-saved to Documents/Exports folder
-- Watermark size slider not working - Text watermarks now use size parameter (was ignored)
-- Watermark size range too narrow - Improved to 5%-50% (images) and 2%-15% (text)
-- Watermark density range too narrow - Improved to 0.6x-5x spacing (was 1x-3x)
-- Watermark PDF hang at 27% - Fixed by reducing tiling limits from 50x50 to 15x15
-- Crash at 100% completion - Fixed division by zero in ExportPreviewView.swift
+- **Workflow "Add Step" button not working** - Button set state variable that was never used, and available steps grid was hidden when no steps selected. Fixed by always showing steps grid.
+- **Workflow completing silently** - After workflow ran, no success feedback was shown. Added success alert with "Share Result" option.
 
 ---
 
 ## Last Session Summary
 
-**Date:** 2025-12-06
+**Date:** 2025-12-07
 
 **What Was Done:**
-- **Rebuilt Workflow feature completely:**
-  1. Added missing workflow steps: `.redact`, `.addPageNumbers`, `.addDateStamp`, `.flatten`
-  2. Fixed step mappings in WorkflowExecutionService (organize now uses pdfOrganize, not pdfMerge)
-  3. Added professional industry presets:
-     - **Legal Discovery** - redact, Bates numbering, date stamp, flatten, compress
-     - **Contract Execution** - merge, flatten, sign, watermark, compress
-     - **Financial Report** - redact account numbers, CONFIDENTIAL watermark, date stamp
-     - **HR Documents** - redact SSN/personal data, INTERNAL watermark, page numbers
-     - **Medical Records** - HIPAA-compliant redaction, date stamp, watermark
-     - **Merge & Archive** - combine documents with page numbers and date stamp
-  4. Added step configuration capability (watermark text, redaction presets, Bates prefix)
-  5. Updated JobSettings with new properties for page numbering, date stamps, form flattening
+- **Fixed Workflow "Create Custom Workflow" - Add Step button:**
+  1. Removed unused `showingStepPicker` state variable
+  2. Changed layout to always show available steps grid (was hidden when no steps selected)
+  3. Users can now tap any step to add it to their workflow
+- **Fixed Workflow success feedback:**
+  1. Added success alert when workflow completes ("Workflow Complete")
+  2. Added "Share Result" button to share processed files
+  3. Added progress monitoring to show correct step number during execution
 
 **What's Unfinished:**
-- Redact PDF needs user testing to confirm precise redaction works correctly
-- Workflow feature needs user testing
+- Workflow templates need user testing to verify they run correctly
+- Redact PDF needs user testing
 
 **Files Modified:**
-- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Added new steps and professional templates
-- `OneBox/OneBox/Services/WorkflowExecutionService.swift` - Fixed step mappings and added configuration
-- `OneBox/Modules/JobEngine/JobEngine.swift` - Added new JobSettings properties
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Fixed Add Step, added success feedback
 
 ---
 

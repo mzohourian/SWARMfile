@@ -277,9 +277,9 @@ public actor PDFProcessor {
         let resolutionScale: CGFloat = {
             switch quality {
             case .maximum: return 1.0    // Full resolution
-            case .high: return 0.85      // 85% resolution
-            case .medium: return 0.70    // 70% resolution
-            case .low: return 0.50       // 50% resolution
+            case .high: return 0.80      // 80% resolution
+            case .medium: return 0.60    // 60% resolution
+            case .low: return 0.35       // 35% resolution - aggressive for max compression
             }
         }()
 
@@ -556,6 +556,7 @@ public actor PDFProcessor {
         opacity: Double = 0.5,
         size: Double = 0.2,
         tileDensity: Double = 0.3,
+        isPageNumbering: Bool = false,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
 
@@ -631,8 +632,15 @@ public actor PDFProcessor {
                 context.saveGState()
                 context.setAlpha(CGFloat(opacity))
 
-                if let text = text {
-                    print("🎨 CorePDF: Drawing text watermark on page \(pageIndex)")
+                if var text = text {
+                    // Replace page number placeholders if this is page numbering
+                    if isPageNumbering {
+                        text = text.replacingOccurrences(of: "{page}", with: "\(pageIndex + 1)")
+                        text = text.replacingOccurrences(of: "{total}", with: "\(pageCount)")
+                        print("🎨 CorePDF: Drawing page number '\(text)' on page \(pageIndex + 1)")
+                    } else {
+                        print("🎨 CorePDF: Drawing text watermark on page \(pageIndex)")
+                    }
                     drawTextWatermark(text, in: pageBounds, position: position, size: size, tileDensity: tileDensity)
                 } else if let image = image {
                     print("🎨 CorePDF: Drawing image watermark on page \(pageIndex)")

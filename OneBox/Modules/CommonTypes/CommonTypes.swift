@@ -119,9 +119,9 @@ public enum CompressionQuality: String, Codable, CaseIterable {
     public var jpegQuality: Double {
         switch self {
         case .maximum: return 0.95
-        case .high: return 0.85
-        case .medium: return 0.65
-        case .low: return 0.45
+        case .high: return 0.75
+        case .medium: return 0.50
+        case .low: return 0.25  // Much more aggressive compression
         }
     }
 }

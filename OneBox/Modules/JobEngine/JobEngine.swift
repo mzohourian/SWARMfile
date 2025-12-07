@@ -777,14 +777,21 @@ actor JobProcessor {
         }
         // Use watermark position directly from CommonTypes
         let watermarkPos = job.settings.watermarkPosition
-        
+
+        // Use smaller size for page numbering and date stamps
+        var effectiveSize = job.settings.watermarkSize
+        if job.settings.isPageNumbering || job.settings.isDateStamp {
+            effectiveSize = 0.03 // Small, unobtrusive size for page numbers/date stamps
+        }
+
         let outputURL = try await processor.watermarkPDF(
             pdfURL,
             text: job.settings.watermarkText,
             position: watermarkPos,
             opacity: job.settings.watermarkOpacity,
-            size: job.settings.watermarkSize,
+            size: effectiveSize,
             tileDensity: job.settings.watermarkTileDensity,
+            isPageNumbering: job.settings.isPageNumbering,
             progressHandler: progressHandler
         )
         return try await applyPostProcessing(job: job, urls: [outputURL])

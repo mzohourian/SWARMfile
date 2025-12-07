@@ -900,9 +900,10 @@ struct WorkflowBuilderView: View {
     @State private var stepBeingConfigured: WorkflowStep?
     @State private var currentStepConfig = WorkflowStepConfig()
 
-    // Available steps - exclude Organize (requires interactive UI)
+    // Available steps - all workflow steps including Organize
+    // Note: Organize in automated workflow passes files through (requires interactive UI for actual reordering)
     private var availableSteps: [WorkflowStep] {
-        WorkflowStep.allCases.filter { $0 != .organize }
+        WorkflowStep.allCases
     }
 
     var body: some View {

@@ -203,16 +203,31 @@ class WorkflowExecutionService: ObservableObject {
             jobType = .pdfSign
             // Use saved signature position
             settings.signaturePosition = WatermarkPosition(rawValue: config.signaturePosition) ?? .bottomRight
-            // Use signature: stored image > custom text > date stamp
-            if config.useStoredSignature, let signatureData = SignatureManager.shared.getSavedSignatureImage() {
-                // Use stored signature image
-                settings.signatureImageData = signatureData
-            } else if !config.signatureText.isEmpty {
-                // Use custom text
+
+            // Priority: saved signature image > custom text > auto-generated text
+            var hasSignature = false
+
+            // Try to use saved signature image first
+            if config.useStoredSignature {
+                if let signatureData = SignatureManager.shared.getSavedSignatureImage() {
+                    settings.signatureImageData = signatureData
+                    hasSignature = true
+                    print("Workflow: Using saved signature image")
+                }
+            }
+
+            // If no saved signature, try custom text
+            if !hasSignature && !config.signatureText.isEmpty {
                 settings.signatureText = config.signatureText
-            } else {
-                // Fallback to date stamp
-                settings.signatureText = "Signed: \(DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short))"
+                hasSignature = true
+                print("Workflow: Using custom signature text: \(config.signatureText)")
+            }
+
+            // Always ensure a fallback signature text exists
+            if !hasSignature {
+                let dateStr = DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short)
+                settings.signatureText = "Signed: \(dateStr)"
+                print("Workflow: Using fallback signature text")
             }
 
         case .merge:

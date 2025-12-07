@@ -37,43 +37,78 @@ class WorkflowExecutionService: ObservableObject {
         totalSteps = template.steps.count
         currentStepIndex = 0
         error = nil
-        
-        var currentInputs = inputURLs
-        
-        // Create a temporary directory for workflow intermediates to keep things clean
+
+        // Create a temporary directory for workflow intermediates
         let workflowDir = FileManager.default.temporaryDirectory.appendingPathComponent("Workflow_\(currentWorkflowId!.uuidString)")
         try? FileManager.default.createDirectory(at: workflowDir, withIntermediateDirectories: true)
+
+        // Copy security-scoped input files to temp directory for reliable access
+        // This ensures files remain accessible across actor boundaries
+        var currentInputs: [URL] = []
+        for inputURL in inputURLs {
+            let fileName = inputURL.lastPathComponent
+            let tempURL = workflowDir.appendingPathComponent(fileName)
+
+            do {
+                // Remove existing file if present
+                if FileManager.default.fileExists(atPath: tempURL.path) {
+                    try FileManager.default.removeItem(at: tempURL)
+                }
+                try FileManager.default.copyItem(at: inputURL, to: tempURL)
+                currentInputs.append(tempURL)
+                print("Workflow: Copied input file to: \(tempURL.path)")
+            } catch {
+                print("Workflow: Failed to copy input file \(inputURL.lastPathComponent): \(error.localizedDescription)")
+                // Try to use original URL as fallback
+                if FileManager.default.fileExists(atPath: inputURL.path) {
+                    currentInputs.append(inputURL)
+                }
+            }
+        }
+
+        guard !currentInputs.isEmpty else {
+            self.error = "Failed to prepare input files for processing"
+            isRunning = false
+            currentWorkflowId = nil
+            return
+        }
         
         do {
             for (index, step) in template.steps.enumerated() {
                 currentStepIndex = index
                 print("Workflow: Executing step \(index + 1)/\(template.steps.count): \(step.title)")
-                
+
+                // 0. Verify input files exist before processing
+                let validInputs = currentInputs.filter { url in
+                    FileManager.default.fileExists(atPath: url.path)
+                }
+
+                if validInputs.isEmpty {
+                    print("Workflow: No valid input files for step \(index + 1)")
+                    print("Workflow: Attempted inputs: \(currentInputs)")
+                    throw WorkflowError.stepFailed("No valid input files available for \(step.title)")
+                }
+
+                print("Workflow: Processing \(validInputs.count) file(s)")
+
                 // 1. Determine Job Type & Settings
                 let (jobType, settings) = configureJobForStep(step)
-                
-                // 2. Create Job
-                // For intermediate steps, we might want to ensure inputs are valid for the next step
-                // e.g. Images -> PDF produces PDF, next step must handle PDF
-                
+
+                // 2. Create Job with validated inputs
                 let job = Job(
                     type: jobType,
-                    inputs: currentInputs,
+                    inputs: validInputs,
                     settings: settings
                 )
-                
+
                 // 3. Submit to JobManager
                 await jobManager.submitJob(job)
-                
+
                 // 4. Wait for completion
                 let outputURLs = try await waitForJobCompletion(jobId: job.id, jobManager: jobManager)
-                
+
                 // 5. Update inputs for next step
                 currentInputs = outputURLs
-                
-                // 6. Clean up previous intermediate files if they were created by this workflow
-                // (Skipping specific cleanup logic for now to ensure stability, 
-                // but in production we'd delete intermediate files from previous steps)
             }
             
             print("Workflow: Completed successfully. Final outputs: \(currentInputs)")
@@ -92,14 +127,32 @@ class WorkflowExecutionService: ObservableObject {
             guard let job = jobManager.jobs.first(where: { $0.id == jobId }) else {
                 throw WorkflowError.jobLost
             }
-            
+
             switch job.status {
             case .success:
-                return job.outputURLs
+                // Validate output URLs exist before returning
+                let validURLs = job.outputURLs.filter { url in
+                    FileManager.default.fileExists(atPath: url.path)
+                }
+
+                if validURLs.isEmpty && !job.outputURLs.isEmpty {
+                    print("Workflow: Warning - output files don't exist at expected paths")
+                    print("Workflow: Expected outputs: \(job.outputURLs)")
+                    throw WorkflowError.stepFailed("Output files were not created properly")
+                }
+
+                if validURLs.isEmpty {
+                    throw WorkflowError.stepFailed("No output files were produced")
+                }
+
+                print("Workflow: Step completed with \(validURLs.count) output file(s)")
+                return validURLs
+
             case .failed:
                 throw WorkflowError.stepFailed(job.error ?? "Unknown error")
+
             case .pending, .running:
-                try await Task.sleep(nanoseconds: 500_000_000) // 0.5s poll
+                try await Task.sleep(nanoseconds: 100_000_000) // 0.1s poll (was 0.5s)
             }
         }
     }

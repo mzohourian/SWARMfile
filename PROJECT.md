@@ -64,6 +64,9 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Resolved This Session:**
 - **Workflow "Add Step" button not working** - Button set state variable that was never used, and available steps grid was hidden when no steps selected. Fixed by always showing steps grid.
 - **Workflow completing silently** - After workflow ran, no success feedback was shown. Added success alert with "Share Result" option.
+- **Custom workflow not showing after save** - Parent view only loaded workflows onAppear. Added onChange to reload when builder sheet dismisses.
+- **Workflow "Invalid input files" error** - Security-scoped URLs not accessible across actor boundaries. Fixed by copying input files to temp directory before processing.
+- **Workflow slowness** - Reduced polling interval from 500ms to 100ms for job completion, and 200ms to 50ms for UI updates.
 
 ---
 
@@ -80,13 +83,23 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
   1. Added success alert when workflow completes ("Workflow Complete")
   2. Added "Share Result" button to share processed files
   3. Added progress monitoring to show correct step number during execution
+- **Fixed custom workflow not appearing after save:**
+  1. Added onChange handler to reload workflows when builder sheet dismisses
+- **Fixed "Invalid input files" error:**
+  1. Copy security-scoped input files to temp directory before processing
+  2. Added validation that output files exist before passing to next step
+  3. Added validation that input files exist before submitting jobs
+- **Improved workflow speed:**
+  1. Reduced job completion polling from 500ms to 100ms
+  2. Reduced UI update polling from 200ms to 50ms
 
 **What's Unfinished:**
 - Workflow templates need user testing to verify they run correctly
 - Redact PDF needs user testing
 
 **Files Modified:**
-- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Fixed Add Step, added success feedback
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Fixed Add Step, success feedback, reload on dismiss
+- `OneBox/OneBox/Services/WorkflowExecutionService.swift` - Fixed file access, added validation, improved speed
 
 ---
 

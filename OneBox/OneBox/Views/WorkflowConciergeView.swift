@@ -74,6 +74,12 @@ struct WorkflowConciergeView: View {
         .onAppear {
             loadWorkflowData()
         }
+        .onChange(of: isCreatingWorkflow) { _, isCreating in
+            // Reload workflows when the builder sheet is dismissed
+            if !isCreating {
+                loadCustomWorkflows()
+            }
+        }
         .sheet(isPresented: $isCreatingWorkflow) {
             WorkflowBuilderView(template: selectedTemplate)
                 .environmentObject(jobManager)
@@ -588,13 +594,13 @@ struct WorkflowConciergeView: View {
                 totalSteps = template.steps.count
                 currentStepIndex = 0
 
-                // Start monitoring progress
+                // Start monitoring progress (faster polling for responsive UI)
                 let progressTask = Task {
                     while isWorkflowRunning {
                         await MainActor.run {
                             currentStepIndex = WorkflowExecutionService.shared.currentStepIndex
                         }
-                        try? await Task.sleep(nanoseconds: 200_000_000) // 0.2s
+                        try? await Task.sleep(nanoseconds: 50_000_000) // 0.05s for responsive UI
                     }
                 }
 

@@ -4,41 +4,39 @@
 
 ---
 
-## 2025-12-07: Workflow Feature - UI Fixes
+## 2025-12-07: Workflow Feature - Complete Fixes
 
-**Problem:**
-User reported two issues with Workflow feature:
+**Problems Reported:**
 1. "Create Custom Workflow" - Add Step button doesn't work
-2. "Quick Share" template - runs briefly showing "Step 1/2" then returns to previous page with no feedback
+2. "Quick Share" template - runs briefly then returns with no feedback
+3. Custom workflow doesn't show after save (only after app restart)
+4. Workflow error: "Invalid input files"
+5. Workflow execution is too slow
 
-**Root Causes:**
+**Root Causes & Fixes:**
 
 **Issue 1 - Add Step button:**
-- `showingStepPicker` state variable was set to `true` but nothing in the code ever used it
-- The "Available Steps" grid only appeared when `!selectedSteps.isEmpty`, so with zero steps, users couldn't see any steps to add
-- Result: Impossible to add steps when creating a new workflow
+- `showingStepPicker` state variable was never used
+- Fix: Always show available steps grid with helper text
 
 **Issue 2 - No success feedback:**
-- After workflow completed, `isWorkflowRunning` was set to `false` and overlay disappeared
-- On success, no message was shown and no results were displayed
-- User had no way to know if workflow succeeded or where to find the processed file
+- No message shown after workflow completes
+- Fix: Added success alert with "Share Result" button
 
-**Fix:**
+**Issue 3 - Workflow not showing after save:**
+- Parent view only loaded workflows on `onAppear`
+- Fix: Added `onChange(of: isCreatingWorkflow)` to reload on sheet dismiss
 
-1. **Add Step button:**
-   - Removed unused `showingStepPicker` state variable
-   - Changed layout to always show "Available Steps" grid
-   - Added helper text: "Tap a step to add it to your workflow"
-   - Changed "Add Step" button to a tip card that shows after steps are added
+**Issue 4 - Invalid input files:**
+- Security-scoped URLs from file picker not accessible across actor boundaries
+- Fix: Copy security-scoped files to temp directory before processing, validate files exist
 
-2. **Success feedback:**
-   - Added `workflowSucceeded` state and `completedOutputURLs` state
-   - Added success alert: "Workflow Complete" with "Share Result" and "Done" buttons
-   - Added ShareSheet to share processed files
-   - Added progress monitoring task to update `currentStepIndex` during execution
+**Issue 5 - Slowness:**
+- Fix: Reduced polling from 500ms→100ms (job), 200ms→50ms (UI)
 
 **Files Modified:**
-- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Fixed Add Step, added success feedback
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift`
+- `OneBox/OneBox/Services/WorkflowExecutionService.swift`
 
 **Status:** Needs user testing
 

@@ -23,8 +23,9 @@ struct RedactionView: View {
 
     @State private var redactionItems: [RedactionItem] = []
 
-    init(pdfURL: URL) {
+    init(pdfURL: URL, workflowMode: Bool = false) {
         self.pdfURL = pdfURL
+        self.workflowMode = workflowMode
         print("🟢 RedactionView: init called with URL: \(pdfURL.absoluteString)")
         print("🟢 RedactionView: File exists at init: \(FileManager.default.fileExists(atPath: pdfURL.path))")
     }

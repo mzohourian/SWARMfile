@@ -121,7 +121,12 @@ struct RedactionView: View {
                 print("🟢 RedactionView: Started security-scoped resource access")
             }
             loadPDFDocument()
-            performSensitiveDataAnalysis()
+            // Analysis is triggered after PDF loads successfully in onChange
+        }
+        .onChange(of: pdfDocument) { document in
+            if document != nil && loadError == nil {
+                performSensitiveDataAnalysis()
+            }
         }
         .onDisappear {
             // Stop security-scoped access when view disappears
@@ -598,15 +603,38 @@ struct RedactionView: View {
     }
 
     // MARK: - Helper Functions
-    private func loadPDFDocument() {
-        print("RedactionView: Attempting to load PDF from: \(pdfURL.path)")
+    private func loadPDFDocument(retryCount: Int = 0) {
+        print("RedactionView: Attempting to load PDF from: \(pdfURL.path) (attempt \(retryCount + 1))")
         print("RedactionView: File exists: \(FileManager.default.fileExists(atPath: pdfURL.path))")
 
+        // Try to access the file
+        if !FileManager.default.fileExists(atPath: pdfURL.path) {
+            if retryCount < 3 {
+                print("RedactionView: File not found yet, retrying in 0.5s")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.loadPDFDocument(retryCount: retryCount + 1)
+                }
+                return
+            }
+            print("RedactionView: File not found after 3 retries")
+            loadError = "Could not find the PDF file. Please try selecting the file again."
+            return
+        }
+
+        // Try to load the PDF
         if let document = PDFDocument(url: pdfURL) {
             pdfDocument = document
+            loadError = nil
             print("RedactionView: PDF loaded successfully with \(document.pageCount) pages")
         } else {
-            print("RedactionView: Failed to load PDF")
+            if retryCount < 3 {
+                print("RedactionView: Failed to create PDFDocument, retrying in 0.5s")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.loadPDFDocument(retryCount: retryCount + 1)
+                }
+                return
+            }
+            print("RedactionView: Failed to load PDF after 3 retries")
             loadError = "Could not open the PDF file. The file may be corrupted or in an unsupported format."
         }
     }

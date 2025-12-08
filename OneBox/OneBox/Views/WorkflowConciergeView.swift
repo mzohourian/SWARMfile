@@ -35,6 +35,7 @@ struct WorkflowConciergeView: View {
     @State private var showingInteractiveSign = false // For interactive sign step
     @State private var showingRedactionView = false // For interactive redact step
     @State private var interactiveCurrentURL: URL? // URL being processed by interactive view
+    @State private var securityScopedURLs: [URL] = [] // URLs that need stopAccessingSecurityScopedResource when workflow ends
 
     // Success state
     @State private var workflowSucceeded = false
@@ -684,17 +685,31 @@ struct WorkflowConciergeView: View {
             try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
 
             var secureURLs: [URL] = []
+            var urlsNeedingCleanup: [URL] = []
+
             for url in urls {
-                _ = url.startAccessingSecurityScopedResource()
+                let didStartAccess = url.startAccessingSecurityScopedResource()
+                print("WorkflowConcierge: Started security-scoped access for \(url.lastPathComponent): \(didStartAccess)")
+
                 let tempURL = tempDir.appendingPathComponent(url.lastPathComponent)
                 do {
                     try FileManager.default.copyItem(at: url, to: tempURL)
+                    print("WorkflowConcierge: Successfully copied \(url.lastPathComponent) to temp directory")
                     secureURLs.append(tempURL)
+                    // Can release security access since we have a copy
+                    url.stopAccessingSecurityScopedResource()
                 } catch {
+                    print("WorkflowConcierge: Failed to copy \(url.lastPathComponent) to temp: \(error.localizedDescription)")
+                    // Keep security-scoped access and use original URL
                     secureURLs.append(url)
+                    if didStartAccess {
+                        urlsNeedingCleanup.append(url)
+                    }
                 }
-                url.stopAccessingSecurityScopedResource()
             }
+
+            // Store URLs that need security cleanup when workflow ends
+            securityScopedURLs = urlsNeedingCleanup
 
             // Initialize workflow state
             workflowInputURLs = secureURLs
@@ -818,6 +833,13 @@ struct WorkflowConciergeView: View {
             workflowSucceeded = true
             HapticManager.shared.notification(.success)
         }
+
+        // Release security-scoped access for any URLs we're still holding
+        for url in securityScopedURLs {
+            url.stopAccessingSecurityScopedResource()
+            print("WorkflowConcierge: Released security-scoped access for \(url.lastPathComponent)")
+        }
+        securityScopedURLs = []
 
         // Cleanup
         workflowInputURLs = []

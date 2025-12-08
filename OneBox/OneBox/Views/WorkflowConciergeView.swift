@@ -33,6 +33,7 @@ struct WorkflowConciergeView: View {
     @State private var workflowRemainingSteps: [ConfiguredStepData] = [] // Steps left to execute
     @State private var showingPageOrganizer = false // For interactive organize step
     @State private var showingInteractiveSign = false // For interactive sign step
+    @State private var showingRedactionView = false // For interactive redact step
     @State private var interactiveCurrentURL: URL? // URL being processed by interactive view
 
     // Success state
@@ -161,6 +162,17 @@ struct WorkflowConciergeView: View {
                 .onDisappear {
                     handleInteractiveStepCompleted()
                 }
+            }
+        }
+        // Interactive Redaction - uses existing RedactionView
+        .fullScreenCover(isPresented: $showingRedactionView) {
+            if let url = interactiveCurrentURL {
+                RedactionView(pdfURL: url)
+                    .environmentObject(jobManager)
+                    .environmentObject(paymentsManager)
+                    .onDisappear {
+                        handleInteractiveStepCompleted()
+                    }
             }
         }
     }
@@ -730,6 +742,8 @@ struct WorkflowConciergeView: View {
                 showingPageOrganizer = true
             case .sign:
                 showingInteractiveSign = true
+            case .redact:
+                showingRedactionView = true
             default:
                 // Shouldn't happen, but handle gracefully
                 workflowRemainingSteps.removeFirst()
@@ -786,6 +800,7 @@ struct WorkflowConciergeView: View {
         interactiveCurrentURL = nil
         showingPageOrganizer = false
         showingInteractiveSign = false
+        showingRedactionView = false
 
         // Small delay to ensure UI updates, then continue
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -882,7 +897,7 @@ struct WorkflowTemplate: Identifiable {
         ),
         WorkflowTemplate(
             title: "Medical Records",
-            description: "HIPAA-compliant: redact PHI, add processing date, watermark, flatten, compress",
+            description: "Redact sensitive data, add processing date, watermark, flatten, compress",
             icon: "cross.case",
             accentColor: OneBoxColors.warningAmber,
             steps: [.redact, .addDateStamp, .watermark, .flatten, .compress],
@@ -998,8 +1013,8 @@ enum WorkflowStep: String, CaseIterable, Identifiable, Codable {
     /// Whether this step requires interactive user input (uses existing app views)
     var isInteractive: Bool {
         switch self {
-        case .organize, .sign:
-            return true // Uses PageOrganizerView and InteractiveSignPDFView
+        case .organize, .sign, .redact:
+            return true // Uses existing interactive views
         default:
             return false // Automated with configured settings
         }
@@ -1304,7 +1319,7 @@ struct WorkflowBuilderView: View {
         case .addDateStamp:
             return "Position: \(config.dateStampPosition)"
         case .redact:
-            return "Preset: \(config.redactionPreset.capitalized)"
+            return "Interactive - review & select"
         case .merge:
             return "Combine all files"
         case .split:
@@ -1811,44 +1826,47 @@ struct StepConfigurationView: View {
     }
 
     private var redactOptions: some View {
-        OneBoxCard(style: .standard) {
-            VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
-                Text("Redaction Preset")
-                    .font(OneBoxTypography.cardTitle)
-                    .foregroundColor(OneBoxColors.primaryText)
+        VStack(spacing: OneBoxSpacing.medium) {
+            OneBoxCard(style: .standard) {
+                VStack(spacing: OneBoxSpacing.medium) {
+                    Image(systemName: "eye.slash.fill")
+                        .font(.system(size: 48))
+                        .foregroundColor(OneBoxColors.criticalRed)
 
-                ForEach(["legal", "finance", "hr", "medical"], id: \.self) { preset in
-                    Button(action: { config.redactionPreset = preset }) {
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(preset.capitalized)
-                                    .foregroundColor(OneBoxColors.primaryText)
-                                Text(redactPresetDescription(preset))
-                                    .font(OneBoxTypography.micro)
-                                    .foregroundColor(OneBoxColors.secondaryText)
-                            }
-                            Spacer()
-                            if config.redactionPreset == preset {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(OneBoxColors.primaryGold)
-                            }
-                        }
-                        .padding(OneBoxSpacing.small)
-                        .background(config.redactionPreset == preset ? OneBoxColors.primaryGold.opacity(0.1) : Color.clear)
-                        .cornerRadius(OneBoxRadius.small)
-                    }
+                    Text("Interactive Step")
+                        .font(OneBoxTypography.cardTitle)
+                        .foregroundColor(OneBoxColors.primaryText)
+
+                    Text("Redaction requires review to ensure accuracy.")
+                        .font(OneBoxTypography.body)
+                        .foregroundColor(OneBoxColors.secondaryText)
+                        .multilineTextAlignment(.center)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(OneBoxSpacing.large)
             }
-        }
-    }
 
-    private func redactPresetDescription(_ preset: String) -> String {
-        switch preset {
-        case "legal": return "SSN, case numbers, names, addresses"
-        case "finance": return "Account numbers, amounts, SSN"
-        case "hr": return "SSN, DOB, salary, personal info"
-        case "medical": return "PHI, patient IDs, dates (HIPAA)"
-        default: return ""
+            OneBoxCard(style: .standard) {
+                VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
+                    Label("What happens in workflow:", systemImage: "info.circle")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.primaryGold)
+
+                    Text("When this step runs, the Redaction View will open so you can:")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.secondaryText)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Review automatically detected sensitive data", systemImage: "brain")
+                        Label("Select which items to redact", systemImage: "checkmark.circle")
+                        Label("Add custom text patterns to redact", systemImage: "plus.circle")
+                    }
+                    .font(OneBoxTypography.caption)
+                    .foregroundColor(OneBoxColors.primaryText)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(OneBoxSpacing.medium)
+            }
         }
     }
 

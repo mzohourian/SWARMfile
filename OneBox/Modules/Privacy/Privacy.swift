@@ -25,9 +25,9 @@ public enum ComplianceMode: String, Codable, CaseIterable {
     public var displayName: String {
         switch self {
         case .none: return "Standard"
-        case .healthcare: return "Healthcare (HIPAA)"
+        case .healthcare: return "Healthcare"
         case .legal: return "Legal"
-        case .finance: return "Finance (SOX)"
+        case .finance: return "Finance"
         }
     }
     

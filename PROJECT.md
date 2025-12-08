@@ -103,6 +103,12 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
   - Fixed signature position mismatch (signature CENTER now at tap position, not corner)
   - Fixed workflow section performance (removed unused `@EnvironmentObject` from WorkflowBuilderView)
   - Fixed redact function in workflow (presets now convert to regex patterns, findTextRanges supports regex)
+  - Made Redact an interactive workflow step (uses existing RedactionView with OCR and selection)
+  - **Removed inaccurate marketing claims:**
+    - Removed "HIPAA-compliant" claims (requires certification)
+    - Replaced "military-grade security/encryption" with accurate descriptions
+    - Replaced "Zero-Knowledge" and "End-to-End Encryption" (misused terms)
+    - Updated "Healthcare (HIPAA)" and "Finance (SOX)" labels
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test

@@ -99,7 +99,7 @@ public enum WorkflowRedactionPreset: String, Codable, CaseIterable {
     case legal      // SSN, dates, names, addresses, case numbers
     case finance    // Account numbers, amounts, SSN
     case hr         // SSN, DOB, salary, addresses
-    case medical    // PHI, patient IDs, dates (HIPAA)
+    case medical    // PHI, patient IDs, dates
     case custom     // User-defined patterns
 }
 

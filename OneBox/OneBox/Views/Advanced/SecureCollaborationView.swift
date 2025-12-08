@@ -135,7 +135,7 @@ struct SecureCollaborationView: View {
                             Image(systemName: "lock.shield.fill")
                                 .foregroundColor(OneBoxColors.secureGreen)
                             
-                            Text("End-to-end encryption • Access controls • Activity tracking")
+                            Text("Local sharing • Access controls • Activity tracking")
                                 .font(OneBoxTypography.caption)
                                 .foregroundColor(OneBoxColors.secondaryText)
                         }
@@ -421,8 +421,8 @@ struct SecureCollaborationView: View {
                             .font(OneBoxTypography.caption)
                             .foregroundColor(OneBoxColors.secondaryText)
                         
-                        securityFeature("End-to-end encryption", true)
-                        securityFeature("Zero-knowledge architecture", true)
+                        securityFeature("Local device encryption", true)
+                        securityFeature("No cloud storage", true)
                         securityFeature("Automatic key rotation", encryptionLevel == .maximum)
                         securityFeature("Forward secrecy", encryptionLevel == .maximum)
                     }

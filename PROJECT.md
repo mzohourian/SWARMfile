@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-07
+**Last Updated:** 2025-12-08
 
 ## What This Is
 **OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -62,57 +62,60 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **Workflow "Configure-Once, Run-Many" redesign** - Major workflow architecture change:
-  - Users now configure each step's settings when creating a workflow
-  - Settings are saved and applied consistently on each run
-  - Removed "Organize" step (requires interactive UI, doesn't fit automated workflow)
-- All previous workflow fixes from earlier sessions remain in place
+- **Workflow hybrid interactive/automated redesign** - Major workflow fix:
+  - Interactive steps (Organize, Sign) now use existing app views (PageOrganizerView, InteractiveSignPDFView)
+  - Automated steps (Compress, Watermark, etc.) run with pre-configured settings
+  - Workflow pauses for interactive steps, continues after user completes them
+  - Fixed page numbers showing literal `{page}` - now properly replaced per-page
+  - Fixed date stamp showing "Processed:" prefix and ugly formatting
+  - Made compression more aggressive for visible file size reduction
+- All previous workflow fixes remain in place
 
 ---
 
 ## Last Session Summary
 
-**Date:** 2025-12-07
+**Date:** 2025-12-08
 
 **What Was Done:**
-- **Redesigned workflow system to "Configure-Once, Run-Many" approach:**
-  1. Created `ConfiguredStepData` and `WorkflowStepConfig` data models
-  2. Added `StepConfigurationView` with configuration UI for each step type:
-     - Compress: Quality selection (low/medium/high/maximum)
-     - Watermark: Text, position, opacity settings
-     - Sign: Position, use saved signature toggle, fallback text
-     - Page Numbers: Position, format, Bates numbering prefix/start
-     - Date Stamp: Position selection
-     - Redact: Preset selection (legal/finance/hr/medical)
-  3. Updated `CustomWorkflowData` with migration support for old format
-  4. Updated `WorkflowBuilderView` to use configured steps
-  5. Added `executeConfiguredWorkflow()` method to execution service
-  6. Removed "Organize" step from available steps (requires interactive UI)
+- **Redesigned workflow to use existing interactive views:**
+  1. Added `isInteractive` property to WorkflowStep enum (Organize, Sign = true)
+  2. Added fullScreenCover presentations for PageOrganizerView and InteractiveSignPDFView
+  3. Implemented view-driven workflow execution:
+     - `continueWorkflow()` - handles step routing
+     - `runAutomatedStep()` - executes non-interactive steps
+     - `handleInteractiveStepCompleted()` - resumes after interactive view closes
+     - `finishWorkflow()` - cleanup and success handling
+  4. Added `executeSingleStep()` to WorkflowExecutionService for step-by-step execution
+  5. Updated StepConfigurationView for Sign/Organize to show "Interactive Step" info
 
-- **Previous session fixes (preserved):**
-  - Fixed Add Step button
-  - Added success feedback with share option
-  - Fixed custom workflow persistence
-  - Fixed file access across actor boundaries
-  - Improved polling speed
+- **Bug fixes from earlier in session:**
+  - Fixed `CustomWorkflowData` not conforming to `Encodable`
+  - Added workflow delete feature with confirmation
+  - Fixed WorkflowHooksView to use new configuredSteps format
+  - Fixed page number placeholders (`{page}`, `{total}`) not being replaced
+  - Fixed date stamp format (removed "Processed:", use medium date)
+  - Made compression more aggressive (JPEG 0.25, resolution 35%)
+  - Fixed signature canvas gesture conflict with `.interactiveDismissDisabled()`
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
-- Custom workflows need testing with new configuration UI
-- Redact PDF needs user testing
+- Test workflow with interactive steps (Organize, Sign)
+- Verify automated steps work correctly after interactive steps
 
 **Files Modified:**
-- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Major restructure for configured steps
-- `OneBox/OneBox/Services/WorkflowExecutionService.swift` - New executeConfiguredWorkflow method
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Interactive workflow support
+- `OneBox/OneBox/Services/WorkflowExecutionService.swift` - Added executeSingleStep method
 
 ---
 
 ## Next Steps (Priority Order)
 
 1. **Build and test in Xcode** - Verify all changes compile
-2. **Test new workflow configuration UI** - Create a custom workflow and verify settings are applied
-3. **Test Redact PDF** - Verify file saving/sharing now works correctly
-4. Address Swift 6 warnings (optional, non-blocking)
+2. **Test workflow with interactive steps** - Create a workflow with Organize/Sign and verify they open existing views
+3. **Verify workflow chaining** - Test that automated steps run correctly after interactive steps complete
+4. **Test Redact PDF** - Verify file saving/sharing works correctly
+5. Address Swift 6 warnings (optional, non-blocking)
 
 ---
 

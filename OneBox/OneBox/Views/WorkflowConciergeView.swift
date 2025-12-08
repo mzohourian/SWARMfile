@@ -18,15 +18,22 @@ struct WorkflowConciergeView: View {
     @State private var suggestedWorkflows: [WorkflowSuggestion] = []
     @State private var isCreatingWorkflow = false
     @State private var selectedTemplate: WorkflowTemplate?
-    
+
     // Workflow Execution
     @State private var showingFilePicker = false
     @State private var activeTemplate: WorkflowTemplate?
-    @State private var activeConfiguredSteps: [ConfiguredStepData] = [] // Stores step configs for execution
+    @State private var activeConfiguredSteps: [ConfiguredStepData] = []
     @State private var isWorkflowRunning = false
     @State private var workflowError: String?
     @State private var currentStepIndex = 0
     @State private var totalSteps = 0
+
+    // Interactive workflow state - for pausing workflow to show existing views
+    @State private var workflowInputURLs: [URL] = [] // Current input files for workflow
+    @State private var workflowRemainingSteps: [ConfiguredStepData] = [] // Steps left to execute
+    @State private var showingPageOrganizer = false // For interactive organize step
+    @State private var showingInteractiveSign = false // For interactive sign step
+    @State private var interactiveCurrentURL: URL? // URL being processed by interactive view
 
     // Success state
     @State private var workflowSucceeded = false
@@ -133,8 +140,32 @@ struct WorkflowConciergeView: View {
                 Text("Are you sure you want to delete \"\(workflow.name)\"? This cannot be undone.")
             }
         }
+        // Interactive Page Organizer - uses existing view
+        .fullScreenCover(isPresented: $showingPageOrganizer) {
+            if let url = interactiveCurrentURL {
+                PageOrganizerView(pdfURL: url)
+                    .environmentObject(jobManager)
+                    .environmentObject(paymentsManager)
+                    .onDisappear {
+                        handleInteractiveStepCompleted()
+                    }
+            }
+        }
+        // Interactive Sign PDF - uses existing view
+        .fullScreenCover(isPresented: $showingInteractiveSign) {
+            if let url = interactiveCurrentURL {
+                InteractiveSignPDFView(pdfURL: url) { job in
+                    // Job submitted - will be handled by onDisappear
+                }
+                .environmentObject(jobManager)
+                .environmentObject(paymentsManager)
+                .onDisappear {
+                    handleInteractiveStepCompleted()
+                }
+            }
+        }
     }
-    
+
     // MARK: - Hero Section
     private var heroSection: some View {
         OneBoxCard(style: .security) {
@@ -635,72 +666,149 @@ struct WorkflowConciergeView: View {
     private func handleFileSelection(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
-            guard let template = activeTemplate else { return }
+            guard activeTemplate != nil else { return }
 
-            // Capture configured steps for this execution
-            let stepsToExecute = activeConfiguredSteps
+            // Copy files to temp directory for reliable access
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("Workflow_\(UUID().uuidString)")
+            try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
 
-            // Clear for next workflow
+            var secureURLs: [URL] = []
+            for url in urls {
+                _ = url.startAccessingSecurityScopedResource()
+                let tempURL = tempDir.appendingPathComponent(url.lastPathComponent)
+                do {
+                    try FileManager.default.copyItem(at: url, to: tempURL)
+                    secureURLs.append(tempURL)
+                } catch {
+                    secureURLs.append(url)
+                }
+                url.stopAccessingSecurityScopedResource()
+            }
+
+            // Initialize workflow state
+            workflowInputURLs = secureURLs
+            workflowRemainingSteps = activeConfiguredSteps
             activeConfiguredSteps = []
+            totalSteps = workflowRemainingSteps.count
+            currentStepIndex = 0
+            isWorkflowRunning = true
+            workflowError = nil
 
-            // Access security scoped resources
-            let secureURLs = urls.map { url -> URL in
-                if url.startAccessingSecurityScopedResource() {
-                    return url
-                }
-                return url
-            }
-
-            Task {
-                isWorkflowRunning = true
-                totalSteps = template.steps.count
-                currentStepIndex = 0
-
-                // Start monitoring progress (faster polling for responsive UI)
-                let progressTask = Task {
-                    while isWorkflowRunning {
-                        await MainActor.run {
-                            currentStepIndex = WorkflowExecutionService.shared.currentStepIndex
-                        }
-                        try? await Task.sleep(nanoseconds: 50_000_000) // 0.05s for responsive UI
-                    }
-                }
-
-                // Execute with configured steps
-                await WorkflowExecutionService.shared.executeConfiguredWorkflow(
-                    name: template.title,
-                    configuredSteps: stepsToExecute,
-                    inputURLs: secureURLs,
-                    jobManager: jobManager
-                )
-
-                progressTask.cancel()
-                isWorkflowRunning = false
-
-                // Check for errors or success
-                if let error = WorkflowExecutionService.shared.error {
-                    workflowError = error
-                } else {
-                    // Success! Get the output files from the last completed job
-                    if let lastJob = jobManager.completedJobs.last,
-                       !lastJob.outputURLs.isEmpty {
-                        completedOutputURLs = lastJob.outputURLs
-                        workflowSucceeded = true
-                    } else {
-                        workflowSucceeded = true
-                        completedOutputURLs = []
-                    }
-                }
-
-                // Release resources after processing
-                for url in secureURLs {
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
+            // Start the workflow
+            continueWorkflow()
 
         case .failure(let error):
             print("File selection failed: \(error.localizedDescription)")
         }
+    }
+
+    /// Continue workflow execution - handles both interactive and automated steps
+    private func continueWorkflow() {
+        // Check if there are more steps
+        guard !workflowRemainingSteps.isEmpty else {
+            // Workflow complete!
+            finishWorkflow()
+            return
+        }
+
+        // Get the next step
+        let nextStep = workflowRemainingSteps.first!
+        currentStepIndex = totalSteps - workflowRemainingSteps.count
+
+        // Check if this is an interactive step
+        if nextStep.step.isInteractive {
+            // Interactive step - show the appropriate existing view
+            guard let inputURL = workflowInputURLs.first else {
+                workflowError = "No input file available for \(nextStep.step.title)"
+                finishWorkflow()
+                return
+            }
+
+            interactiveCurrentURL = inputURL
+
+            switch nextStep.step {
+            case .organize:
+                showingPageOrganizer = true
+            case .sign:
+                showingInteractiveSign = true
+            default:
+                // Shouldn't happen, but handle gracefully
+                workflowRemainingSteps.removeFirst()
+                continueWorkflow()
+            }
+        } else {
+            // Automated step - run via execution service
+            runAutomatedStep(nextStep)
+        }
+    }
+
+    /// Run a single automated step
+    private func runAutomatedStep(_ step: ConfiguredStepData) {
+        Task {
+            do {
+                let outputURLs = try await WorkflowExecutionService.shared.executeSingleStep(
+                    step: step,
+                    inputURLs: workflowInputURLs,
+                    jobManager: jobManager
+                )
+
+                await MainActor.run {
+                    // Update inputs for next step
+                    workflowInputURLs = outputURLs
+                    // Remove completed step
+                    workflowRemainingSteps.removeFirst()
+                    // Continue to next step
+                    continueWorkflow()
+                }
+            } catch {
+                await MainActor.run {
+                    workflowError = error.localizedDescription
+                    finishWorkflow()
+                }
+            }
+        }
+    }
+
+    /// Called when an interactive view (PageOrganizer or InteractiveSign) completes
+    private func handleInteractiveStepCompleted() {
+        // The interactive view submitted a job - get the output
+        // Look for the most recent completed job's output
+        if let lastJob = jobManager.completedJobs.last,
+           !lastJob.outputURLs.isEmpty {
+            workflowInputURLs = lastJob.outputURLs
+        }
+
+        // Remove the completed interactive step
+        if !workflowRemainingSteps.isEmpty {
+            workflowRemainingSteps.removeFirst()
+        }
+
+        // Clear interactive state
+        interactiveCurrentURL = nil
+        showingPageOrganizer = false
+        showingInteractiveSign = false
+
+        // Small delay to ensure UI updates, then continue
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            self.continueWorkflow()
+        }
+    }
+
+    /// Finish the workflow (success or error)
+    private func finishWorkflow() {
+        isWorkflowRunning = false
+
+        if workflowError == nil {
+            // Success!
+            completedOutputURLs = workflowInputURLs
+            workflowSucceeded = true
+            HapticManager.shared.notification(.success)
+        }
+
+        // Cleanup
+        workflowInputURLs = []
+        workflowRemainingSteps = []
+        interactiveCurrentURL = nil
     }
 }
 
@@ -885,6 +993,16 @@ enum WorkflowStep: String, CaseIterable, Identifiable, Codable {
         case .addPageNumbers: return "Add page numbers (Bates numbering for legal)"
         case .addDateStamp: return "Add processing date to documents"
         case .flatten: return "Flatten form fields and annotations"
+        }
+    }
+
+    /// Whether this step requires interactive user input (uses existing app views)
+    var isInteractive: Bool {
+        switch self {
+        case .organize, .sign:
+            return true // Uses PageOrganizerView and InteractiveSignPDFView
+        default:
+            return false // Automated with configured settings
         }
     }
 }
@@ -1186,7 +1304,9 @@ struct WorkflowBuilderView: View {
         case .watermark:
             return "\"\(config.watermarkText)\" • \(config.watermarkPosition) • \(Int(config.watermarkOpacity * 100))%"
         case .sign:
-            return config.useStoredSignature ? "Saved signature • \(config.signaturePosition)" : "Text: \(config.signatureText)"
+            return "Interactive - touch to place"
+        case .organize:
+            return "Interactive - reorder pages"
         case .addPageNumbers:
             return config.batesPrefix.isEmpty ? "Page X of Y • \(config.pageNumberPosition)" : "Bates: \(config.batesPrefix)"
         case .addDateStamp:
@@ -1358,8 +1478,6 @@ struct StepConfigurationView: View {
     let onSave: () -> Void
     let onCancel: () -> Void
 
-    @State private var showingSignatureCanvas = false
-
     var body: some View {
         NavigationStack {
             ZStack {
@@ -1390,16 +1508,6 @@ struct StepConfigurationView: View {
                     Button("Add Step") { onSave() }
                         .foregroundColor(OneBoxColors.primaryGold)
                 }
-            }
-            .sheet(isPresented: $showingSignatureCanvas) {
-                EnhancedSignatureCanvasView(signatureData: $config.drawnSignatureData) { data in
-                    if let data = data {
-                        config.drawnSignatureData = data
-                        config.useStoredSignature = false // Use drawn signature instead
-                    }
-                    showingSignatureCanvas = false
-                }
-                .interactiveDismissDisabled() // Prevent sheet dismiss gesture from interfering with drawing
             }
         }
     }
@@ -1598,94 +1706,45 @@ struct StepConfigurationView: View {
 
     private var signOptions: some View {
         VStack(spacing: OneBoxSpacing.medium) {
-            // Draw signature option
+            OneBoxCard(style: .standard) {
+                VStack(spacing: OneBoxSpacing.medium) {
+                    Image(systemName: "signature")
+                        .font(.system(size: 48))
+                        .foregroundColor(OneBoxColors.warningAmber)
+
+                    Text("Interactive Step")
+                        .font(OneBoxTypography.cardTitle)
+                        .foregroundColor(OneBoxColors.primaryText)
+
+                    Text("Signing requires the interactive signature view.")
+                        .font(OneBoxTypography.body)
+                        .foregroundColor(OneBoxColors.secondaryText)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(OneBoxSpacing.large)
+            }
+
             OneBoxCard(style: .standard) {
                 VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
-                    Text("Signature")
+                    Label("What happens in workflow:", systemImage: "info.circle")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.primaryGold)
+
+                    Text("When this step runs, the Signature View will open so you can:")
                         .font(OneBoxTypography.caption)
                         .foregroundColor(OneBoxColors.secondaryText)
 
-                    Button(action: { showingSignatureCanvas = true }) {
-                        HStack {
-                            Image(systemName: config.drawnSignatureData != nil ? "checkmark.circle.fill" : "pencil.tip.crop.circle")
-                                .font(.system(size: 24))
-                                .foregroundColor(config.drawnSignatureData != nil ? OneBoxColors.secureGreen : OneBoxColors.primaryGold)
-
-                            VStack(alignment: .leading) {
-                                Text(config.drawnSignatureData != nil ? "Signature Drawn" : "Draw Your Signature")
-                                    .font(OneBoxTypography.body)
-                                    .foregroundColor(OneBoxColors.primaryText)
-                                Text(config.drawnSignatureData != nil ? "Tap to redraw" : "Tap to open signature canvas")
-                                    .font(OneBoxTypography.micro)
-                                    .foregroundColor(OneBoxColors.secondaryText)
-                            }
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(OneBoxColors.tertiaryText)
-                        }
-                        .padding(OneBoxSpacing.small)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Draw your signature on the document", systemImage: "pencil.tip")
+                        Label("Position it exactly where you want", systemImage: "arrow.up.and.down.and.arrow.left.and.right")
+                        Label("Resize for the perfect fit", systemImage: "arrow.up.left.and.arrow.down.right")
                     }
+                    .font(OneBoxTypography.caption)
+                    .foregroundColor(OneBoxColors.primaryText)
                 }
-            }
-
-            // Or use saved signature
-            if config.drawnSignatureData == nil {
-                OneBoxCard(style: .standard) {
-                    VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
-                        Toggle(isOn: $config.useStoredSignature) {
-                            VStack(alignment: .leading) {
-                                Text("Use Saved Signature")
-                                    .foregroundColor(OneBoxColors.primaryText)
-                                Text("Use your signature from Settings (if available)")
-                                    .font(OneBoxTypography.micro)
-                                    .foregroundColor(OneBoxColors.secondaryText)
-                            }
-                        }
-                        .tint(OneBoxColors.primaryGold)
-                    }
-                }
-
-                // Text fallback
-                if !config.useStoredSignature {
-                    OneBoxCard(style: .standard) {
-                        VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
-                            Text("Signature Text (Fallback)")
-                                .font(OneBoxTypography.caption)
-                                .foregroundColor(OneBoxColors.secondaryText)
-                            TextField("Enter signature text", text: $config.signatureText)
-                                .font(OneBoxTypography.body)
-                                .foregroundColor(OneBoxColors.primaryText)
-                                .padding(OneBoxSpacing.small)
-                                .background(OneBoxColors.surfaceGraphite.opacity(0.3))
-                                .cornerRadius(OneBoxRadius.small)
-                        }
-                    }
-                }
-            }
-
-            // Position
-            OneBoxCard(style: .standard) {
-                VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
-                    Text("Position")
-                        .font(OneBoxTypography.caption)
-                        .foregroundColor(OneBoxColors.secondaryText)
-
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                        ForEach(["topLeft", "topRight", "bottomLeft", "bottomRight"], id: \.self) { pos in
-                            Button(action: { config.signaturePosition = pos }) {
-                                Text(positionLabel(pos))
-                                    .font(OneBoxTypography.caption)
-                                    .padding(12)
-                                    .frame(maxWidth: .infinity)
-                                    .background(config.signaturePosition == pos ? OneBoxColors.primaryGold : OneBoxColors.surfaceGraphite)
-                                    .foregroundColor(config.signaturePosition == pos ? .black : OneBoxColors.primaryText)
-                                    .cornerRadius(8)
-                            }
-                        }
-                    }
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(OneBoxSpacing.medium)
             }
         }
     }

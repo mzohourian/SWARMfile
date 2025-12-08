@@ -140,7 +140,37 @@ class WorkflowExecutionService: ObservableObject {
             jobManager: jobManager
         )
     }
-    
+
+    /// Execute a single automated step (used by view-driven workflow)
+    func executeSingleStep(
+        step: ConfiguredStepData,
+        inputURLs: [URL],
+        jobManager: JobManager
+    ) async throws -> [URL] {
+        guard !inputURLs.isEmpty else {
+            throw WorkflowError.stepFailed("No input files provided")
+        }
+
+        print("Workflow: Executing single step: \(step.step.title)")
+
+        // Verify input files exist
+        let validInputs = inputURLs.filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !validInputs.isEmpty else {
+            throw WorkflowError.stepFailed("Input files not accessible")
+        }
+
+        // Configure and create job
+        let (jobType, settings) = configureJobWithUserSettings(step: step.step, config: step.config)
+        let job = Job(type: jobType, inputs: validInputs, settings: settings)
+
+        // Submit and wait for completion
+        await jobManager.submitJob(job)
+        let outputURLs = try await waitForJobCompletion(jobId: job.id, jobManager: jobManager)
+
+        print("Workflow: Step completed with \(outputURLs.count) output file(s)")
+        return outputURLs
+    }
+
     private func waitForJobCompletion(jobId: UUID, jobManager: JobManager) async throws -> [URL] {
         while true {
             guard let job = jobManager.jobs.first(where: { $0.id == jobId }) else {

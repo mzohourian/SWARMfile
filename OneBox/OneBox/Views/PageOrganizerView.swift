@@ -87,7 +87,7 @@ struct PageOrganizerView: View {
                                             Color.clear
                                                 .preference(
                                                     key: CellFramePreferenceKey.self,
-                                                    value: [page.id: geo.frame(in: .named("pageGrid"))]
+                                                    value: [page.id: geo.frame(in: .global)]
                                                 )
                                         }
                                     )
@@ -98,9 +98,8 @@ struct PageOrganizerView: View {
                                 cellFrames = frames
                             }
                         }
-                        .coordinateSpace(name: "pageGrid")
                         .simultaneousGesture(
-                            DragGesture(minimumDistance: 30, coordinateSpace: .named("pageGrid"))
+                            DragGesture(minimumDistance: 20, coordinateSpace: .global)
                                 .onChanged { value in
                                     let isStart = !isSwipeSelecting
                                     isSwipeSelecting = true

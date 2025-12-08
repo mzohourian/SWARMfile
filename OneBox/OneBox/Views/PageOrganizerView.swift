@@ -739,7 +739,13 @@ struct PageOrganizerView: View {
                     paymentsManager.consumeExport()
                     completedJob = job
                     isProcessing = false
-                    showingResult = true
+
+                    // In workflow mode, dismiss immediately without showing result
+                    if workflowMode {
+                        dismiss()
+                    } else {
+                        showingResult = true
+                    }
                 }
                 await jobManager.submitJob(job)
 

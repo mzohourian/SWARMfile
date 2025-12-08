@@ -1114,9 +1114,16 @@ struct RedactionView: View {
                     paymentsManager.consumeExport()
                     completedJob = job
                     isProcessing = false
-                    showingResult = true
                     HapticManager.shared.notification(.success)
-                    print("🔵 RedactionView: showingResult = true, completedJob set")
+
+                    // In workflow mode, dismiss immediately without showing result
+                    if workflowMode {
+                        print("🔵 RedactionView: Workflow mode - dismissing")
+                        dismiss()
+                    } else {
+                        showingResult = true
+                        print("🔵 RedactionView: showingResult = true, completedJob set")
+                    }
                 }
 
                 // Submit job for history tracking

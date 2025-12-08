@@ -1055,12 +1055,12 @@ struct SwipeSelectionOverlay: UIViewRepresentable {
         view.isUserInteractionEnabled = true
         view.coordinator = context.coordinator
 
-        let panGesture = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePan(_:)))
-        panGesture.delegate = context.coordinator
-        panGesture.minimumNumberOfTouches = 1
-        panGesture.maximumNumberOfTouches = 1
-        view.addGestureRecognizer(panGesture)
-        context.coordinator.panGesture = panGesture
+        // Long press gesture to initiate selection mode (like iOS Photos)
+        let longPressGesture = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleLongPress(_:)))
+        longPressGesture.minimumPressDuration = 0.2  // Short delay to activate
+        longPressGesture.delegate = context.coordinator
+        view.addGestureRecognizer(longPressGesture)
+        context.coordinator.longPressGesture = longPressGesture
 
         return view
     }
@@ -1082,7 +1082,7 @@ struct SwipeSelectionOverlay: UIViewRepresentable {
         var onSelectionChanged: ((Set<UUID>) -> Void)?
         var onHaptic: (() -> Void)?
 
-        weak var panGesture: UIPanGestureRecognizer?
+        weak var longPressGesture: UILongPressGestureRecognizer?
 
         private var isSelecting = false
         private var selectMode: Bool? = nil  // true = select, false = deselect
@@ -1090,13 +1090,20 @@ struct SwipeSelectionOverlay: UIViewRepresentable {
         private var workingSelection: Set<UUID> = []
         private var startedOnCell = false
 
-        @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
-            let location = gesture.location(in: gesture.view?.window)
+        // Auto-scroll support
+        private var autoScrollTimer: Timer?
+        private var autoScrollSpeed: CGFloat = 0
+        private weak var activeScrollView: UIScrollView?
+        private var scrollViewBounds: CGRect = .zero
+
+        @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+            let locationInWindow = gesture.location(in: gesture.view?.window)
+            let locationInView = gesture.location(in: gesture.view)
 
             switch gesture.state {
             case .began:
                 // Check if we started on a cell
-                if let pageId = pageAtLocation(location) {
+                if let pageId = pageAtLocation(locationInWindow) {
                     startedOnCell = true
                     isSelecting = true
                     workingSelection = selectedPages
@@ -1108,24 +1115,34 @@ struct SwipeSelectionOverlay: UIViewRepresentable {
                     // Process first cell
                     processCell(pageId)
 
-                    // Disable scroll view
-                    findScrollView(in: gesture.view)?.isScrollEnabled = false
+                    // Get scroll view reference and bounds
+                    if let scrollView = findScrollView(in: gesture.view) {
+                        activeScrollView = scrollView
+                        scrollViewBounds = scrollView.convert(scrollView.bounds, to: gesture.view?.window)
+                    }
+
+                    // Haptic feedback to indicate selection mode activated
+                    let generator = UIImpactFeedbackGenerator(style: .medium)
+                    generator.impactOccurred()
                 } else {
                     startedOnCell = false
+                    gesture.state = .cancelled
                 }
 
             case .changed:
                 guard startedOnCell, isSelecting else { return }
 
-                if let pageId = pageAtLocation(location) {
+                // Check for cells at current location
+                if let pageId = pageAtLocation(locationInWindow) {
                     processCell(pageId)
                 }
 
-            case .ended, .cancelled:
-                if startedOnCell {
-                    // Re-enable scroll view
-                    findScrollView(in: gesture.view)?.isScrollEnabled = true
-                }
+                // Handle auto-scroll based on position
+                updateAutoScroll(locationInView: locationInView, locationInWindow: locationInWindow)
+
+            case .ended, .cancelled, .failed:
+                stopAutoScroll()
+                activeScrollView = nil
 
                 isSelecting = false
                 startedOnCell = false
@@ -1134,6 +1151,74 @@ struct SwipeSelectionOverlay: UIViewRepresentable {
 
             default:
                 break
+            }
+        }
+
+        private func updateAutoScroll(locationInView: CGPoint, locationInWindow: CGPoint) {
+            guard let scrollView = activeScrollView else { return }
+
+            let scrollViewFrame = scrollView.convert(scrollView.bounds, to: scrollView.window)
+            let edgeThreshold: CGFloat = 60  // Distance from edge to start scrolling
+            let maxScrollSpeed: CGFloat = 8  // Points per timer tick
+
+            var newSpeed: CGFloat = 0
+
+            // Check if near top edge
+            let distanceFromTop = locationInWindow.y - scrollViewFrame.minY
+            if distanceFromTop < edgeThreshold && distanceFromTop > 0 {
+                // Scroll up (negative speed)
+                let intensity = 1 - (distanceFromTop / edgeThreshold)
+                newSpeed = -maxScrollSpeed * intensity
+            }
+
+            // Check if near bottom edge
+            let distanceFromBottom = scrollViewFrame.maxY - locationInWindow.y
+            if distanceFromBottom < edgeThreshold && distanceFromBottom > 0 {
+                // Scroll down (positive speed)
+                let intensity = 1 - (distanceFromBottom / edgeThreshold)
+                newSpeed = maxScrollSpeed * intensity
+            }
+
+            autoScrollSpeed = newSpeed
+
+            if newSpeed != 0 && autoScrollTimer == nil {
+                startAutoScroll()
+            } else if newSpeed == 0 {
+                stopAutoScroll()
+            }
+        }
+
+        private func startAutoScroll() {
+            autoScrollTimer = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { [weak self] _ in
+                self?.performAutoScroll()
+            }
+        }
+
+        private func stopAutoScroll() {
+            autoScrollTimer?.invalidate()
+            autoScrollTimer = nil
+            autoScrollSpeed = 0
+        }
+
+        private func performAutoScroll() {
+            guard let scrollView = activeScrollView, autoScrollSpeed != 0 else { return }
+
+            var newOffset = scrollView.contentOffset
+            newOffset.y += autoScrollSpeed
+
+            // Clamp to valid range
+            let minY: CGFloat = 0
+            let maxY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
+            newOffset.y = max(minY, min(maxY, newOffset.y))
+
+            scrollView.contentOffset = newOffset
+
+            // Check for new cells at the current touch location after scroll
+            if let gesture = longPressGesture, gesture.state == .changed {
+                let locationInWindow = gesture.location(in: gesture.view?.window)
+                if let pageId = pageAtLocation(locationInWindow) {
+                    processCell(pageId)
+                }
             }
         }
 
@@ -1175,13 +1260,11 @@ struct SwipeSelectionOverlay: UIViewRepresentable {
         // MARK: - UIGestureRecognizerDelegate
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            // Allow simultaneous recognition initially - we'll disable scroll if needed
+            // Don't allow simultaneous with scroll view pan when we're selecting
+            if isSelecting {
+                return false
+            }
             return true
-        }
-
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            // If we started on a cell, require other gestures to fail
-            return startedOnCell
         }
     }
 }

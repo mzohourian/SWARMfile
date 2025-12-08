@@ -102,6 +102,7 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
   - Fixed Organize PDF blank page on first tap (changed sheet from `isPresented` to `item` binding)
   - Fixed signature position mismatch (signature CENTER now at tap position, not corner)
   - Fixed workflow section performance (removed unused `@EnvironmentObject` from WorkflowBuilderView)
+  - Fixed redact function in workflow (presets now convert to regex patterns, findTextRanges supports regex)
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test

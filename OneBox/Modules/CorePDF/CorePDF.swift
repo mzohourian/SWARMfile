@@ -1465,19 +1465,38 @@ public actor PDFProcessor {
     private func findTextRanges(_ searchText: String, in text: String) -> [NSRange] {
         var ranges: [NSRange] = []
         let nsText = text as NSString
+
+        // First try as regex pattern
+        if let regex = try? NSRegularExpression(pattern: searchText, options: [.caseInsensitive]) {
+            let fullRange = NSRange(location: 0, length: nsText.length)
+            let matches = regex.matches(in: text, options: [], range: fullRange)
+            for match in matches {
+                ranges.append(match.range)
+            }
+            if !ranges.isEmpty {
+                print("🔵 CorePDF: Found \(ranges.count) regex matches for pattern: \(searchText)")
+                return ranges
+            }
+        }
+
+        // Fall back to plain text search if regex fails or finds nothing
         var searchRange = NSRange(location: 0, length: nsText.length)
-        
+
         while searchRange.location < nsText.length {
             let foundRange = nsText.range(of: searchText, options: [.caseInsensitive], range: searchRange)
             if foundRange.location == NSNotFound {
                 break
             }
-            
+
             ranges.append(foundRange)
             searchRange.location = foundRange.location + foundRange.length
             searchRange.length = nsText.length - searchRange.location
         }
-        
+
+        if !ranges.isEmpty {
+            print("🔵 CorePDF: Found \(ranges.count) plain text matches for: \(searchText)")
+        }
+
         return ranges
     }
     

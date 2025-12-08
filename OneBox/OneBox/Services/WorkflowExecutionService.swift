@@ -281,10 +281,13 @@ class WorkflowExecutionService: ObservableObject {
 
         case .redact:
             jobType = .pdfRedact
-            // Convert string preset to enum
-            settings.redactionPreset = WorkflowRedactionPreset(rawValue: config.redactionPreset) ?? .legal
+            // Convert string preset to enum and populate redaction patterns
+            let preset = WorkflowRedactionPreset(rawValue: config.redactionPreset) ?? .legal
+            settings.redactionPreset = preset
+            settings.redactionItems = redactionPatternsForPreset(preset)
             settings.stripMetadata = true
             settings.enableDocumentSanitization = true
+            print("Workflow: Redact step with preset '\(preset.rawValue)' using \(settings.redactionItems.count) patterns")
 
         case .addPageNumbers:
             jobType = .pdfWatermark
@@ -315,6 +318,73 @@ class WorkflowExecutionService: ObservableObject {
         }
 
         return (jobType, settings)
+    }
+
+    /// Convert redaction preset to actual patterns to search for
+    private func redactionPatternsForPreset(_ preset: WorkflowRedactionPreset) -> [String] {
+        switch preset {
+        case .legal:
+            return [
+                // SSN patterns
+                "\\d{3}-\\d{2}-\\d{4}",
+                "\\d{3} \\d{2} \\d{4}",
+                // Date patterns
+                "\\d{1,2}/\\d{1,2}/\\d{2,4}",
+                "\\d{1,2}-\\d{1,2}-\\d{2,4}",
+                // Case numbers (common formats)
+                "Case No\\.?\\s*\\d+",
+                "Docket\\s*#?\\s*\\d+",
+                // Phone numbers
+                "\\(\\d{3}\\)\\s*\\d{3}-\\d{4}",
+                "\\d{3}-\\d{3}-\\d{4}"
+            ]
+        case .finance:
+            return [
+                // SSN
+                "\\d{3}-\\d{2}-\\d{4}",
+                // Account numbers (various lengths)
+                "Account\\s*#?:?\\s*\\d{8,17}",
+                "Acct\\s*#?:?\\s*\\d{8,17}",
+                // Routing numbers
+                "Routing\\s*#?:?\\s*\\d{9}",
+                // Credit card patterns
+                "\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}",
+                // Dollar amounts
+                "\\$\\d{1,3}(,\\d{3})*(\\.\\d{2})?"
+            ]
+        case .hr:
+            return [
+                // SSN
+                "\\d{3}-\\d{2}-\\d{4}",
+                // DOB
+                "DOB:?\\s*\\d{1,2}/\\d{1,2}/\\d{2,4}",
+                "Date of Birth:?\\s*\\d{1,2}/\\d{1,2}/\\d{2,4}",
+                // Salary patterns
+                "Salary:?\\s*\\$?\\d{1,3}(,\\d{3})*",
+                "Compensation:?\\s*\\$?\\d{1,3}(,\\d{3})*",
+                // Phone
+                "\\(\\d{3}\\)\\s*\\d{3}-\\d{4}",
+                "\\d{3}-\\d{3}-\\d{4}"
+            ]
+        case .medical:
+            return [
+                // Patient ID patterns
+                "Patient\\s*ID:?\\s*\\w+",
+                "MRN:?\\s*\\d+",
+                "Medical Record:?\\s*\\d+",
+                // SSN
+                "\\d{3}-\\d{2}-\\d{4}",
+                // DOB
+                "DOB:?\\s*\\d{1,2}/\\d{1,2}/\\d{2,4}",
+                // Date patterns (HIPAA)
+                "\\d{1,2}/\\d{1,2}/\\d{2,4}",
+                // Phone
+                "\\(\\d{3}\\)\\s*\\d{3}-\\d{4}"
+            ]
+        case .custom:
+            // Custom preset returns empty - user would provide their own patterns
+            return []
+        }
     }
 }
 

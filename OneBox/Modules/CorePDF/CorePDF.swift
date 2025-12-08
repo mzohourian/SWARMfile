@@ -1133,10 +1133,15 @@ public actor PDFProcessor {
         ]
         
         // Custom position is in normalized coordinates (0.0 to 1.0)
+        // The position represents the CENTER of where user tapped, so offset by half text size
         let textSize = (text as NSString).size(withAttributes: attributes)
+        let centerX = bounds.minX + (bounds.width * clampedX)
+        let centerY = bounds.minY + (bounds.height * (1.0 - clampedY)) // Flip Y coordinate
+
+        // Calculate origin by offsetting from center
         let point = CGPoint(
-            x: max(bounds.minX, min(bounds.minX + (bounds.width * clampedX), bounds.maxX - textSize.width)),
-            y: max(bounds.minY, min(bounds.minY + (bounds.height * (1.0 - clampedY)), bounds.maxY - textSize.height))
+            x: max(bounds.minX, min(centerX - (textSize.width / 2), bounds.maxX - textSize.width)),
+            y: max(bounds.minY, min(centerY - (textSize.height / 2), bounds.maxY - textSize.height))
         )
         (text as NSString).draw(at: point, withAttributes: attributes)
     }
@@ -1171,17 +1176,22 @@ public actor PDFProcessor {
         )
         
         // Custom position is in normalized coordinates (0.0 to 1.0)
+        // The position represents the CENTER of where user tapped, so offset by half signature size
+        let centerX = bounds.minX + (bounds.width * clampedX)
+        let centerY = bounds.minY + (bounds.height * (1.0 - clampedY)) // Flip Y coordinate
+
+        // Calculate origin by offsetting from center
         let origin = CGPoint(
-            x: bounds.minX + (bounds.width * clampedX),
-            y: bounds.minY + (bounds.height * (1.0 - clampedY)) // Flip Y coordinate
+            x: centerX - (clampedSize.width / 2),
+            y: centerY - (clampedSize.height / 2)
         )
-        
+
         // Ensure signature stays within page bounds
         let finalOrigin = CGPoint(
             x: max(bounds.minX, min(origin.x, bounds.maxX - clampedSize.width)),
             y: max(bounds.minY, min(origin.y, bounds.maxY - clampedSize.height))
         )
-        
+
         let rect = CGRect(origin: finalOrigin, size: clampedSize)
         image.draw(in: rect)
     }

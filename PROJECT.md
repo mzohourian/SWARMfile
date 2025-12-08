@@ -98,14 +98,20 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
   - Made compression more aggressive (JPEG 0.25, resolution 35%)
   - Fixed signature canvas gesture conflict with `.interactiveDismissDisabled()`
 
+- **Additional fixes (from continued session):**
+  - Fixed Organize PDF blank page on first tap (changed sheet from `isPresented` to `item` binding)
+  - Fixed signature position mismatch (signature CENTER now at tap position, not corner)
+  - Fixed workflow section performance (removed unused `@EnvironmentObject` from WorkflowBuilderView)
+
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
 - Test workflow with interactive steps (Organize, Sign)
 - Verify automated steps work correctly after interactive steps
 
 **Files Modified:**
-- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Interactive workflow support
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Interactive workflow support, fixed blank page, performance fix
 - `OneBox/OneBox/Services/WorkflowExecutionService.swift` - Added executeSingleStep method
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed signature position (center at tap, not corner)
 
 ---
 

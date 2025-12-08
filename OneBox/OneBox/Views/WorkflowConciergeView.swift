@@ -94,7 +94,6 @@ struct WorkflowConciergeView: View {
         }
         .sheet(isPresented: $isCreatingWorkflow) {
             WorkflowBuilderView(template: selectedTemplate)
-                .environmentObject(jobManager)
         }
         .fileImporter(
             isPresented: $showingFilePicker,
@@ -1011,10 +1010,8 @@ enum WorkflowStep: String, CaseIterable, Identifiable, Codable {
 struct WorkflowBuilderView: View {
     let template: WorkflowTemplate?
     @Environment(\.dismiss) var dismiss
-    @EnvironmentObject var jobManager: JobManager
     @State private var workflowName = ""
     @State private var configuredSteps: [ConfiguredStepData] = []
-    @State private var showingStepConfig = false
     @State private var stepBeingConfigured: WorkflowStep?
     @State private var currentStepConfig = WorkflowStepConfig()
 
@@ -1069,24 +1066,20 @@ struct WorkflowBuilderView: View {
                     .disabled(workflowName.isEmpty || configuredSteps.isEmpty)
                 }
             }
-            .sheet(isPresented: $showingStepConfig) {
-                if let step = stepBeingConfigured {
-                    StepConfigurationView(
-                        step: step,
-                        config: $currentStepConfig,
-                        onSave: {
-                            let configured = ConfiguredStepData(step: step, config: currentStepConfig)
-                            configuredSteps.append(configured)
-                            showingStepConfig = false
-                            stepBeingConfigured = nil
-                            HapticManager.shared.notification(.success)
-                        },
-                        onCancel: {
-                            showingStepConfig = false
-                            stepBeingConfigured = nil
-                        }
-                    )
-                }
+            .sheet(item: $stepBeingConfigured) { step in
+                StepConfigurationView(
+                    step: step,
+                    config: $currentStepConfig,
+                    onSave: {
+                        let configured = ConfiguredStepData(step: step, config: currentStepConfig)
+                        configuredSteps.append(configured)
+                        stepBeingConfigured = nil
+                        HapticManager.shared.notification(.success)
+                    },
+                    onCancel: {
+                        stepBeingConfigured = nil
+                    }
+                )
             }
         }
         .onAppear {
@@ -1275,10 +1268,9 @@ struct WorkflowBuilderView: View {
     }
 
     private func addStep(_ step: WorkflowStep) {
-        // Show configuration sheet for the step
-        stepBeingConfigured = step
+        // Set up config first, then set stepBeingConfigured to trigger sheet
         currentStepConfig = WorkflowStepConfig.defaultConfig(for: step)
-        showingStepConfig = true
+        stepBeingConfigured = step
         HapticManager.shared.selection()
     }
     

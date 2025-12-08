@@ -75,84 +75,34 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2025-12-08
+**Date:** 2025-12-08 (continued session)
 
 **What Was Done:**
-- **Redesigned workflow to use existing interactive views:**
-  1. Added `isInteractive` property to WorkflowStep enum (Organize, Sign = true)
-  2. Added fullScreenCover presentations for PageOrganizerView and InteractiveSignPDFView
-  3. Implemented view-driven workflow execution:
-     - `continueWorkflow()` - handles step routing
-     - `runAutomatedStep()` - executes non-interactive steps
-     - `handleInteractiveStepCompleted()` - resumes after interactive view closes
-     - `finishWorkflow()` - cleanup and success handling
-  4. Added `executeSingleStep()` to WorkflowExecutionService for step-by-step execution
-  5. Updated StepConfigurationView for Sign/Organize to show "Interactive Step" info
+- **Added swipe-to-select in Page Organizer (iOS Photos-like):**
+  - Swipe across pages to select/deselect multiple at once
+  - First page touched determines mode (select or deselect)
+  - Haptic feedback on each page touched
+  - Only activates when starting on a cell (preserves scrolling)
+  - Uses PreferenceKey system for cell frame tracking
 
-- **Bug fixes from earlier in session:**
-  - Fixed `CustomWorkflowData` not conforming to `Encodable`
-  - Added workflow delete feature with confirmation
-  - Fixed WorkflowHooksView to use new configuredSteps format
-  - Fixed page number placeholders (`{page}`, `{total}`) not being replaced
-  - Fixed date stamp format (removed "Processed:", use medium date)
-  - Made compression more aggressive (JPEG 0.25, resolution 35%)
-  - Fixed signature canvas gesture conflict with `.interactiveDismissDisabled()`
+- **Fixed RedactionView failing to load PDF in workflow:**
+  - Added retry logic (3 attempts, 0.5s delay each)
+  - Fixed security-scoped resource management in WorkflowConciergeView
+  - Keep security access open for fallback URLs if temp copy fails
+  - Release access only when workflow finishes
 
-- **Additional fixes (from continued session):**
-  - Fixed Organize PDF blank page on first tap (changed sheet from `isPresented` to `item` binding)
-  - Fixed signature position mismatch (signature CENTER now at tap position, not corner)
-  - Fixed workflow section performance (removed unused `@EnvironmentObject` from WorkflowBuilderView)
-  - Fixed redact function in workflow (presets now convert to regex patterns, findTextRanges supports regex)
-  - Made Redact an interactive workflow step (uses existing RedactionView with OCR and selection)
-  - **Removed inaccurate marketing claims:**
-    - Removed "HIPAA-compliant" claims (requires certification)
-    - Replaced "military-grade security/encryption" with accurate descriptions
-    - Replaced "Zero-Knowledge" and "End-to-End Encryption" (misused terms)
-    - Updated "Healthcare (HIPAA)" and "Finance (SOX)" labels
-  - **Fixed biometric authentication (Face ID) not working on iPhone:**
-    - Added missing `NSFaceIDUsageDescription` to Info.plist
-    - This key is required by iOS for Face ID permission
-  - **UX improvements for workflow interactive steps:**
-    - Changed "Done" button to "Proceed" in workflow mode for clarity
-    - Added `workflowMode` parameter to PageOrganizerView, InteractiveSignPDFView, RedactionView
-  - **Added visual tap-to-toggle for redaction:**
-    - New "Visual" mode in RedactionView with List/Visual segmented picker
-    - Shows PDF page with redaction boxes overlaid
-    - Tap boxes to include/exclude from redaction (selected = black, excluded = gray)
-    - Page navigation for multi-page documents
-    - Info labels for items with/without visual boxes
-  - **Settings cleanup:**
-    - Removed unnecessary Appearance/Theme section (app is dark-only)
-  - **Privacy Dashboard accuracy fixes:**
-    - Renamed "Encrypted Memory" to "Secure Processing" (memory is not actually encrypted)
-    - Renamed "Zero Tracking" to "No Cloud Upload" (more accurate)
-  - **Implemented Advanced Privacy Features (all 100% offline):**
-    - **File Forensics**: Select file → Generate SHA-256 hash → Verify on-device processing
-    - **Document Sanitizer**: Select file → Remove metadata, comments, hidden content → Share sanitized file
-    - **Encryption Center**: Select file → Set password → AES-256 encrypt → Share encrypted file
-    - All features use existing Privacy.swift backend (CryptoKit, PDFKit, no network)
-  - **Added swipe-to-select in Page Organizer (iOS Photos-like):**
-    - Swipe across pages to select/deselect multiple pages at once
-    - First page touched determines mode: if selected, swipe deselects; if not selected, swipe selects
-    - Haptic feedback on each page touched during swipe
-    - Only activates when swipe starts on a cell (not in empty space between cells)
-    - Uses PreferenceKey system to track cell frames for hit testing
+- **Fixed redaction analysis not triggering:**
+  - Removed broken `onChange(of: pdfDocument)` - PDFDocument doesn't conform to Equatable
+  - Now calls `performSensitiveDataAnalysis()` directly when PDF loads successfully
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
-- Test workflow with interactive steps (Organize, Sign)
-- Verify automated steps work correctly after interactive steps
+- Swipe-to-select needs user testing for feel/responsiveness
 
-**Files Modified:**
-- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Interactive workflow support, fixed blank page, performance fix, workflowMode for views
-- `OneBox/OneBox/Services/WorkflowExecutionService.swift` - Added executeSingleStep method
-- `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed signature position (center at tap, not corner)
-- `OneBox/OneBox/Info.plist` - Added NSFaceIDUsageDescription for Face ID permission
-- `OneBox/OneBox/Views/PageOrganizerView.swift` - Added workflowMode parameter, "Proceed" button, swipe-to-select gesture
-- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Added workflowMode parameter, "Proceed" button
-- `OneBox/OneBox/Views/RedactionView.swift` - Added workflowMode, visual tap-to-toggle preview mode
-- `OneBox/OneBox/Views/SettingsView.swift` - Removed theme picker (dark-only app)
-- `OneBox/OneBox/Views/PrivacyDashboardView.swift` - Fixed misleading claims, marked Advanced Features as Coming Soon
+**Files Modified This Session:**
+- `OneBox/OneBox/Views/PageOrganizerView.swift` - Swipe-to-select gesture
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Fixed security-scoped resource management
+- `OneBox/OneBox/Views/RedactionView.swift` - Fixed PDF loading retry + analysis trigger
 
 ---
 

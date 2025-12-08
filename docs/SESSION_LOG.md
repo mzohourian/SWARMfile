@@ -4,6 +4,34 @@
 
 ---
 
+## 2025-12-08: Page Organizer & Redaction Fixes
+
+**Features Added:**
+- **Swipe-to-select in Page Organizer** (iOS Photos-style)
+  - Drag finger across pages to select/deselect multiple at once
+  - First cell touched determines mode (selecting vs deselecting)
+  - Haptic feedback for each cell touched
+  - Uses PreferenceKey system to track cell frames
+
+**Bugs Fixed:**
+1. **RedactionView not loading PDF in workflow**
+   - Root cause: Security-scoped resource access released too early
+   - Fix: Keep access open if temp copy fails, release only at workflow end
+   - Added retry logic (3 attempts with 0.5s delay)
+
+2. **Redaction analysis not running**
+   - Root cause: `onChange(of: pdfDocument)` never fired because PDFDocument doesn't conform to Equatable
+   - Fix: Call `performSensitiveDataAnalysis()` directly when PDF loads in `loadPDFDocument()`
+
+**Files Modified:**
+- `OneBox/OneBox/Views/PageOrganizerView.swift` - Swipe-to-select
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Security-scoped resource fix
+- `OneBox/OneBox/Views/RedactionView.swift` - PDF loading retry + analysis trigger fix
+
+**Status:** Needs user testing
+
+---
+
 ## 2025-12-07: Workflow Feature - Complete Fixes
 
 **Problems Reported:**

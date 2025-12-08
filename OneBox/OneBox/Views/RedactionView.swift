@@ -351,7 +351,7 @@ struct RedactionView: View {
                     ScrollView {
                         ZStack(alignment: .topLeading) {
                             // PDF page rendering
-                            PDFPageView(page: page)
+                            RedactionPDFPageView(page: page)
                                 .frame(width: finalWidth, height: finalHeight)
                                 .background(Color.white)
                                 .cornerRadius(8)
@@ -1491,26 +1491,26 @@ struct RedactionPreviewView: View {
     }
 }
 
-// MARK: - PDF Page Rendering View
-/// Simple view for rendering a PDF page
-struct PDFPageView: UIViewRepresentable {
+// MARK: - PDF Page Rendering View for Redaction Preview
+/// Simple view for rendering a PDF page in the redaction visual preview
+struct RedactionPDFPageView: UIViewRepresentable {
     let page: PDFPage
 
-    func makeUIView(context: Context) -> PDFPageRenderView {
-        let view = PDFPageRenderView()
+    func makeUIView(context: Context) -> RedactionPDFRenderView {
+        let view = RedactionPDFRenderView()
         view.page = page
         view.backgroundColor = .white
         return view
     }
 
-    func updateUIView(_ uiView: PDFPageRenderView, context: Context) {
+    func updateUIView(_ uiView: RedactionPDFRenderView, context: Context) {
         uiView.page = page
         uiView.setNeedsDisplay()
     }
 }
 
-/// UIView subclass that renders a PDF page
-class PDFPageRenderView: UIView {
+/// UIView subclass that renders a PDF page for redaction preview
+class RedactionPDFRenderView: UIView {
     var page: PDFPage?
 
     override func draw(_ rect: CGRect) {

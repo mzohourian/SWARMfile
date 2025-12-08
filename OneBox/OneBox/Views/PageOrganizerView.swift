@@ -39,9 +39,6 @@ struct PageOrganizerView: View {
     // Drag & drop state
     @State private var draggedPage: PageInfo?
 
-    // Swipe-to-select state (cell frames tracked for UIKit overlay)
-    @State private var cellFrames: [UUID: CGRect] = [:]
-
     // Security-scoped resource tracking
     @State private var didStartAccessingSecurityScoped = false
 
@@ -64,49 +61,23 @@ struct PageOrganizerView: View {
                             anomalyBanner
                         }
                         
-                        // Page grid with swipe-to-select
-                        ZStack {
-                            ScrollView {
-                                LazyVGrid(columns: [
-                                    GridItem(.adaptive(minimum: 120, maximum: 150), spacing: 16)
-                                ], spacing: 16) {
-                                    ForEach(pages) { page in
-                                        PageCell(
-                                            page: page,
-                                            isSelected: selectedPages.contains(page.id),
-                                            onTap: { toggleSelection(page) },
-                                            onDrag: { draggedPage = page },
-                                            onDrop: { handleDrop(page) },
-                                            hasAnomaly: detectedAnomalies.contains { $0.pageId == page.id }
-                                        )
-                                        .background(
-                                            GeometryReader { geo in
-                                                Color.clear
-                                                    .preference(
-                                                        key: CellFramePreferenceKey.self,
-                                                        value: [page.id: geo.frame(in: .global)]
-                                                    )
-                                            }
-                                        )
-                                    }
-                                }
-                                .padding()
-                                .onPreferenceChange(CellFramePreferenceKey.self) { frames in
-                                    cellFrames = frames
+                        // Page grid
+                        ScrollView {
+                            LazyVGrid(columns: [
+                                GridItem(.adaptive(minimum: 120, maximum: 150), spacing: 16)
+                            ], spacing: 16) {
+                                ForEach(pages) { page in
+                                    PageCell(
+                                        page: page,
+                                        isSelected: selectedPages.contains(page.id),
+                                        onTap: { toggleSelection(page) },
+                                        onDrag: { draggedPage = page },
+                                        onDrop: { handleDrop(page) },
+                                        hasAnomaly: detectedAnomalies.contains { $0.pageId == page.id }
+                                    )
                                 }
                             }
-
-                            // UIKit-based swipe selection overlay
-                            SwipeSelectionOverlay(
-                                cellFrames: cellFrames,
-                                selectedPages: selectedPages,
-                                onSelectionChanged: { newSelection in
-                                    selectedPages = newSelection
-                                },
-                                onHaptic: {
-                                    HapticManager.shared.impact(.light)
-                                }
-                            )
+                            .padding()
                         }
 
                         // Bottom toolbar
@@ -1031,294 +1002,6 @@ struct PageDropDelegate: DropDelegate {
         print("PageDropDelegate: validateDrop called")
         return info.hasItemsConforming(to: [UTType.plainText])
     }
-}
-
-// MARK: - Preference Key for Cell Frames
-struct CellFramePreferenceKey: PreferenceKey {
-    static var defaultValue: [UUID: CGRect] = [:]
-
-    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
-        value.merge(nextValue()) { _, new in new }
-    }
-}
-
-// MARK: - Swipe Selection Gesture Handler (UIKit-based for proper ScrollView coordination)
-struct SwipeSelectionOverlay: UIViewRepresentable {
-    let cellFrames: [UUID: CGRect]
-    let selectedPages: Set<UUID>
-    let onSelectionChanged: (Set<UUID>) -> Void
-    let onHaptic: () -> Void
-
-    func makeUIView(context: Context) -> SwipeSelectionView {
-        let view = SwipeSelectionView()
-        view.backgroundColor = .clear
-        view.isUserInteractionEnabled = false  // Pass through all touches
-        view.coordinator = context.coordinator
-        context.coordinator.overlayView = view
-
-        // Delay gesture setup to next run loop to ensure scroll view exists
-        DispatchQueue.main.async {
-            context.coordinator.setupGestureIfNeeded()
-        }
-
-        return view
-    }
-
-    func updateUIView(_ uiView: SwipeSelectionView, context: Context) {
-        context.coordinator.cellFrames = cellFrames
-        context.coordinator.selectedPages = selectedPages
-        context.coordinator.onSelectionChanged = onSelectionChanged
-        context.coordinator.onHaptic = onHaptic
-
-        // Try to set up gesture if not already done
-        context.coordinator.setupGestureIfNeeded()
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        var cellFrames: [UUID: CGRect] = [:]
-        var selectedPages: Set<UUID> = []
-        var onSelectionChanged: ((Set<UUID>) -> Void)?
-        var onHaptic: (() -> Void)?
-
-        weak var longPressGesture: UILongPressGestureRecognizer?
-        weak var overlayView: SwipeSelectionView?
-        private var gestureSetUp = false
-
-        private var isSelecting = false
-        private var selectMode: Bool? = nil  // true = select, false = deselect
-        private var touchedPages: Set<UUID> = []
-        private var workingSelection: Set<UUID> = []
-
-        // Auto-scroll support
-        private var displayLink: CADisplayLink?
-        private var autoScrollSpeed: CGFloat = 0
-        private weak var activeScrollView: UIScrollView?
-
-        func setupGestureIfNeeded() {
-            guard !gestureSetUp, let overlayView = overlayView else { return }
-
-            // Find the scroll view and add gesture to it
-            if let scrollView = findScrollView(in: overlayView) {
-                activeScrollView = scrollView
-
-                // Check if gesture already exists
-                let existingGesture = scrollView.gestureRecognizers?.first { $0 is UILongPressGestureRecognizer && ($0 as? UILongPressGestureRecognizer)?.minimumPressDuration == 0.3 }
-                if existingGesture == nil {
-                    let longPressGesture = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
-                    longPressGesture.minimumPressDuration = 0.3  // Hold to activate selection
-                    longPressGesture.allowableMovement = 100  // Allow movement during the hold
-                    longPressGesture.delegate = self
-                    scrollView.addGestureRecognizer(longPressGesture)
-                    self.longPressGesture = longPressGesture
-                }
-
-                gestureSetUp = true
-            }
-        }
-
-        @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
-            guard let window = gesture.view?.window else { return }
-            let locationInWindow = gesture.location(in: window)
-
-            switch gesture.state {
-            case .began:
-                // Check if we started on a cell
-                if let pageId = pageAtLocation(locationInWindow) {
-                    isSelecting = true
-                    workingSelection = selectedPages
-                    touchedPages = []
-
-                    // Determine mode based on first cell's selection state
-                    selectMode = !selectedPages.contains(pageId)
-
-                    // Process first cell
-                    processCell(pageId)
-
-                    // Haptic feedback to indicate selection mode activated
-                    let generator = UIImpactFeedbackGenerator(style: .medium)
-                    generator.impactOccurred()
-
-                    // Disable scroll view scrolling during selection
-                    activeScrollView?.isScrollEnabled = false
-
-                    // Start display link for auto-scroll
-                    startDisplayLink()
-                }
-
-            case .changed:
-                guard isSelecting else { return }
-
-                // Check for cells at current location
-                if let pageId = pageAtLocation(locationInWindow) {
-                    processCell(pageId)
-                }
-
-                // Update auto-scroll speed based on position
-                updateAutoScrollSpeed(locationInWindow: locationInWindow)
-
-            case .ended, .cancelled, .failed:
-                stopDisplayLink()
-
-                // Re-enable scroll view scrolling
-                activeScrollView?.isScrollEnabled = true
-
-                isSelecting = false
-                selectMode = nil
-                touchedPages = []
-
-            default:
-                break
-            }
-        }
-
-        private func startDisplayLink() {
-            stopDisplayLink()
-            displayLink = CADisplayLink(target: self, selector: #selector(displayLinkTick))
-            displayLink?.add(to: .main, forMode: .common)
-        }
-
-        private func stopDisplayLink() {
-            displayLink?.invalidate()
-            displayLink = nil
-            autoScrollSpeed = 0
-        }
-
-        @objc private func displayLinkTick() {
-            guard let scrollView = activeScrollView, autoScrollSpeed != 0 else { return }
-
-            var newOffset = scrollView.contentOffset
-            newOffset.y += autoScrollSpeed
-
-            // Clamp to valid range
-            let minY: CGFloat = -scrollView.adjustedContentInset.top
-            let maxY = max(minY, scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom)
-            newOffset.y = max(minY, min(maxY, newOffset.y))
-
-            if newOffset.y != scrollView.contentOffset.y {
-                scrollView.setContentOffset(newOffset, animated: false)
-
-                // Check for cells at current touch location after scroll
-                if let gesture = longPressGesture,
-                   gesture.state == .changed,
-                   let window = gesture.view?.window {
-                    let locationInWindow = gesture.location(in: window)
-                    if let pageId = pageAtLocation(locationInWindow) {
-                        processCell(pageId)
-                    }
-                }
-            }
-        }
-
-        private func updateAutoScrollSpeed(locationInWindow: CGPoint) {
-            guard let scrollView = activeScrollView, let window = scrollView.window else {
-                autoScrollSpeed = 0
-                return
-            }
-
-            let scrollViewFrame = scrollView.convert(scrollView.bounds, to: window)
-            let edgeThreshold: CGFloat = 80  // Distance from edge to start scrolling
-            let maxScrollSpeed: CGFloat = 15  // Points per frame
-
-            // Check if near top edge
-            let distanceFromTop = locationInWindow.y - scrollViewFrame.minY
-            if distanceFromTop < edgeThreshold && distanceFromTop >= 0 {
-                let intensity = 1 - (distanceFromTop / edgeThreshold)
-                autoScrollSpeed = -maxScrollSpeed * intensity * intensity
-                return
-            }
-
-            // Check if near bottom edge
-            let distanceFromBottom = scrollViewFrame.maxY - locationInWindow.y
-            if distanceFromBottom < edgeThreshold && distanceFromBottom >= 0 {
-                let intensity = 1 - (distanceFromBottom / edgeThreshold)
-                autoScrollSpeed = maxScrollSpeed * intensity * intensity
-                return
-            }
-
-            autoScrollSpeed = 0
-        }
-
-        private func processCell(_ pageId: UUID) {
-            guard !touchedPages.contains(pageId) else { return }
-            touchedPages.insert(pageId)
-
-            if let mode = selectMode {
-                if mode {
-                    workingSelection.insert(pageId)
-                } else {
-                    workingSelection.remove(pageId)
-                }
-                onSelectionChanged?(workingSelection)
-                onHaptic?()
-            }
-        }
-
-        private func pageAtLocation(_ location: CGPoint) -> UUID? {
-            for (pageId, frame) in cellFrames {
-                if frame.contains(location) {
-                    return pageId
-                }
-            }
-            return nil
-        }
-
-        private func findScrollView(in view: UIView?) -> UIScrollView? {
-            // First check siblings and parent
-            var current = view?.superview
-            while let parent = current {
-                // Check if parent is a scroll view
-                if let scrollView = parent as? UIScrollView {
-                    return scrollView
-                }
-                // Check siblings
-                for sibling in parent.subviews {
-                    if let scrollView = sibling as? UIScrollView {
-                        return scrollView
-                    }
-                    // Check children of siblings
-                    for child in sibling.subviews {
-                        if let scrollView = child as? UIScrollView {
-                            return scrollView
-                        }
-                    }
-                }
-                current = parent.superview
-            }
-            return nil
-        }
-
-        // MARK: - UIGestureRecognizerDelegate
-
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            // Allow simultaneous recognition until we start selecting
-            // This allows normal scroll, tap, and drag to work
-            if isSelecting {
-                return false
-            }
-            return true
-        }
-
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            return false
-        }
-
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            // Don't require long press to fail for other gestures
-            // This allows taps and drags to work immediately
-            return false
-        }
-    }
-}
-
-class SwipeSelectionView: UIView {
-    weak var coordinator: SwipeSelectionOverlay.Coordinator?
-
-    // This view is just a placeholder for the coordinator
-    // All touches pass through to the scroll view below
 }
 
 #Preview {

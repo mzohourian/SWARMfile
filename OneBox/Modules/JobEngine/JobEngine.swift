@@ -493,7 +493,67 @@ public class JobManager: ObservableObject {
               let loadedJobs = try? JSONDecoder().decode([Job].self, from: data) else {
             return
         }
-        jobs = loadedJobs
+
+        // Fix file paths that may have changed due to app container UUID changes
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+
+        jobs = loadedJobs.map { job in
+            var fixedJob = job
+
+            // Fix output URLs - reconstruct paths relative to current Documents directory
+            fixedJob.outputURLs = job.outputURLs.compactMap { url in
+                // If file exists at original path, use it
+                if FileManager.default.fileExists(atPath: url.path) {
+                    return url
+                }
+
+                // Try to reconstruct path relative to Documents directory
+                // Look for "Documents" in the path and reconstruct from there
+                let pathComponents = url.pathComponents
+                if let documentsIndex = pathComponents.firstIndex(of: "Documents") {
+                    let relativePath = pathComponents.dropFirst(documentsIndex + 1).joined(separator: "/")
+                    let reconstructedURL = documentsURL.appendingPathComponent(relativePath)
+
+                    if FileManager.default.fileExists(atPath: reconstructedURL.path) {
+                        print("✅ JobEngine: Reconstructed file path: \(reconstructedURL.path)")
+                        return reconstructedURL
+                    }
+                }
+
+                // If we still can't find it, try just the filename in Exports directory
+                let exportsURL = documentsURL.appendingPathComponent("Exports")
+                let filenameURL = exportsURL.appendingPathComponent(url.lastPathComponent)
+                if FileManager.default.fileExists(atPath: filenameURL.path) {
+                    print("✅ JobEngine: Found file by name in Exports: \(filenameURL.path)")
+                    return filenameURL
+                }
+
+                print("⚠️ JobEngine: Could not find file: \(url.lastPathComponent)")
+                return nil
+            }
+
+            // Fix input URLs similarly
+            fixedJob.inputs = job.inputs.compactMap { url in
+                if FileManager.default.fileExists(atPath: url.path) {
+                    return url
+                }
+
+                let pathComponents = url.pathComponents
+                if let documentsIndex = pathComponents.firstIndex(of: "Documents") {
+                    let relativePath = pathComponents.dropFirst(documentsIndex + 1).joined(separator: "/")
+                    let reconstructedURL = documentsURL.appendingPathComponent(relativePath)
+
+                    if FileManager.default.fileExists(atPath: reconstructedURL.path) {
+                        return reconstructedURL
+                    }
+                }
+
+                // Input files from user selection may not exist anymore - that's okay
+                return url
+            }
+
+            return fixedJob
+        }
 
         // Resume any running jobs
         for job in jobs where job.status == .running {

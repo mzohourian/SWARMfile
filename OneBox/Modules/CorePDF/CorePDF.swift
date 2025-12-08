@@ -154,35 +154,92 @@ public actor PDFProcessor {
         }
 
         let outputURL = temporaryOutputURL(prefix: "merged")
-        let outputDocument = PDFDocument()
 
         var totalPages = 0
-        var processedPages = 0
+        var allPages: [(page: PDFPage, url: URL)] = []
 
-        // Calculate total pages
+        // First pass: Collect all pages and find target size (largest dimensions)
+        var maxWidth: CGFloat = 0
+        var maxHeight: CGFloat = 0
+
         for url in pdfURLs {
             guard let pdf = PDFDocument(url: url) else {
                 throw PDFError.invalidPDF(url.lastPathComponent)
             }
             totalPages += pdf.pageCount
-        }
-
-        // Merge PDFs
-        for url in pdfURLs {
-            guard let pdf = PDFDocument(url: url) else { continue }
 
             for pageIndex in 0..<pdf.pageCount {
                 guard let page = pdf.page(at: pageIndex) else { continue }
-                outputDocument.insert(page, at: outputDocument.pageCount)
-                processedPages += 1
-                progressHandler(Double(processedPages) / Double(totalPages))
+                allPages.append((page: page, url: url))
+
+                let bounds = page.bounds(for: .mediaBox)
+                maxWidth = max(maxWidth, bounds.width)
+                maxHeight = max(maxHeight, bounds.height)
             }
         }
 
-        guard outputDocument.write(to: outputURL) else {
+        // Standard page sizes for reference
+        let standardA4Width: CGFloat = 612  // 8.5" x 72 DPI
+        let standardA4Height: CGFloat = 792 // 11" x 72 DPI
+
+        // Use the larger of: max found size or standard A4
+        let targetWidth = max(maxWidth, standardA4Width)
+        let targetHeight = max(maxHeight, standardA4Height)
+        let targetSize = CGSize(width: targetWidth, height: targetHeight)
+
+        print("🔵 CorePDF.mergePDFs: Target page size: \(targetWidth) x \(targetHeight)")
+
+        // Create output PDF with normalized page sizes
+        UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
+
+        for (index, pageInfo) in allPages.enumerated() {
+            let page = pageInfo.page
+            let originalBounds = page.bounds(for: .mediaBox)
+
+            // Calculate scale to fit page within target size while maintaining aspect ratio
+            let scaleX = targetWidth / originalBounds.width
+            let scaleY = targetHeight / originalBounds.height
+            let scale = min(scaleX, scaleY)
+
+            // Calculate centered position
+            let scaledWidth = originalBounds.width * scale
+            let scaledHeight = originalBounds.height * scale
+            let offsetX = (targetWidth - scaledWidth) / 2
+            let offsetY = (targetHeight - scaledHeight) / 2
+
+            // Create page with target size
+            let pageRect = CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight)
+            UIGraphicsBeginPDFPageWithInfo(pageRect, nil)
+
+            guard let context = UIGraphicsGetCurrentContext() else { continue }
+
+            // Fill background with white
+            context.setFillColor(UIColor.white.cgColor)
+            context.fill(pageRect)
+
+            // Draw the original page scaled and centered
+            context.saveGState()
+
+            // Move to center position and apply scale
+            context.translateBy(x: offsetX, y: targetHeight - offsetY)
+            context.scaleBy(x: scale, y: -scale)
+
+            // Draw page content
+            page.draw(with: .mediaBox, to: context)
+
+            context.restoreGState()
+
+            progressHandler(Double(index + 1) / Double(totalPages))
+        }
+
+        UIGraphicsEndPDFContext()
+
+        // Verify output file was created
+        guard FileManager.default.fileExists(atPath: outputURL.path) else {
             throw PDFError.writeFailed
         }
 
+        print("✅ CorePDF.mergePDFs: Successfully merged \(allPages.count) pages")
         return outputURL
     }
 

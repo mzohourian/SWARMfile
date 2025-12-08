@@ -735,6 +735,9 @@ struct PageOrganizerView: View {
                     completedAt: Date()
                 )
 
+                // Submit job first so it's available when onDisappear fires
+                await jobManager.submitJob(job)
+
                 await MainActor.run {
                     paymentsManager.consumeExport()
                     completedJob = job
@@ -747,7 +750,6 @@ struct PageOrganizerView: View {
                         showingResult = true
                     }
                 }
-                await jobManager.submitJob(job)
 
             } catch {
                 await MainActor.run {

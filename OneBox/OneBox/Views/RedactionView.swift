@@ -1110,6 +1110,9 @@ struct RedactionView: View {
 
                 print("🔵 RedactionView: Created completed job with output: \(finalURL.path)")
 
+                // Submit job first so it's available when onDisappear fires
+                await jobManager.submitJob(job)
+
                 await MainActor.run {
                     paymentsManager.consumeExport()
                     completedJob = job
@@ -1125,9 +1128,6 @@ struct RedactionView: View {
                         print("🔵 RedactionView: showingResult = true, completedJob set")
                     }
                 }
-
-                // Submit job for history tracking
-                await jobManager.submitJob(job)
 
             } catch {
                 print("❌ RedactionView: Processing error: \(error)")

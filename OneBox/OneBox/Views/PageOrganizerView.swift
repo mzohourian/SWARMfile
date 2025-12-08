@@ -98,20 +98,25 @@ struct PageOrganizerView: View {
                                 cellFrames = frames
                             }
                         }
-                        .simultaneousGesture(
-                            DragGesture(minimumDistance: 20, coordinateSpace: .global)
+                        .scrollDisabled(isSwipeSelecting && swipeSelectStartedOnCell)
+                        .gesture(
+                            DragGesture(minimumDistance: 10, coordinateSpace: .global)
                                 .onChanged { value in
                                     let isStart = !isSwipeSelecting
-                                    isSwipeSelecting = true
 
                                     // On first touch, check if we started on a cell
                                     if isStart {
-                                        swipeSelectStartedOnCell = cellContainsPoint(value.startLocation)
-                                    }
+                                        let startedOnCell = cellContainsPoint(value.startLocation)
+                                        swipeSelectStartedOnCell = startedOnCell
 
-                                    // Only process selection if we started on a cell
-                                    if swipeSelectStartedOnCell {
-                                        handleSwipeSelection(at: value.location, isStart: isStart)
+                                        // Only activate swipe selection if we started on a cell
+                                        if startedOnCell {
+                                            isSwipeSelecting = true
+                                            handleSwipeSelection(at: value.location, isStart: true)
+                                        }
+                                    } else if swipeSelectStartedOnCell {
+                                        // Continue selection if we started on a cell
+                                        handleSwipeSelection(at: value.location, isStart: false)
                                     }
                                 }
                                 .onEnded { _ in

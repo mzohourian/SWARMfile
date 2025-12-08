@@ -39,11 +39,7 @@ struct PageOrganizerView: View {
     // Drag & drop state
     @State private var draggedPage: PageInfo?
 
-    // Swipe-to-select state
-    @State private var isSwipeSelecting = false
-    @State private var swipeSelectStartedOnCell = false  // Only activate if drag started on a cell
-    @State private var swipeSelectMode: Bool? = nil  // true = selecting, false = deselecting
-    @State private var swipeSelectedPages: Set<UUID> = []  // Pages touched during current swipe
+    // Swipe-to-select state (cell frames tracked for UIKit overlay)
     @State private var cellFrames: [UUID: CGRect] = [:]
 
     // Security-scoped resource tracking
@@ -69,60 +65,49 @@ struct PageOrganizerView: View {
                         }
                         
                         // Page grid with swipe-to-select
-                        ScrollView {
-                            LazyVGrid(columns: [
-                                GridItem(.adaptive(minimum: 120, maximum: 150), spacing: 16)
-                            ], spacing: 16) {
-                                ForEach(pages) { page in
-                                    PageCell(
-                                        page: page,
-                                        isSelected: selectedPages.contains(page.id),
-                                        onTap: { toggleSelection(page) },
-                                        onDrag: { draggedPage = page },
-                                        onDrop: { handleDrop(page) },
-                                        hasAnomaly: detectedAnomalies.contains { $0.pageId == page.id }
-                                    )
-                                    .background(
-                                        GeometryReader { geo in
-                                            Color.clear
-                                                .preference(
-                                                    key: CellFramePreferenceKey.self,
-                                                    value: [page.id: geo.frame(in: .global)]
-                                                )
-                                        }
-                                    )
-                                }
-                            }
-                            .padding()
-                            .onPreferenceChange(CellFramePreferenceKey.self) { frames in
-                                cellFrames = frames
-                            }
-                        }
-                        .scrollDisabled(isSwipeSelecting && swipeSelectStartedOnCell)
-                        .gesture(
-                            DragGesture(minimumDistance: 10, coordinateSpace: .global)
-                                .onChanged { value in
-                                    let isStart = !isSwipeSelecting
-
-                                    // On first touch, check if we started on a cell
-                                    if isStart {
-                                        let startedOnCell = cellContainsPoint(value.startLocation)
-                                        swipeSelectStartedOnCell = startedOnCell
-
-                                        // Only activate swipe selection if we started on a cell
-                                        if startedOnCell {
-                                            isSwipeSelecting = true
-                                            handleSwipeSelection(at: value.location, isStart: true)
-                                        }
-                                    } else if swipeSelectStartedOnCell {
-                                        // Continue selection if we started on a cell
-                                        handleSwipeSelection(at: value.location, isStart: false)
+                        ZStack {
+                            ScrollView {
+                                LazyVGrid(columns: [
+                                    GridItem(.adaptive(minimum: 120, maximum: 150), spacing: 16)
+                                ], spacing: 16) {
+                                    ForEach(pages) { page in
+                                        PageCell(
+                                            page: page,
+                                            isSelected: selectedPages.contains(page.id),
+                                            onTap: { toggleSelection(page) },
+                                            onDrag: { draggedPage = page },
+                                            onDrop: { handleDrop(page) },
+                                            hasAnomaly: detectedAnomalies.contains { $0.pageId == page.id }
+                                        )
+                                        .background(
+                                            GeometryReader { geo in
+                                                Color.clear
+                                                    .preference(
+                                                        key: CellFramePreferenceKey.self,
+                                                        value: [page.id: geo.frame(in: .global)]
+                                                    )
+                                            }
+                                        )
                                     }
                                 }
-                                .onEnded { _ in
-                                    finishSwipeSelection()
+                                .padding()
+                                .onPreferenceChange(CellFramePreferenceKey.self) { frames in
+                                    cellFrames = frames
                                 }
-                        )
+                            }
+
+                            // UIKit-based swipe selection overlay
+                            SwipeSelectionOverlay(
+                                cellFrames: cellFrames,
+                                selectedPages: selectedPages,
+                                onSelectionChanged: { newSelection in
+                                    selectedPages = newSelection
+                                },
+                                onHaptic: {
+                                    HapticManager.shared.impact(.light)
+                                }
+                            )
+                        }
 
                         // Bottom toolbar
                         bottomToolbar
@@ -561,60 +546,6 @@ struct PageOrganizerView: View {
         }
     }
 
-    // MARK: - Swipe-to-Select
-
-    private func cellContainsPoint(_ point: CGPoint) -> Bool {
-        for (_, frame) in cellFrames {
-            if frame.contains(point) {
-                return true
-            }
-        }
-        return false
-    }
-
-    private func handleSwipeSelection(at location: CGPoint, isStart: Bool) {
-        // Find which cell contains the current touch point
-        for (pageId, frame) in cellFrames {
-            if frame.contains(location) {
-                // First touch determines the mode: selecting or deselecting
-                if isStart {
-                    // If the first touched cell is selected, we're deselecting
-                    // If it's not selected, we're selecting
-                    swipeSelectMode = !selectedPages.contains(pageId)
-                    swipeSelectedPages.removeAll()
-                }
-
-                // Only process if we haven't already touched this cell in this swipe
-                if !swipeSelectedPages.contains(pageId) {
-                    swipeSelectedPages.insert(pageId)
-
-                    // Apply selection based on mode
-                    if let mode = swipeSelectMode {
-                        if mode {
-                            // Selecting mode
-                            selectedPages.insert(pageId)
-                        } else {
-                            // Deselecting mode
-                            selectedPages.remove(pageId)
-                        }
-                    }
-
-                    // Haptic feedback for each cell touched
-                    HapticManager.shared.impact(.light)
-                }
-
-                break  // Only process one cell at a time
-            }
-        }
-    }
-
-    private func finishSwipeSelection() {
-        isSwipeSelecting = false
-        swipeSelectStartedOnCell = false
-        swipeSelectMode = nil
-        swipeSelectedPages.removeAll()
-    }
-    
     // MARK: - Undo/Redo (On-Device State Management)
     
     private func saveState() {
@@ -1108,6 +1039,172 @@ struct CellFramePreferenceKey: PreferenceKey {
 
     static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
         value.merge(nextValue()) { _, new in new }
+    }
+}
+
+// MARK: - Swipe Selection Gesture Handler (UIKit-based for proper ScrollView coordination)
+struct SwipeSelectionOverlay: UIViewRepresentable {
+    let cellFrames: [UUID: CGRect]
+    let selectedPages: Set<UUID>
+    let onSelectionChanged: (Set<UUID>) -> Void
+    let onHaptic: () -> Void
+
+    func makeUIView(context: Context) -> SwipeSelectionView {
+        let view = SwipeSelectionView()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = true
+        view.coordinator = context.coordinator
+
+        let panGesture = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePan(_:)))
+        panGesture.delegate = context.coordinator
+        panGesture.minimumNumberOfTouches = 1
+        panGesture.maximumNumberOfTouches = 1
+        view.addGestureRecognizer(panGesture)
+        context.coordinator.panGesture = panGesture
+
+        return view
+    }
+
+    func updateUIView(_ uiView: SwipeSelectionView, context: Context) {
+        context.coordinator.cellFrames = cellFrames
+        context.coordinator.selectedPages = selectedPages
+        context.coordinator.onSelectionChanged = onSelectionChanged
+        context.coordinator.onHaptic = onHaptic
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var cellFrames: [UUID: CGRect] = [:]
+        var selectedPages: Set<UUID> = []
+        var onSelectionChanged: ((Set<UUID>) -> Void)?
+        var onHaptic: (() -> Void)?
+
+        weak var panGesture: UIPanGestureRecognizer?
+
+        private var isSelecting = false
+        private var selectMode: Bool? = nil  // true = select, false = deselect
+        private var touchedPages: Set<UUID> = []
+        private var workingSelection: Set<UUID> = []
+        private var startedOnCell = false
+
+        @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
+            let location = gesture.location(in: gesture.view?.window)
+
+            switch gesture.state {
+            case .began:
+                // Check if we started on a cell
+                if let pageId = pageAtLocation(location) {
+                    startedOnCell = true
+                    isSelecting = true
+                    workingSelection = selectedPages
+                    touchedPages = []
+
+                    // Determine mode based on first cell's selection state
+                    selectMode = !selectedPages.contains(pageId)
+
+                    // Process first cell
+                    processCell(pageId)
+
+                    // Disable scroll view
+                    findScrollView(in: gesture.view)?.isScrollEnabled = false
+                } else {
+                    startedOnCell = false
+                }
+
+            case .changed:
+                guard startedOnCell, isSelecting else { return }
+
+                if let pageId = pageAtLocation(location) {
+                    processCell(pageId)
+                }
+
+            case .ended, .cancelled:
+                if startedOnCell {
+                    // Re-enable scroll view
+                    findScrollView(in: gesture.view)?.isScrollEnabled = true
+                }
+
+                isSelecting = false
+                startedOnCell = false
+                selectMode = nil
+                touchedPages = []
+
+            default:
+                break
+            }
+        }
+
+        private func processCell(_ pageId: UUID) {
+            guard !touchedPages.contains(pageId) else { return }
+            touchedPages.insert(pageId)
+
+            if let mode = selectMode {
+                if mode {
+                    workingSelection.insert(pageId)
+                } else {
+                    workingSelection.remove(pageId)
+                }
+                onSelectionChanged?(workingSelection)
+                onHaptic?()
+            }
+        }
+
+        private func pageAtLocation(_ location: CGPoint) -> UUID? {
+            for (pageId, frame) in cellFrames {
+                if frame.contains(location) {
+                    return pageId
+                }
+            }
+            return nil
+        }
+
+        private func findScrollView(in view: UIView?) -> UIScrollView? {
+            var current = view?.superview
+            while let view = current {
+                if let scrollView = view as? UIScrollView {
+                    return scrollView
+                }
+                current = view.superview
+            }
+            return nil
+        }
+
+        // MARK: - UIGestureRecognizerDelegate
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            // Allow simultaneous recognition initially - we'll disable scroll if needed
+            return true
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            // If we started on a cell, require other gestures to fail
+            return startedOnCell
+        }
+    }
+}
+
+class SwipeSelectionView: UIView {
+    weak var coordinator: SwipeSelectionOverlay.Coordinator?
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        // Convert point to window coordinates for cell check
+        let windowPoint = convert(point, to: window)
+
+        // Check if point is on a cell
+        if let coordinator = coordinator {
+            for (_, frame) in coordinator.cellFrames {
+                if frame.contains(windowPoint) {
+                    // Point is on a cell - we handle this
+                    return self
+                }
+            }
+        }
+
+        // Point is not on a cell - pass through to scroll view
+        return nil
     }
 }
 

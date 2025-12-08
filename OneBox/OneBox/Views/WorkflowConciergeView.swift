@@ -1378,6 +1378,9 @@ struct StepConfigurationView: View {
             }
             .navigationTitle("Configure \(step.title)")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(OneBoxColors.primaryGraphite, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") { onCancel() }
@@ -1396,6 +1399,7 @@ struct StepConfigurationView: View {
                     }
                     showingSignatureCanvas = false
                 }
+                .interactiveDismissDisabled() // Prevent sheet dismiss gesture from interfering with drawing
             }
         }
     }
@@ -1443,23 +1447,47 @@ struct StepConfigurationView: View {
     }
 
     private var organizeInfo: some View {
-        OneBoxCard(style: .standard) {
-            VStack(spacing: OneBoxSpacing.medium) {
-                Image(systemName: "square.grid.2x2")
-                    .font(.system(size: 48))
-                    .foregroundColor(OneBoxColors.warningAmber)
+        VStack(spacing: OneBoxSpacing.medium) {
+            OneBoxCard(style: .standard) {
+                VStack(spacing: OneBoxSpacing.medium) {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: 48))
+                        .foregroundColor(OneBoxColors.warningAmber)
 
-                Text("Interactive Step")
-                    .font(OneBoxTypography.cardTitle)
-                    .foregroundColor(OneBoxColors.primaryText)
+                    Text("Interactive Step")
+                        .font(OneBoxTypography.cardTitle)
+                        .foregroundColor(OneBoxColors.primaryText)
 
-                Text("Page organization requires the interactive organizer.\n\nIn a workflow, this step will open the Page Organizer where you can reorder, rotate, or delete pages before continuing.")
-                    .font(OneBoxTypography.caption)
-                    .foregroundColor(OneBoxColors.secondaryText)
-                    .multilineTextAlignment(.center)
+                    Text("Page organization requires the interactive organizer.")
+                        .font(OneBoxTypography.body)
+                        .foregroundColor(OneBoxColors.secondaryText)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(OneBoxSpacing.large)
             }
-            .frame(maxWidth: .infinity)
-            .padding(OneBoxSpacing.large)
+
+            OneBoxCard(style: .standard) {
+                VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
+                    Label("What happens in workflow:", systemImage: "info.circle")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.primaryGold)
+
+                    Text("When this step runs, the Page Organizer will open so you can:")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.secondaryText)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Reorder pages by dragging", systemImage: "arrow.up.arrow.down")
+                        Label("Rotate pages", systemImage: "rotate.right")
+                        Label("Delete unwanted pages", systemImage: "trash")
+                    }
+                    .font(OneBoxTypography.caption)
+                    .foregroundColor(OneBoxColors.primaryText)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(OneBoxSpacing.medium)
+            }
         }
     }
 

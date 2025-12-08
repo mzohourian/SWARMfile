@@ -24,6 +24,8 @@
 	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>OneBox uses Face ID to protect your documents and secure sensitive operations</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>OneBox needs permission to save processed files</string>
 	<key>NSPhotoLibraryUsageDescription</key>

@@ -109,6 +109,9 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
     - Replaced "military-grade security/encryption" with accurate descriptions
     - Replaced "Zero-Knowledge" and "End-to-End Encryption" (misused terms)
     - Updated "Healthcare (HIPAA)" and "Finance (SOX)" labels
+  - **Fixed biometric authentication (Face ID) not working on iPhone:**
+    - Added missing `NSFaceIDUsageDescription` to Info.plist
+    - This key is required by iOS for Face ID permission
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
@@ -119,6 +122,7 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Interactive workflow support, fixed blank page, performance fix
 - `OneBox/OneBox/Services/WorkflowExecutionService.swift` - Added executeSingleStep method
 - `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed signature position (center at tap, not corner)
+- `OneBox/OneBox/Info.plist` - Added NSFaceIDUsageDescription for Face ID permission
 
 ---
 

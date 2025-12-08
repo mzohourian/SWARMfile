@@ -4,6 +4,48 @@
 
 ---
 
+## 2025-12-08: Workflow Fixes - Signing, Merge, Redaction (Continued Session)
+
+**Problems Reported:**
+1. Signing: Only page 1 signed when placing signatures on multiple pages
+2. Signing: Signature position wrong (placed at bottom right, appears at middle right)
+3. Merge: One single-page PDF appears very small instead of matching other PDFs
+4. Redaction: No redaction applied in workflow output
+
+**What Was Done:**
+
+**Issue 1 & 2 - Multi-page signing FIXED:**
+- Root cause: `InteractiveSignPDFView.processSignatures()` only used the first signature placement
+- Fix: Added `SignaturePlacementData` struct to JobSettings for storing multiple placements
+- Modified `InteractiveSignPDFView` to convert ALL placements to job settings array
+- Added `processMultipleSignatures()` in JobEngine to chain sign operations
+- Each signature is applied sequentially, output of one becomes input for next
+- All signatures on all pages now apply correctly with proper positions
+
+**Issue 3 - PDF merge scaling FIXED:**
+- Root cause: `mergePDFs()` just inserted pages without any size normalization
+- Fix: Modified merge to:
+  1. First pass: Find the largest page dimensions (at least A4 size)
+  2. Second pass: Scale all pages to fit within target size
+  3. Center smaller pages on white background
+- Single-page PDFs now display at proper size in merged output
+
+**Issue 4 - Workflow redaction FIXED:**
+- Root cause: `handleInteractiveStepCompleted()` was using `completedJobs.last` which might return the wrong job
+- Also: No delay between job submission and job lookup, causing race condition
+- Fix: Added 500ms delay and matching by input filename instead of just grabbing last job
+- Added logging for debugging
+
+**Files Modified:**
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Merge page normalization
+- `OneBox/Modules/JobEngine/JobEngine.swift` - SignaturePlacementData, processMultipleSignatures()
+- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Process all signature placements
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Fixed handleInteractiveStepCompleted() timing
+
+**Status:** All workflow issues fixed, needs user testing
+
+---
+
 ## 2025-12-08: Preview Fix & Swipe-to-Select Removal (Continued Session)
 
 **Problems Reported:**

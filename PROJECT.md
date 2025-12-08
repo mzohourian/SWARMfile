@@ -79,24 +79,35 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-08 (continued session)
 
 **What Was Done:**
-- **Removed swipe-to-select from Page Organizer:**
-  - After 5+ attempts, SwiftUI gesture conflicts with ScrollView proved too complex
-  - Reverted to simple tap-to-select and drag-to-reorder (works reliably)
 
-- **Fixed preview showing blank screen throughout app:**
-  - Root cause: iOS changes app container UUID on updates, breaking saved file paths
-  - Example: `/var/.../ABC123/Documents/file.pdf` → `/var/.../XYZ789/Documents/file.pdf`
-  - Fix: Added path reconstruction in `JobEngine.loadJobs()` that extracts relative path from "Documents" and rebuilds with current directory
-  - Preview (QuickLook) now works for all exported files
+**1. Fixed multi-page signing in workflows:**
+- Root cause: `InteractiveSignPDFView.processSignatures()` only processed the first signature placement
+- Fix: Added `SignaturePlacementData` struct and `signaturePlacements` array to JobSettings
+- Modified `InteractiveSignPDFView` to convert ALL placements to job settings
+- Added `processMultipleSignatures()` in JobEngine to chain sign operations
+- All signatures on all pages now apply correctly
 
-**What's Unfinished:**
-- **Workflow crash with Face ID** - App crashes with missing `NSFaceIDUsageDescription` when running workflow with biometric lock enabled
-  - The key ALREADY EXISTS in Info.plist (line 27-28)
-  - **Solution: Rebuild and reinstall the app in Xcode** to include updated Info.plist
+**2. Fixed PDF merge page size normalization:**
+- Root cause: `mergePDFs()` just inserted pages without scaling
+- Fix: Modified merge to find largest page dimensions and scale all pages to match
+- Smaller pages are now centered on white background at the target size
+- Single-page PDFs no longer appear tiny in merged output
+
+**3. Fixed redaction not applying in workflow:**
+- Root cause: Timing issue - `handleInteractiveStepCompleted()` retrieved wrong job
+- Fix: Added 500ms delay to ensure job is fully submitted
+- Now matches jobs by input filename instead of just grabbing last completed job
+- Added logging for debugging
+
+**4. Previous fixes still in place:**
+- Preview blank screen fixed (path reconstruction)
+- Face ID crash diagnosed (rebuild app needed)
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/PageOrganizerView.swift` - Simplified to tap-to-select only
-- `OneBox/Modules/JobEngine/JobEngine.swift` - Added file path reconstruction for stale URLs
+- `OneBox/Modules/CorePDF/CorePDF.swift` - PDF merge page normalization
+- `OneBox/Modules/JobEngine/JobEngine.swift` - Multi-signature support, SignaturePlacementData
+- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Process all signature placements
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Fixed interactive step job matching
 
 ---
 

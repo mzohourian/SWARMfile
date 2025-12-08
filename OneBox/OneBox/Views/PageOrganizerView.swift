@@ -1052,15 +1052,14 @@ struct SwipeSelectionOverlay: UIViewRepresentable {
     func makeUIView(context: Context) -> SwipeSelectionView {
         let view = SwipeSelectionView()
         view.backgroundColor = .clear
-        view.isUserInteractionEnabled = true
+        view.isUserInteractionEnabled = false  // Pass through all touches
         view.coordinator = context.coordinator
+        context.coordinator.overlayView = view
 
-        // Long press gesture to initiate selection mode (like iOS Photos)
-        let longPressGesture = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleLongPress(_:)))
-        longPressGesture.minimumPressDuration = 0.2  // Short delay to activate
-        longPressGesture.delegate = context.coordinator
-        view.addGestureRecognizer(longPressGesture)
-        context.coordinator.longPressGesture = longPressGesture
+        // Delay gesture setup to next run loop to ensure scroll view exists
+        DispatchQueue.main.async {
+            context.coordinator.setupGestureIfNeeded()
+        }
 
         return view
     }
@@ -1070,6 +1069,9 @@ struct SwipeSelectionOverlay: UIViewRepresentable {
         context.coordinator.selectedPages = selectedPages
         context.coordinator.onSelectionChanged = onSelectionChanged
         context.coordinator.onHaptic = onHaptic
+
+        // Try to set up gesture if not already done
+        context.coordinator.setupGestureIfNeeded()
     }
 
     func makeCoordinator() -> Coordinator {
@@ -1083,28 +1085,49 @@ struct SwipeSelectionOverlay: UIViewRepresentable {
         var onHaptic: (() -> Void)?
 
         weak var longPressGesture: UILongPressGestureRecognizer?
+        weak var overlayView: SwipeSelectionView?
+        private var gestureSetUp = false
 
         private var isSelecting = false
         private var selectMode: Bool? = nil  // true = select, false = deselect
         private var touchedPages: Set<UUID> = []
         private var workingSelection: Set<UUID> = []
-        private var startedOnCell = false
 
         // Auto-scroll support
-        private var autoScrollTimer: Timer?
+        private var displayLink: CADisplayLink?
         private var autoScrollSpeed: CGFloat = 0
         private weak var activeScrollView: UIScrollView?
-        private var scrollViewBounds: CGRect = .zero
+
+        func setupGestureIfNeeded() {
+            guard !gestureSetUp, let overlayView = overlayView else { return }
+
+            // Find the scroll view and add gesture to it
+            if let scrollView = findScrollView(in: overlayView) {
+                activeScrollView = scrollView
+
+                // Check if gesture already exists
+                let existingGesture = scrollView.gestureRecognizers?.first { $0 is UILongPressGestureRecognizer && ($0 as? UILongPressGestureRecognizer)?.minimumPressDuration == 0.3 }
+                if existingGesture == nil {
+                    let longPressGesture = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+                    longPressGesture.minimumPressDuration = 0.3  // Hold to activate selection
+                    longPressGesture.allowableMovement = 100  // Allow movement during the hold
+                    longPressGesture.delegate = self
+                    scrollView.addGestureRecognizer(longPressGesture)
+                    self.longPressGesture = longPressGesture
+                }
+
+                gestureSetUp = true
+            }
+        }
 
         @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
-            let locationInWindow = gesture.location(in: gesture.view?.window)
-            let locationInView = gesture.location(in: gesture.view)
+            guard let window = gesture.view?.window else { return }
+            let locationInWindow = gesture.location(in: window)
 
             switch gesture.state {
             case .began:
                 // Check if we started on a cell
                 if let pageId = pageAtLocation(locationInWindow) {
-                    startedOnCell = true
                     isSelecting = true
                     workingSelection = selectedPages
                     touchedPages = []
@@ -1115,37 +1138,35 @@ struct SwipeSelectionOverlay: UIViewRepresentable {
                     // Process first cell
                     processCell(pageId)
 
-                    // Get scroll view reference and bounds
-                    if let scrollView = findScrollView(in: gesture.view) {
-                        activeScrollView = scrollView
-                        scrollViewBounds = scrollView.convert(scrollView.bounds, to: gesture.view?.window)
-                    }
-
                     // Haptic feedback to indicate selection mode activated
                     let generator = UIImpactFeedbackGenerator(style: .medium)
                     generator.impactOccurred()
-                } else {
-                    startedOnCell = false
-                    gesture.state = .cancelled
+
+                    // Disable scroll view scrolling during selection
+                    activeScrollView?.isScrollEnabled = false
+
+                    // Start display link for auto-scroll
+                    startDisplayLink()
                 }
 
             case .changed:
-                guard startedOnCell, isSelecting else { return }
+                guard isSelecting else { return }
 
                 // Check for cells at current location
                 if let pageId = pageAtLocation(locationInWindow) {
                     processCell(pageId)
                 }
 
-                // Handle auto-scroll based on position
-                updateAutoScroll(locationInView: locationInView, locationInWindow: locationInWindow)
+                // Update auto-scroll speed based on position
+                updateAutoScrollSpeed(locationInWindow: locationInWindow)
 
             case .ended, .cancelled, .failed:
-                stopAutoScroll()
-                activeScrollView = nil
+                stopDisplayLink()
+
+                // Re-enable scroll view scrolling
+                activeScrollView?.isScrollEnabled = true
 
                 isSelecting = false
-                startedOnCell = false
                 selectMode = nil
                 touchedPages = []
 
@@ -1154,72 +1175,71 @@ struct SwipeSelectionOverlay: UIViewRepresentable {
             }
         }
 
-        private func updateAutoScroll(locationInView: CGPoint, locationInWindow: CGPoint) {
-            guard let scrollView = activeScrollView else { return }
-
-            let scrollViewFrame = scrollView.convert(scrollView.bounds, to: scrollView.window)
-            let edgeThreshold: CGFloat = 60  // Distance from edge to start scrolling
-            let maxScrollSpeed: CGFloat = 8  // Points per timer tick
-
-            var newSpeed: CGFloat = 0
-
-            // Check if near top edge
-            let distanceFromTop = locationInWindow.y - scrollViewFrame.minY
-            if distanceFromTop < edgeThreshold && distanceFromTop > 0 {
-                // Scroll up (negative speed)
-                let intensity = 1 - (distanceFromTop / edgeThreshold)
-                newSpeed = -maxScrollSpeed * intensity
-            }
-
-            // Check if near bottom edge
-            let distanceFromBottom = scrollViewFrame.maxY - locationInWindow.y
-            if distanceFromBottom < edgeThreshold && distanceFromBottom > 0 {
-                // Scroll down (positive speed)
-                let intensity = 1 - (distanceFromBottom / edgeThreshold)
-                newSpeed = maxScrollSpeed * intensity
-            }
-
-            autoScrollSpeed = newSpeed
-
-            if newSpeed != 0 && autoScrollTimer == nil {
-                startAutoScroll()
-            } else if newSpeed == 0 {
-                stopAutoScroll()
-            }
+        private func startDisplayLink() {
+            stopDisplayLink()
+            displayLink = CADisplayLink(target: self, selector: #selector(displayLinkTick))
+            displayLink?.add(to: .main, forMode: .common)
         }
 
-        private func startAutoScroll() {
-            autoScrollTimer = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { [weak self] _ in
-                self?.performAutoScroll()
-            }
-        }
-
-        private func stopAutoScroll() {
-            autoScrollTimer?.invalidate()
-            autoScrollTimer = nil
+        private func stopDisplayLink() {
+            displayLink?.invalidate()
+            displayLink = nil
             autoScrollSpeed = 0
         }
 
-        private func performAutoScroll() {
+        @objc private func displayLinkTick() {
             guard let scrollView = activeScrollView, autoScrollSpeed != 0 else { return }
 
             var newOffset = scrollView.contentOffset
             newOffset.y += autoScrollSpeed
 
             // Clamp to valid range
-            let minY: CGFloat = 0
-            let maxY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
+            let minY: CGFloat = -scrollView.adjustedContentInset.top
+            let maxY = max(minY, scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom)
             newOffset.y = max(minY, min(maxY, newOffset.y))
 
-            scrollView.contentOffset = newOffset
+            if newOffset.y != scrollView.contentOffset.y {
+                scrollView.setContentOffset(newOffset, animated: false)
 
-            // Check for new cells at the current touch location after scroll
-            if let gesture = longPressGesture, gesture.state == .changed {
-                let locationInWindow = gesture.location(in: gesture.view?.window)
-                if let pageId = pageAtLocation(locationInWindow) {
-                    processCell(pageId)
+                // Check for cells at current touch location after scroll
+                if let gesture = longPressGesture,
+                   gesture.state == .changed,
+                   let window = gesture.view?.window {
+                    let locationInWindow = gesture.location(in: window)
+                    if let pageId = pageAtLocation(locationInWindow) {
+                        processCell(pageId)
+                    }
                 }
             }
+        }
+
+        private func updateAutoScrollSpeed(locationInWindow: CGPoint) {
+            guard let scrollView = activeScrollView, let window = scrollView.window else {
+                autoScrollSpeed = 0
+                return
+            }
+
+            let scrollViewFrame = scrollView.convert(scrollView.bounds, to: window)
+            let edgeThreshold: CGFloat = 80  // Distance from edge to start scrolling
+            let maxScrollSpeed: CGFloat = 15  // Points per frame
+
+            // Check if near top edge
+            let distanceFromTop = locationInWindow.y - scrollViewFrame.minY
+            if distanceFromTop < edgeThreshold && distanceFromTop >= 0 {
+                let intensity = 1 - (distanceFromTop / edgeThreshold)
+                autoScrollSpeed = -maxScrollSpeed * intensity * intensity
+                return
+            }
+
+            // Check if near bottom edge
+            let distanceFromBottom = scrollViewFrame.maxY - locationInWindow.y
+            if distanceFromBottom < edgeThreshold && distanceFromBottom >= 0 {
+                let intensity = 1 - (distanceFromBottom / edgeThreshold)
+                autoScrollSpeed = maxScrollSpeed * intensity * intensity
+                return
+            }
+
+            autoScrollSpeed = 0
         }
 
         private func processCell(_ pageId: UUID) {
@@ -1247,12 +1267,26 @@ struct SwipeSelectionOverlay: UIViewRepresentable {
         }
 
         private func findScrollView(in view: UIView?) -> UIScrollView? {
+            // First check siblings and parent
             var current = view?.superview
-            while let view = current {
-                if let scrollView = view as? UIScrollView {
+            while let parent = current {
+                // Check if parent is a scroll view
+                if let scrollView = parent as? UIScrollView {
                     return scrollView
                 }
-                current = view.superview
+                // Check siblings
+                for sibling in parent.subviews {
+                    if let scrollView = sibling as? UIScrollView {
+                        return scrollView
+                    }
+                    // Check children of siblings
+                    for child in sibling.subviews {
+                        if let scrollView = child as? UIScrollView {
+                            return scrollView
+                        }
+                    }
+                }
+                current = parent.superview
             }
             return nil
         }
@@ -1260,11 +1294,22 @@ struct SwipeSelectionOverlay: UIViewRepresentable {
         // MARK: - UIGestureRecognizerDelegate
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            // Don't allow simultaneous with scroll view pan when we're selecting
+            // Allow simultaneous recognition until we start selecting
+            // This allows normal scroll, tap, and drag to work
             if isSelecting {
                 return false
             }
             return true
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            return false
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            // Don't require long press to fail for other gestures
+            // This allows taps and drags to work immediately
+            return false
         }
     }
 }
@@ -1272,23 +1317,8 @@ struct SwipeSelectionOverlay: UIViewRepresentable {
 class SwipeSelectionView: UIView {
     weak var coordinator: SwipeSelectionOverlay.Coordinator?
 
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        // Convert point to window coordinates for cell check
-        let windowPoint = convert(point, to: window)
-
-        // Check if point is on a cell
-        if let coordinator = coordinator {
-            for (_, frame) in coordinator.cellFrames {
-                if frame.contains(windowPoint) {
-                    // Point is on a cell - we handle this
-                    return self
-                }
-            }
-        }
-
-        // Point is not on a cell - pass through to scroll view
-        return nil
-    }
+    // This view is just a placeholder for the coordinator
+    // All touches pass through to the scroll view below
 }
 
 #Preview {

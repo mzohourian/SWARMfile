@@ -272,7 +272,17 @@ public actor PDFProcessor {
 
         let outputURL = temporaryOutputURL(prefix: "compressed")
         let pageCount = pdf.pageCount
-        
+
+        // Resolution scale based on quality - lower quality = smaller resolution = smaller file
+        let resolutionScale: CGFloat = {
+            switch quality {
+            case .maximum: return 1.0    // Full resolution
+            case .high: return 0.80      // 80% resolution
+            case .medium: return 0.60    // 60% resolution
+            case .low: return 0.35       // 35% resolution - aggressive for max compression
+            }
+        }()
+
         // Use chunked processing for large PDFs (> 100 pages)
         let useChunkedProcessing = pageCount > 100
         let chunkSize = useChunkedProcessing ? 50 : pageCount // Process 50 pages at a time for large PDFs
@@ -284,18 +294,18 @@ public actor PDFProcessor {
         var processedPages = 0
         for chunkStart in stride(from: 0, to: pageCount, by: chunkSize) {
             let chunkEnd = min(chunkStart + chunkSize, pageCount)
-            
+
             // Check memory pressure before each chunk
             if useChunkedProcessing {
                 let memoryPressure = await MainActor.run {
                     MemoryManager.shared.getMemoryPressureLevel()
                 }
-                
+
                 if memoryPressure == .critical {
                     throw PDFError.invalidParameters("Memory critically low. Please close other apps and try again.")
                 }
             }
-            
+
             for pageIndex in chunkStart..<chunkEnd {
                 guard let page = pdf.page(at: pageIndex) else { continue }
 
@@ -306,18 +316,25 @@ public actor PDFProcessor {
 
                 // Use autoreleasepool for each page to manage memory
                 autoreleasepool {
-                    // Render page to image first
-                    let renderer = UIGraphicsImageRenderer(size: pageBounds.size)
+                    // Calculate scaled size for rendering (smaller = more compression)
+                    let scaledSize = CGSize(
+                        width: pageBounds.size.width * resolutionScale,
+                        height: pageBounds.size.height * resolutionScale
+                    )
+
+                    // Render page at reduced resolution
+                    let renderer = UIGraphicsImageRenderer(size: scaledSize)
                     let pageImage = renderer.image { rendererContext in
                         UIColor.white.setFill()
-                        rendererContext.fill(CGRect(origin: .zero, size: pageBounds.size))
+                        rendererContext.fill(CGRect(origin: .zero, size: scaledSize))
 
+                        rendererContext.cgContext.scaleBy(x: resolutionScale, y: resolutionScale)
                         rendererContext.cgContext.translateBy(x: 0, y: pageBounds.size.height)
                         rendererContext.cgContext.scaleBy(x: 1.0, y: -1.0)
                         page.draw(with: .mediaBox, to: rendererContext.cgContext)
                     }
 
-                    // Compress and draw to PDF context
+                    // Compress and draw to PDF context (scaled back to original page size)
                     if let compressedData = pageImage.jpegData(compressionQuality: quality.jpegQuality),
                        let compressedImage = UIImage(data: compressedData) {
                         compressedImage.draw(in: pageBounds)
@@ -329,7 +346,7 @@ public actor PDFProcessor {
                 processedPages += 1
                 progressHandler(Double(processedPages) / Double(pageCount))
             }
-            
+
             // Small delay between chunks to allow memory cleanup
             if useChunkedProcessing && chunkEnd < pageCount {
                 try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s delay
@@ -539,6 +556,7 @@ public actor PDFProcessor {
         opacity: Double = 0.5,
         size: Double = 0.2,
         tileDensity: Double = 0.3,
+        isPageNumbering: Bool = false,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
 
@@ -614,8 +632,15 @@ public actor PDFProcessor {
                 context.saveGState()
                 context.setAlpha(CGFloat(opacity))
 
-                if let text = text {
-                    print("🎨 CorePDF: Drawing text watermark on page \(pageIndex)")
+                if var text = text {
+                    // Replace page number placeholders if this is page numbering
+                    if isPageNumbering {
+                        text = text.replacingOccurrences(of: "{page}", with: "\(pageIndex + 1)")
+                        text = text.replacingOccurrences(of: "{total}", with: "\(pageCount)")
+                        print("🎨 CorePDF: Drawing page number '\(text)' on page \(pageIndex + 1)")
+                    } else {
+                        print("🎨 CorePDF: Drawing text watermark on page \(pageIndex)")
+                    }
                     drawTextWatermark(text, in: pageBounds, position: position, size: size, tileDensity: tileDensity)
                 } else if let image = image {
                     print("🎨 CorePDF: Drawing image watermark on page \(pageIndex)")
@@ -1108,10 +1133,15 @@ public actor PDFProcessor {
         ]
         
         // Custom position is in normalized coordinates (0.0 to 1.0)
+        // The position represents the CENTER of where user tapped, so offset by half text size
         let textSize = (text as NSString).size(withAttributes: attributes)
+        let centerX = bounds.minX + (bounds.width * clampedX)
+        let centerY = bounds.minY + (bounds.height * (1.0 - clampedY)) // Flip Y coordinate
+
+        // Calculate origin by offsetting from center
         let point = CGPoint(
-            x: max(bounds.minX, min(bounds.minX + (bounds.width * clampedX), bounds.maxX - textSize.width)),
-            y: max(bounds.minY, min(bounds.minY + (bounds.height * (1.0 - clampedY)), bounds.maxY - textSize.height))
+            x: max(bounds.minX, min(centerX - (textSize.width / 2), bounds.maxX - textSize.width)),
+            y: max(bounds.minY, min(centerY - (textSize.height / 2), bounds.maxY - textSize.height))
         )
         (text as NSString).draw(at: point, withAttributes: attributes)
     }
@@ -1146,17 +1176,22 @@ public actor PDFProcessor {
         )
         
         // Custom position is in normalized coordinates (0.0 to 1.0)
+        // The position represents the CENTER of where user tapped, so offset by half signature size
+        let centerX = bounds.minX + (bounds.width * clampedX)
+        let centerY = bounds.minY + (bounds.height * (1.0 - clampedY)) // Flip Y coordinate
+
+        // Calculate origin by offsetting from center
         let origin = CGPoint(
-            x: bounds.minX + (bounds.width * clampedX),
-            y: bounds.minY + (bounds.height * (1.0 - clampedY)) // Flip Y coordinate
+            x: centerX - (clampedSize.width / 2),
+            y: centerY - (clampedSize.height / 2)
         )
-        
+
         // Ensure signature stays within page bounds
         let finalOrigin = CGPoint(
             x: max(bounds.minX, min(origin.x, bounds.maxX - clampedSize.width)),
             y: max(bounds.minY, min(origin.y, bounds.maxY - clampedSize.height))
         )
-        
+
         let rect = CGRect(origin: finalOrigin, size: clampedSize)
         image.draw(in: rect)
     }
@@ -1430,19 +1465,38 @@ public actor PDFProcessor {
     private func findTextRanges(_ searchText: String, in text: String) -> [NSRange] {
         var ranges: [NSRange] = []
         let nsText = text as NSString
+
+        // First try as regex pattern
+        if let regex = try? NSRegularExpression(pattern: searchText, options: [.caseInsensitive]) {
+            let fullRange = NSRange(location: 0, length: nsText.length)
+            let matches = regex.matches(in: text, options: [], range: fullRange)
+            for match in matches {
+                ranges.append(match.range)
+            }
+            if !ranges.isEmpty {
+                print("🔵 CorePDF: Found \(ranges.count) regex matches for pattern: \(searchText)")
+                return ranges
+            }
+        }
+
+        // Fall back to plain text search if regex fails or finds nothing
         var searchRange = NSRange(location: 0, length: nsText.length)
-        
+
         while searchRange.location < nsText.length {
             let foundRange = nsText.range(of: searchText, options: [.caseInsensitive], range: searchRange)
             if foundRange.location == NSNotFound {
                 break
             }
-            
+
             ranges.append(foundRange)
             searchRange.location = foundRange.location + foundRange.length
             searchRange.length = nsText.length - searchRange.location
         }
-        
+
+        if !ranges.isEmpty {
+            print("🔵 CorePDF: Found \(ranges.count) plain text matches for: \(searchText)")
+        }
+
         return ranges
     }
     

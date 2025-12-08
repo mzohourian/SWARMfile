@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-06
+**Last Updated:** 2025-12-08
 
 ## What This Is
 **OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -33,7 +33,7 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - Pro subscriptions (StoreKit 2)
 - On-device search
 - Workflow automation
-- Page organizer with undo/redo
+- Page organizer with undo/redo and swipe-to-select
 - Redaction with presets
 
 ### Broken / Blocked
@@ -62,60 +62,57 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **Redact PDF - Fixed coordinate transformation bug**:
-  1. Previous issue: Black boxes appeared in wrong positions (random places instead of over sensitive text)
-  2. Root cause: Vision uses bottom-left origin (Y up), UIKit PDF context uses top-left origin (Y down)
-  3. Fix: Proper Y coordinate conversion: `y = pageHeight * (1 - visionY - visionHeight)`
-  4. Added fallback: If character-level bounding box fails, estimate position from character ratios
-  5. Fixed thread safety: Capture OCR results from main thread before processing
-- Organize PDF scrolling not working - Removed conflicting DragGesture that consumed scroll events
-- Organize PDF selection cleared after rotation - Kept selection after rotate left/right
-- Organize PDF false anomaly detection - Disabled feature (too many false positives, no solutions)
-- Organize PDF not saving to Files - PageOrganizerView was bypassing JobEngine's file persistence
-- Organize PDF multi-page rotation bug - Rotating multiple pages only kept last rotation
-- Processed files not saving to Files app - Files now auto-saved to Documents/Exports folder
-- Watermark size slider not working - Text watermarks now use size parameter (was ignored)
-- Watermark size range too narrow - Improved to 5%-50% (images) and 2%-15% (text)
-- Watermark density range too narrow - Improved to 0.6x-5x spacing (was 1x-3x)
-- Watermark PDF hang at 27% - Fixed by reducing tiling limits from 50x50 to 15x15
-- Crash at 100% completion - Fixed division by zero in ExportPreviewView.swift
+- **Workflow hybrid interactive/automated redesign** - Major workflow fix:
+  - Interactive steps (Organize, Sign) now use existing app views (PageOrganizerView, InteractiveSignPDFView)
+  - Automated steps (Compress, Watermark, etc.) run with pre-configured settings
+  - Workflow pauses for interactive steps, continues after user completes them
+  - Fixed page numbers showing literal `{page}` - now properly replaced per-page
+  - Fixed date stamp showing "Processed:" prefix and ugly formatting
+  - Made compression more aggressive for visible file size reduction
+- All previous workflow fixes remain in place
 
 ---
 
 ## Last Session Summary
 
-**Date:** 2025-12-06
+**Date:** 2025-12-08 (continued session)
 
 **What Was Done:**
-- **Rebuilt Workflow feature completely:**
-  1. Added missing workflow steps: `.redact`, `.addPageNumbers`, `.addDateStamp`, `.flatten`
-  2. Fixed step mappings in WorkflowExecutionService (organize now uses pdfOrganize, not pdfMerge)
-  3. Added professional industry presets:
-     - **Legal Discovery** - redact, Bates numbering, date stamp, flatten, compress
-     - **Contract Execution** - merge, flatten, sign, watermark, compress
-     - **Financial Report** - redact account numbers, CONFIDENTIAL watermark, date stamp
-     - **HR Documents** - redact SSN/personal data, INTERNAL watermark, page numbers
-     - **Medical Records** - HIPAA-compliant redaction, date stamp, watermark
-     - **Merge & Archive** - combine documents with page numbers and date stamp
-  4. Added step configuration capability (watermark text, redaction presets, Bates prefix)
-  5. Updated JobSettings with new properties for page numbering, date stamps, form flattening
+- **Added swipe-to-select in Page Organizer (iOS Photos-like):**
+  - Swipe across pages to select/deselect multiple at once
+  - First page touched determines mode (select or deselect)
+  - Haptic feedback on each page touched
+  - Only activates when starting on a cell (preserves scrolling)
+  - Uses PreferenceKey system for cell frame tracking
+
+- **Fixed RedactionView failing to load PDF in workflow:**
+  - Added retry logic (3 attempts, 0.5s delay each)
+  - Fixed security-scoped resource management in WorkflowConciergeView
+  - Keep security access open for fallback URLs if temp copy fails
+  - Release access only when workflow finishes
+
+- **Fixed redaction analysis not triggering:**
+  - Removed broken `onChange(of: pdfDocument)` - PDFDocument doesn't conform to Equatable
+  - Now calls `performSensitiveDataAnalysis()` directly when PDF loads successfully
 
 **What's Unfinished:**
-- Redact PDF needs user testing to confirm precise redaction works correctly
-- Workflow feature needs user testing
+- Build not verified (no Xcode in environment) - user should build and test
+- Swipe-to-select needs user testing for feel/responsiveness
 
-**Files Modified:**
-- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Added new steps and professional templates
-- `OneBox/OneBox/Services/WorkflowExecutionService.swift` - Fixed step mappings and added configuration
-- `OneBox/Modules/JobEngine/JobEngine.swift` - Added new JobSettings properties
+**Files Modified This Session:**
+- `OneBox/OneBox/Views/PageOrganizerView.swift` - Swipe-to-select gesture
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Fixed security-scoped resource management
+- `OneBox/OneBox/Views/RedactionView.swift` - Fixed PDF loading retry + analysis trigger
 
 ---
 
 ## Next Steps (Priority Order)
 
-1. **Test Redact PDF** - Verify file saving/sharing now works correctly
-2. Test all features end-to-end
-3. Address Swift 6 warnings (optional, non-blocking)
+1. **Build and test in Xcode** - Verify all changes compile
+2. **Test workflow with interactive steps** - Create a workflow with Organize/Sign and verify they open existing views
+3. **Verify workflow chaining** - Test that automated steps run correctly after interactive steps complete
+4. **Test Redact PDF** - Verify file saving/sharing works correctly
+5. Address Swift 6 warnings (optional, non-blocking)
 
 ---
 

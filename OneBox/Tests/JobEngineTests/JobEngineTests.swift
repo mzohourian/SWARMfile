@@ -253,10 +253,10 @@ final class JobEngineTests: XCTestCase {
     // MARK: - Compression Quality Tests
 
     func testCompressionQualityValues() {
-        XCTAssertEqual(CompressionQuality.maximum.jpegQuality, 0.3)
-        XCTAssertEqual(CompressionQuality.high.jpegQuality, 0.5)
-        XCTAssertEqual(CompressionQuality.medium.jpegQuality, 0.65)
-        XCTAssertEqual(CompressionQuality.low.jpegQuality, 0.85)
+        XCTAssertEqual(CompressionQuality.maximum.jpegQuality, 0.95)
+        XCTAssertEqual(CompressionQuality.high.jpegQuality, 0.75)
+        XCTAssertEqual(CompressionQuality.medium.jpegQuality, 0.50)
+        XCTAssertEqual(CompressionQuality.low.jpegQuality, 0.25)
     }
 
     func testCompressionQualityDisplayNames() {

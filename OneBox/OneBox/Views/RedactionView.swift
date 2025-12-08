@@ -16,14 +16,16 @@ import NaturalLanguage
 
 struct RedactionView: View {
     let pdfURL: URL
+    var workflowMode: Bool = false  // When true, changes "Apply" to "Proceed" for workflow clarity
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var jobManager: JobManager
     @EnvironmentObject var paymentsManager: PaymentsManager
 
     @State private var redactionItems: [RedactionItem] = []
 
-    init(pdfURL: URL) {
+    init(pdfURL: URL, workflowMode: Bool = false) {
         self.pdfURL = pdfURL
+        self.workflowMode = workflowMode
         print("🟢 RedactionView: init called with URL: \(pdfURL.absoluteString)")
         print("🟢 RedactionView: File exists at init: \(FileManager.default.fileExists(atPath: pdfURL.path))")
     }
@@ -44,7 +46,11 @@ struct RedactionView: View {
     @State private var loadError: String?
     // Store OCR results with bounding boxes for accurate redaction
     @State private var ocrResults: [Int: [OCRTextBlock]] = [:] // pageIndex -> text blocks
-    
+
+    // Visual preview mode for tap-to-toggle redaction boxes
+    @State private var showingVisualPreview = false
+    @State private var previewPageIndex = 0
+
     var body: some View {
         let _ = print("🟢 RedactionView: body is being evaluated")
         NavigationStack {
@@ -78,7 +84,7 @@ struct RedactionView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Apply") {
+                    Button(workflowMode ? "Proceed" : "Apply") {
                         applyRedactions()
                     }
                     .foregroundColor(OneBoxColors.primaryGold)
@@ -115,7 +121,6 @@ struct RedactionView: View {
                 print("🟢 RedactionView: Started security-scoped resource access")
             }
             loadPDFDocument()
-            performSensitiveDataAnalysis()
         }
         .onDisappear {
             // Stop security-scoped access when view disappears
@@ -261,20 +266,171 @@ struct RedactionView: View {
         VStack(spacing: 0) {
             // Statistics header
             redactionStatsHeader
-            
-            // Redaction items list
-            ScrollView {
-                LazyVStack(spacing: OneBoxSpacing.small) {
-                    ForEach(redactionItems) { item in
-                        redactionItemRow(item)
-                    }
 
-                    // Always show manual add option
-                    addCustomRedactionButton
+            // View mode picker - List vs Visual
+            Picker("View Mode", selection: $showingVisualPreview) {
+                Text("List").tag(false)
+                Text("Visual").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, OneBoxSpacing.medium)
+            .padding(.vertical, OneBoxSpacing.small)
+
+            if showingVisualPreview {
+                // Visual preview with tap-to-toggle redaction boxes
+                visualRedactionPreview
+            } else {
+                // Redaction items list
+                ScrollView {
+                    LazyVStack(spacing: OneBoxSpacing.small) {
+                        ForEach(redactionItems) { item in
+                            redactionItemRow(item)
+                        }
+
+                        // Always show manual add option
+                        addCustomRedactionButton
+                    }
+                    .padding(OneBoxSpacing.medium)
                 }
-                .padding(OneBoxSpacing.medium)
             }
         }
+    }
+
+    // MARK: - Visual Redaction Preview
+    private var visualRedactionPreview: some View {
+        VStack(spacing: 0) {
+            // Page navigation
+            if let document = pdfDocument, document.pageCount > 1 {
+                HStack {
+                    Button(action: {
+                        if previewPageIndex > 0 {
+                            previewPageIndex -= 1
+                            HapticManager.shared.selection()
+                        }
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(previewPageIndex > 0 ? OneBoxColors.primaryGold : OneBoxColors.tertiaryText)
+                    }
+                    .disabled(previewPageIndex == 0)
+
+                    Spacer()
+
+                    Text("Page \(previewPageIndex + 1) of \(document.pageCount)")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.secondaryText)
+
+                    Spacer()
+
+                    Button(action: {
+                        if previewPageIndex < document.pageCount - 1 {
+                            previewPageIndex += 1
+                            HapticManager.shared.selection()
+                        }
+                    }) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(previewPageIndex < document.pageCount - 1 ? OneBoxColors.primaryGold : OneBoxColors.tertiaryText)
+                    }
+                    .disabled(previewPageIndex >= document.pageCount - 1)
+                }
+                .padding(.horizontal, OneBoxSpacing.large)
+                .padding(.vertical, OneBoxSpacing.small)
+            }
+
+            // PDF page with redaction overlays
+            GeometryReader { geometry in
+                if let document = pdfDocument, let page = document.page(at: previewPageIndex) {
+                    let pageBounds = page.bounds(for: .mediaBox)
+                    let pageAspect = pageBounds.width / pageBounds.height
+                    let viewWidth = geometry.size.width - 32 // Padding
+                    let viewHeight = viewWidth / pageAspect
+                    let finalHeight = min(viewHeight, geometry.size.height - 20)
+                    let finalWidth = finalHeight * pageAspect
+
+                    ScrollView {
+                        ZStack(alignment: .topLeading) {
+                            // PDF page rendering
+                            RedactionPDFPageView(page: page)
+                                .frame(width: finalWidth, height: finalHeight)
+                                .background(Color.white)
+                                .cornerRadius(8)
+                                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+
+                            // Redaction boxes overlay
+                            ForEach(itemsForCurrentPage()) { item in
+                                if let box = item.boundingBox {
+                                    redactionBoxOverlay(item: item, box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
+                                }
+                            }
+                        }
+                        .frame(width: finalWidth, height: finalHeight)
+                        .frame(maxWidth: .infinity)
+                    }
+                } else {
+                    Text("Unable to load page")
+                        .font(OneBoxTypography.body)
+                        .foregroundColor(OneBoxColors.secondaryText)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+
+            // Hint text and info about items on current page
+            VStack(spacing: OneBoxSpacing.tiny) {
+                let pageItems = itemsForCurrentPage()
+                let itemsWithBoxes = pageItems.filter { $0.boundingBox != nil }
+                let itemsWithoutBoxes = pageItems.filter { $0.boundingBox == nil }
+
+                if !itemsWithBoxes.isEmpty {
+                    Text("Tap boxes to include/exclude from redaction")
+                        .font(OneBoxTypography.micro)
+                        .foregroundColor(OneBoxColors.tertiaryText)
+                }
+
+                if !itemsWithoutBoxes.isEmpty {
+                    Text("\(itemsWithoutBoxes.count) item(s) on this page in List view only")
+                        .font(OneBoxTypography.micro)
+                        .foregroundColor(OneBoxColors.warningAmber)
+                }
+
+                if pageItems.isEmpty {
+                    Text("No redaction items on this page")
+                        .font(OneBoxTypography.micro)
+                        .foregroundColor(OneBoxColors.secondaryText)
+                }
+            }
+            .padding(.vertical, OneBoxSpacing.small)
+        }
+    }
+
+    private func itemsForCurrentPage() -> [RedactionItem] {
+        redactionItems.filter { $0.pageNumber == previewPageIndex }
+    }
+
+    private func itemsWithBoxesForCurrentPage() -> [RedactionItem] {
+        redactionItems.filter { $0.pageNumber == previewPageIndex && $0.boundingBox != nil }
+    }
+
+    private func redactionBoxOverlay(item: RedactionItem, box: CGRect, pageSize: CGSize) -> some View {
+        // Convert normalized coordinates (0-1) to view coordinates
+        // Note: Vision's boundingBox has origin at bottom-left, need to flip Y
+        let x = box.minX * pageSize.width
+        let y = (1.0 - box.maxY) * pageSize.height // Flip Y
+        let width = box.width * pageSize.width
+        let height = box.height * pageSize.height
+
+        return Rectangle()
+            .fill(item.isSelected ? Color.black : Color.gray.opacity(0.3))
+            .frame(width: max(width, 20), height: max(height, 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 2)
+                    .stroke(item.isSelected ? OneBoxColors.primaryGold : OneBoxColors.tertiaryText, lineWidth: 2)
+            )
+            .position(x: x + width/2, y: y + height/2)
+            .onTapGesture {
+                toggleRedactionSelection(item)
+                HapticManager.shared.selection()
+            }
     }
     
     private var redactionStatsHeader: some View {
@@ -441,15 +597,40 @@ struct RedactionView: View {
     }
 
     // MARK: - Helper Functions
-    private func loadPDFDocument() {
-        print("RedactionView: Attempting to load PDF from: \(pdfURL.path)")
+    private func loadPDFDocument(retryCount: Int = 0) {
+        print("RedactionView: Attempting to load PDF from: \(pdfURL.path) (attempt \(retryCount + 1))")
         print("RedactionView: File exists: \(FileManager.default.fileExists(atPath: pdfURL.path))")
 
+        // Try to access the file
+        if !FileManager.default.fileExists(atPath: pdfURL.path) {
+            if retryCount < 3 {
+                print("RedactionView: File not found yet, retrying in 0.5s")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.loadPDFDocument(retryCount: retryCount + 1)
+                }
+                return
+            }
+            print("RedactionView: File not found after 3 retries")
+            loadError = "Could not find the PDF file. Please try selecting the file again."
+            return
+        }
+
+        // Try to load the PDF
         if let document = PDFDocument(url: pdfURL) {
             pdfDocument = document
+            loadError = nil
             print("RedactionView: PDF loaded successfully with \(document.pageCount) pages")
+            // Start analysis now that PDF is loaded
+            performSensitiveDataAnalysis()
         } else {
-            print("RedactionView: Failed to load PDF")
+            if retryCount < 3 {
+                print("RedactionView: Failed to create PDFDocument, retrying in 0.5s")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.loadPDFDocument(retryCount: retryCount + 1)
+                }
+                return
+            }
+            print("RedactionView: Failed to load PDF after 3 retries")
             loadError = "Could not open the PDF file. The file may be corrupted or in an unsupported format."
         }
     }
@@ -953,17 +1134,24 @@ struct RedactionView: View {
 
                 print("🔵 RedactionView: Created completed job with output: \(finalURL.path)")
 
+                // Submit job first so it's available when onDisappear fires
+                await jobManager.submitJob(job)
+
                 await MainActor.run {
                     paymentsManager.consumeExport()
                     completedJob = job
                     isProcessing = false
-                    showingResult = true
                     HapticManager.shared.notification(.success)
-                    print("🔵 RedactionView: showingResult = true, completedJob set")
-                }
 
-                // Submit job for history tracking
-                await jobManager.submitJob(job)
+                    // In workflow mode, dismiss immediately without showing result
+                    if workflowMode {
+                        print("🔵 RedactionView: Workflow mode - dismissing")
+                        dismiss()
+                    } else {
+                        showingResult = true
+                        print("🔵 RedactionView: showingResult = true, completedJob set")
+                    }
+                }
 
             } catch {
                 print("❌ RedactionView: Processing error: \(error)")
@@ -1332,6 +1520,54 @@ struct RedactionPreviewView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - PDF Page Rendering View for Redaction Preview
+/// Simple view for rendering a PDF page in the redaction visual preview
+struct RedactionPDFPageView: UIViewRepresentable {
+    let page: PDFPage
+
+    func makeUIView(context: Context) -> RedactionPDFRenderView {
+        let view = RedactionPDFRenderView()
+        view.page = page
+        view.backgroundColor = .white
+        return view
+    }
+
+    func updateUIView(_ uiView: RedactionPDFRenderView, context: Context) {
+        uiView.page = page
+        uiView.setNeedsDisplay()
+    }
+}
+
+/// UIView subclass that renders a PDF page for redaction preview
+class RedactionPDFRenderView: UIView {
+    var page: PDFPage?
+
+    override func draw(_ rect: CGRect) {
+        guard let page = page, let context = UIGraphicsGetCurrentContext() else { return }
+
+        // Fill with white background
+        UIColor.white.setFill()
+        context.fill(rect)
+
+        // Set up transformation for PDF rendering
+        let pageBounds = page.bounds(for: .mediaBox)
+        let scaleX = rect.width / pageBounds.width
+        let scaleY = rect.height / pageBounds.height
+        let scale = min(scaleX, scaleY)
+
+        context.saveGState()
+
+        // Translate and flip coordinate system
+        context.translateBy(x: 0, y: rect.height)
+        context.scaleBy(x: scale, y: -scale)
+
+        // Draw the PDF page
+        page.draw(with: .mediaBox, to: context)
+
+        context.restoreGState()
     }
 }
 

@@ -99,7 +99,7 @@ public enum WorkflowRedactionPreset: String, Codable, CaseIterable {
     case legal      // SSN, dates, names, addresses, case numbers
     case finance    // Account numbers, amounts, SSN
     case hr         // SSN, DOB, salary, addresses
-    case medical    // PHI, patient IDs, dates (HIPAA)
+    case medical    // PHI, patient IDs, dates
     case custom     // User-defined patterns
 }
 
@@ -635,10 +635,36 @@ actor JobProcessor {
         case .pdfSign:
             return try await processPDFSign(job: job, progressHandler: progressHandler)
         case .pdfOrganize:
-            // Page Organizer is handled through interactive UI (PageOrganizerView)
-            // Jobs are created after user completes organization, already processed
-            // This case should not normally be reached through standard job flow
-            return job.outputURLs
+            // Page Organizer is normally handled through interactive UI (PageOrganizerView)
+            // In automated workflows, copy input files to output location (pass-through)
+            // since page organization requires user interaction
+            progressHandler(0.5)
+
+            if !job.outputURLs.isEmpty {
+                return job.outputURLs // Use existing outputs if available (from interactive UI)
+            }
+
+            // Copy inputs to temp output files to ensure they're properly passed through
+            var outputURLs: [URL] = []
+            let tempDir = FileManager.default.temporaryDirectory
+            for inputURL in job.inputs {
+                let outputURL = tempDir.appendingPathComponent("organized_\(UUID().uuidString)_\(inputURL.lastPathComponent)")
+                do {
+                    if FileManager.default.fileExists(atPath: outputURL.path) {
+                        try FileManager.default.removeItem(at: outputURL)
+                    }
+                    try FileManager.default.copyItem(at: inputURL, to: outputURL)
+                    outputURLs.append(outputURL)
+                } catch {
+                    print("❌ pdfOrganize: Failed to copy \(inputURL.lastPathComponent): \(error)")
+                    // Use original as fallback
+                    outputURLs.append(inputURL)
+                }
+            }
+
+            progressHandler(1.0)
+            return outputURLs.isEmpty ? job.inputs : outputURLs
+
         case .fillForm:
             return try await processFormFilling(job: job, progressHandler: progressHandler)
         case .imageResize:
@@ -751,14 +777,21 @@ actor JobProcessor {
         }
         // Use watermark position directly from CommonTypes
         let watermarkPos = job.settings.watermarkPosition
-        
+
+        // Use smaller size for page numbering and date stamps
+        var effectiveSize = job.settings.watermarkSize
+        if job.settings.isPageNumbering || job.settings.isDateStamp {
+            effectiveSize = 0.03 // Small, unobtrusive size for page numbers/date stamps
+        }
+
         let outputURL = try await processor.watermarkPDF(
             pdfURL,
             text: job.settings.watermarkText,
             position: watermarkPos,
             opacity: job.settings.watermarkOpacity,
-            size: job.settings.watermarkSize,
+            size: effectiveSize,
             tileDensity: job.settings.watermarkTileDensity,
+            isPageNumbering: job.settings.isPageNumbering,
             progressHandler: progressHandler
         )
         return try await applyPostProcessing(job: job, urls: [outputURL])

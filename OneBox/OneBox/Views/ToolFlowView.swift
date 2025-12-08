@@ -2013,7 +2013,7 @@ struct ProcessingView: View {
                             .foregroundColor(OneBoxColors.primaryText)
                             .tracking(1.0)
                         
-                        Text("Your files are being processed on-device\nwith military-grade security")
+                        Text("Your files are being processed entirely\non your device - never uploaded")
                             .font(OneBoxTypography.body)
                             .foregroundColor(OneBoxColors.secondaryText)
                             .multilineTextAlignment(.center)

@@ -24,7 +24,7 @@ struct OnboardingView: View {
             id: "welcome",
             title: "Welcome to OneBox",
             subtitle: "Fort Knox for your PDF documents",
-            description: "Military-grade security meets professional productivity. Transform, organize, and secure your documents with confidence.",
+            description: "Privacy-first document processing. Transform, organize, and secure your documents entirely on your device.",
             primaryAction: "Get Started",
             icon: "shield.lefthalf.filled",
             gradient: [OneBoxColors.primaryGold, OneBoxColors.secondaryGold]
@@ -169,11 +169,11 @@ struct OnboardingView: View {
         VStack(spacing: OneBoxSpacing.medium) {
             HStack(spacing: OneBoxSpacing.medium) {
                 securityFeature("On-Device Processing", "cpu.fill")
-                securityFeature("Zero-Knowledge", "eye.slash.fill")
+                securityFeature("No Cloud Upload", "icloud.slash.fill")
             }
-            
+
             HStack(spacing: OneBoxSpacing.medium) {
-                securityFeature("End-to-End Encryption", "lock.shield.fill")
+                securityFeature("Local Storage", "lock.shield.fill")
                 securityFeature("Biometric Security", "faceid")
             }
         }

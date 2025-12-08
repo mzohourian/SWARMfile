@@ -14,6 +14,7 @@ import UniformTypeIdentifiers
 
 struct PageOrganizerView: View {
     let pdfURL: URL
+    var workflowMode: Bool = false  // When true, changes "Done" to "Proceed" for workflow clarity
 
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var jobManager: JobManager
@@ -38,6 +39,13 @@ struct PageOrganizerView: View {
     // Drag & drop state
     @State private var draggedPage: PageInfo?
 
+    // Swipe-to-select state
+    @State private var isSwipeSelecting = false
+    @State private var swipeSelectStartedOnCell = false  // Only activate if drag started on a cell
+    @State private var swipeSelectMode: Bool? = nil  // true = selecting, false = deselecting
+    @State private var swipeSelectedPages: Set<UUID> = []  // Pages touched during current swipe
+    @State private var cellFrames: [UUID: CGRect] = [:]
+
     // Security-scoped resource tracking
     @State private var didStartAccessingSecurityScoped = false
 
@@ -60,7 +68,7 @@ struct PageOrganizerView: View {
                             anomalyBanner
                         }
                         
-                        // Page grid
+                        // Page grid with swipe-to-select
                         ScrollView {
                             LazyVGrid(columns: [
                                 GridItem(.adaptive(minimum: 120, maximum: 150), spacing: 16)
@@ -74,10 +82,43 @@ struct PageOrganizerView: View {
                                         onDrop: { handleDrop(page) },
                                         hasAnomaly: detectedAnomalies.contains { $0.pageId == page.id }
                                     )
+                                    .background(
+                                        GeometryReader { geo in
+                                            Color.clear
+                                                .preference(
+                                                    key: CellFramePreferenceKey.self,
+                                                    value: [page.id: geo.frame(in: .named("pageGrid"))]
+                                                )
+                                        }
+                                    )
                                 }
                             }
                             .padding()
+                            .onPreferenceChange(CellFramePreferenceKey.self) { frames in
+                                cellFrames = frames
+                            }
                         }
+                        .coordinateSpace(name: "pageGrid")
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 30, coordinateSpace: .named("pageGrid"))
+                                .onChanged { value in
+                                    let isStart = !isSwipeSelecting
+                                    isSwipeSelecting = true
+
+                                    // On first touch, check if we started on a cell
+                                    if isStart {
+                                        swipeSelectStartedOnCell = cellContainsPoint(value.startLocation)
+                                    }
+
+                                    // Only process selection if we started on a cell
+                                    if swipeSelectStartedOnCell {
+                                        handleSwipeSelection(at: value.location, isStart: isStart)
+                                    }
+                                }
+                                .onEnded { _ in
+                                    finishSwipeSelection()
+                                }
+                        )
 
                         // Bottom toolbar
                         bottomToolbar
@@ -121,7 +162,7 @@ struct PageOrganizerView: View {
                 }
 
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Done") {
+                    Button(workflowMode ? "Proceed" : "Done") {
                         savePDF()
                     }
                     .disabled(pages.isEmpty)
@@ -515,6 +556,60 @@ struct PageOrganizerView: View {
             selectedPages.insert(page.id)
         }
     }
+
+    // MARK: - Swipe-to-Select
+
+    private func cellContainsPoint(_ point: CGPoint) -> Bool {
+        for (_, frame) in cellFrames {
+            if frame.contains(point) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func handleSwipeSelection(at location: CGPoint, isStart: Bool) {
+        // Find which cell contains the current touch point
+        for (pageId, frame) in cellFrames {
+            if frame.contains(location) {
+                // First touch determines the mode: selecting or deselecting
+                if isStart {
+                    // If the first touched cell is selected, we're deselecting
+                    // If it's not selected, we're selecting
+                    swipeSelectMode = !selectedPages.contains(pageId)
+                    swipeSelectedPages.removeAll()
+                }
+
+                // Only process if we haven't already touched this cell in this swipe
+                if !swipeSelectedPages.contains(pageId) {
+                    swipeSelectedPages.insert(pageId)
+
+                    // Apply selection based on mode
+                    if let mode = swipeSelectMode {
+                        if mode {
+                            // Selecting mode
+                            selectedPages.insert(pageId)
+                        } else {
+                            // Deselecting mode
+                            selectedPages.remove(pageId)
+                        }
+                    }
+
+                    // Haptic feedback for each cell touched
+                    HapticManager.shared.impact(.light)
+                }
+
+                break  // Only process one cell at a time
+            }
+        }
+    }
+
+    private func finishSwipeSelection() {
+        isSwipeSelecting = false
+        swipeSelectStartedOnCell = false
+        swipeSelectMode = nil
+        swipeSelectedPages.removeAll()
+    }
     
     // MARK: - Undo/Redo (On-Device State Management)
     
@@ -734,13 +829,21 @@ struct PageOrganizerView: View {
                     completedAt: Date()
                 )
 
+                // Submit job first so it's available when onDisappear fires
+                await jobManager.submitJob(job)
+
                 await MainActor.run {
                     paymentsManager.consumeExport()
                     completedJob = job
                     isProcessing = false
-                    showingResult = true
+
+                    // In workflow mode, dismiss immediately without showing result
+                    if workflowMode {
+                        dismiss()
+                    } else {
+                        showingResult = true
+                    }
                 }
-                await jobManager.submitJob(job)
 
             } catch {
                 await MainActor.run {
@@ -992,6 +1095,15 @@ struct PageDropDelegate: DropDelegate {
     func validateDrop(info: DropInfo) -> Bool {
         print("PageDropDelegate: validateDrop called")
         return info.hasItemsConforming(to: [UTType.plainText])
+    }
+}
+
+// MARK: - Preference Key for Cell Frames
+struct CellFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [UUID: CGRect] = [:]
+
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
     }
 }
 

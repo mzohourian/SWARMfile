@@ -148,7 +148,7 @@ struct UpgradeFlowView: View {
                     .foregroundColor(OneBoxColors.primaryText)
                     .multilineTextAlignment(.center)
                 
-                Text("Transform your document workflow with military-grade features designed for professionals who demand excellence.")
+                Text("Transform your document workflow with professional features designed for those who demand privacy and excellence.")
                     .font(OneBoxTypography.body)
                     .foregroundColor(OneBoxColors.secondaryText)
                     .multilineTextAlignment(.center)
@@ -872,7 +872,7 @@ struct PaymentView: View {
                         .fontWeight(.semibold)
                         .foregroundColor(OneBoxColors.primaryText)
                     
-                    Text("Your payment is protected by military-grade encryption and biometric authentication")
+                    Text("Your payment is securely processed by Apple with biometric authentication")
                         .font(OneBoxTypography.caption)
                         .foregroundColor(OneBoxColors.secondaryText)
                         .multilineTextAlignment(.center)

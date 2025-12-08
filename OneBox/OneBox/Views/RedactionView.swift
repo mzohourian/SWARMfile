@@ -121,12 +121,6 @@ struct RedactionView: View {
                 print("🟢 RedactionView: Started security-scoped resource access")
             }
             loadPDFDocument()
-            // Analysis is triggered after PDF loads successfully in onChange
-        }
-        .onChange(of: pdfDocument) { document in
-            if document != nil && loadError == nil {
-                performSensitiveDataAnalysis()
-            }
         }
         .onDisappear {
             // Stop security-scoped access when view disappears
@@ -626,6 +620,8 @@ struct RedactionView: View {
             pdfDocument = document
             loadError = nil
             print("RedactionView: PDF loaded successfully with \(document.pageCount) pages")
+            // Start analysis now that PDF is loaded
+            performSensitiveDataAnalysis()
         } else {
             if retryCount < 3 {
                 print("RedactionView: Failed to create PDFDocument, retrying in 0.5s")

@@ -33,11 +33,12 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - Pro subscriptions (StoreKit 2)
 - On-device search
 - Workflow automation
-- Page organizer with undo/redo and swipe-to-select
+- Page organizer with undo/redo and tap-to-select
 - Redaction with presets
+- File preview (QuickLook) - fixed stale path issue
 
 ### Broken / Blocked
-- None currently
+- None currently (rebuild app to get latest Info.plist)
 
 ### Needs Testing
 - **Redact PDF** - Completely rebuilt with precise character-level redaction:
@@ -78,39 +79,32 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-08 (continued session)
 
 **What Was Done:**
-- **Added swipe-to-select in Page Organizer (iOS Photos-like):**
-  - Swipe across pages to select/deselect multiple at once
-  - First page touched determines mode (select or deselect)
-  - Haptic feedback on each page touched
-  - Only activates when starting on a cell (preserves scrolling)
-  - Uses PreferenceKey system for cell frame tracking
+- **Removed swipe-to-select from Page Organizer:**
+  - After 5+ attempts, SwiftUI gesture conflicts with ScrollView proved too complex
+  - Reverted to simple tap-to-select and drag-to-reorder (works reliably)
 
-- **Fixed RedactionView failing to load PDF in workflow:**
-  - Added retry logic (3 attempts, 0.5s delay each)
-  - Fixed security-scoped resource management in WorkflowConciergeView
-  - Keep security access open for fallback URLs if temp copy fails
-  - Release access only when workflow finishes
-
-- **Fixed redaction analysis not triggering:**
-  - Removed broken `onChange(of: pdfDocument)` - PDFDocument doesn't conform to Equatable
-  - Now calls `performSensitiveDataAnalysis()` directly when PDF loads successfully
+- **Fixed preview showing blank screen throughout app:**
+  - Root cause: iOS changes app container UUID on updates, breaking saved file paths
+  - Example: `/var/.../ABC123/Documents/file.pdf` → `/var/.../XYZ789/Documents/file.pdf`
+  - Fix: Added path reconstruction in `JobEngine.loadJobs()` that extracts relative path from "Documents" and rebuilds with current directory
+  - Preview (QuickLook) now works for all exported files
 
 **What's Unfinished:**
-- Build not verified (no Xcode in environment) - user should build and test
-- Swipe-to-select needs user testing for feel/responsiveness
+- **Workflow crash with Face ID** - App crashes with missing `NSFaceIDUsageDescription` when running workflow with biometric lock enabled
+  - The key ALREADY EXISTS in Info.plist (line 27-28)
+  - **Solution: Rebuild and reinstall the app in Xcode** to include updated Info.plist
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/PageOrganizerView.swift` - Swipe-to-select gesture
-- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Fixed security-scoped resource management
-- `OneBox/OneBox/Views/RedactionView.swift` - Fixed PDF loading retry + analysis trigger
+- `OneBox/OneBox/Views/PageOrganizerView.swift` - Simplified to tap-to-select only
+- `OneBox/Modules/JobEngine/JobEngine.swift` - Added file path reconstruction for stale URLs
 
 ---
 
 ## Next Steps (Priority Order)
 
-1. **Build and test in Xcode** - Verify all changes compile
-2. **Test workflow with interactive steps** - Create a workflow with Organize/Sign and verify they open existing views
-3. **Verify workflow chaining** - Test that automated steps run correctly after interactive steps complete
+1. **REBUILD APP IN XCODE** - Critical: fixes Face ID crash in workflows
+2. **Test preview function** - Verify QuickLook now shows files properly after path fix
+3. **Test workflow with biometric lock** - Should work after rebuild
 4. **Test Redact PDF** - Verify file saving/sharing works correctly
 5. Address Swift 6 warnings (optional, non-blocking)
 

@@ -4,6 +4,43 @@
 
 ---
 
+## 2025-12-08: Preview Fix & Swipe-to-Select Removal (Continued Session)
+
+**Problems Reported:**
+1. Swipe-to-select not working vertically in Page Organizer
+2. Preview function showing blank screen throughout app
+3. Workflow crash when running with biometric lock enabled
+
+**What Was Done:**
+
+**Issue 1 - Swipe-to-select removed:**
+- After 5+ attempts with various SwiftUI gesture and UIKit approaches, conflicts with ScrollView proved too complex
+- Final solution: Removed all swipe-to-select code, reverted to simple tap-to-select and drag-to-reorder
+- User agreed: "if you think it is complicated for you we can give it up for now"
+
+**Issue 2 - Preview blank screen FIXED:**
+- Root cause: iOS changes app container UUID when app updates
+- Stored file paths in jobs.json become invalid (e.g., UUID ABC123 → XYZ789)
+- Fix: Added path reconstruction in `JobEngine.loadJobs()`:
+  1. If file exists at stored path, use it
+  2. Otherwise, extract relative path from "Documents" and rebuild with current directory
+  3. As fallback, search for filename in Exports directory
+- Preview (QuickLook) now works for all exported files
+
+**Issue 3 - Workflow crash diagnosed:**
+- Error: "NSFaceIDUsageDescription key with a string value..."
+- The key ALREADY EXISTS in Info.plist (line 27-28)
+- **NOT a code bug** - the installed app was built before this key was added
+- **Solution: Rebuild and reinstall the app in Xcode**
+
+**Files Modified:**
+- `OneBox/OneBox/Views/PageOrganizerView.swift` - Removed swipe-to-select code
+- `OneBox/Modules/JobEngine/JobEngine.swift` - Added file path reconstruction
+
+**Status:** Preview fixed, rebuild required for Face ID crash
+
+---
+
 ## 2025-12-08: Page Organizer & Redaction Fixes
 
 **Features Added:**

@@ -116,17 +116,17 @@ struct PrivacyDashboardView: View {
             )
             
             PrivacyStatusCard(
-                title: "Zero Tracking",
-                icon: "eye.slash",
+                title: "No Cloud Upload",
+                icon: "icloud.slash",
                 status: .active,
-                description: "No analytics"
+                description: "Files never leave device"
             )
-            
+
             PrivacyStatusCard(
-                title: "Encrypted Memory",
+                title: "Secure Processing",
                 icon: "lock.shield",
                 status: .active,
-                description: "\(String(format: "%.1f", privacyManager.memoryStatus.usage)) MB secure"
+                description: "\(String(format: "%.1f", privacyManager.memoryStatus.usage)) MB in use"
             )
             
             PrivacyStatusCard(
@@ -271,39 +271,45 @@ struct PrivacyDashboardView: View {
     }
     
     // MARK: - Advanced Features Section
-    
+
     private var advancedFeaturesSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Advanced Features")
-                .font(.headline)
-            
+            HStack {
+                Text("Advanced Features")
+                    .font(.headline)
+                Spacer()
+                Text("Coming Soon")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+
             VStack(spacing: 12) {
                 NavigationLink(destination: FileForensicsView()) {
                     FeatureCard(
                         title: "File Forensics",
                         description: "Cryptographic proof of local processing",
                         icon: "magnifyingglass.circle.fill",
-                        color: .cyan
+                        color: .cyan.opacity(0.6)
                     )
                 }
                 .buttonStyle(.plain)
-                
+
                 NavigationLink(destination: DocumentSanitizerView()) {
                     FeatureCard(
                         title: "Document Sanitizer",
                         description: "Remove metadata and hidden content",
                         icon: "doc.badge.gearshape.fill",
-                        color: .orange
+                        color: .orange.opacity(0.6)
                     )
                 }
                 .buttonStyle(.plain)
-                
+
                 NavigationLink(destination: EncryptionCenterView()) {
                     FeatureCard(
                         title: "Encryption Center",
                         description: "Password-protect your files",
                         icon: "key.fill",
-                        color: .green
+                        color: .green.opacity(0.6)
                     )
                 }
                 .buttonStyle(.plain)
@@ -616,25 +622,107 @@ struct AuditEntryDetailView: View {
     }
 }
 
-// Placeholder views for advanced features
+// MARK: - Advanced Features Views (Coming Soon)
+
 struct FileForensicsView: View {
     var body: some View {
-        Text("File Forensics")
-            .navigationTitle("File Forensics")
+        VStack(spacing: 24) {
+            Spacer()
+
+            Image(systemName: "magnifyingglass.circle.fill")
+                .font(.system(size: 64))
+                .foregroundColor(.cyan.opacity(0.6))
+
+            Text("File Forensics")
+                .font(.title2.bold())
+                .foregroundColor(.primary)
+
+            Text("Generate cryptographic proof that your files were processed entirely on-device with no network activity.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            Label("Coming Soon", systemImage: "clock.fill")
+                .font(.caption.bold())
+                .foregroundColor(.orange)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.orange.opacity(0.15))
+                .cornerRadius(8)
+
+            Spacer()
+        }
+        .navigationTitle("File Forensics")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
 struct DocumentSanitizerView: View {
     var body: some View {
-        Text("Document Sanitizer")
-            .navigationTitle("Document Sanitizer")
+        VStack(spacing: 24) {
+            Spacer()
+
+            Image(systemName: "doc.badge.gearshape.fill")
+                .font(.system(size: 64))
+                .foregroundColor(.orange.opacity(0.6))
+
+            Text("Document Sanitizer")
+                .font(.title2.bold())
+                .foregroundColor(.primary)
+
+            Text("Remove hidden metadata, author information, comments, and other identifying data from your documents.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            Label("Coming Soon", systemImage: "clock.fill")
+                .font(.caption.bold())
+                .foregroundColor(.orange)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.orange.opacity(0.15))
+                .cornerRadius(8)
+
+            Spacer()
+        }
+        .navigationTitle("Document Sanitizer")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
 struct EncryptionCenterView: View {
     var body: some View {
-        Text("Encryption Center")
-            .navigationTitle("Encryption Center")
+        VStack(spacing: 24) {
+            Spacer()
+
+            Image(systemName: "key.fill")
+                .font(.system(size: 64))
+                .foregroundColor(.green.opacity(0.6))
+
+            Text("Encryption Center")
+                .font(.title2.bold())
+                .foregroundColor(.primary)
+
+            Text("Password-protect your documents with AES-256 encryption. Only you can unlock them.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            Label("Coming Soon", systemImage: "clock.fill")
+                .font(.caption.bold())
+                .foregroundColor(.orange)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.orange.opacity(0.15))
+                .cornerRadius(8)
+
+            Spacer()
+        }
+        .navigationTitle("Encryption Center")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

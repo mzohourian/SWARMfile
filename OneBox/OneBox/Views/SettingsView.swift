@@ -9,7 +9,6 @@ import Privacy
 
 struct SettingsView: View {
     @EnvironmentObject var paymentsManager: PaymentsManager
-    @EnvironmentObject var themeManager: ThemeManager
     @EnvironmentObject var privacyManager: Privacy.PrivacyManager
     @AppStorage("strip_metadata_default") private var stripMetadataDefault = true
     @AppStorage("keep_originals") private var keepOriginals = false
@@ -32,15 +31,6 @@ struct SettingsView: View {
                     Text("Processing")
                 } footer: {
                     Text("These settings apply to all tools by default")
-                }
-
-                // Appearance
-                Section("Appearance") {
-                    Picker("Theme", selection: $themeManager.themePreference) {
-                        ForEach(ThemeManager.ThemePreference.allCases, id: \.self) { theme in
-                            Text(theme.displayName).tag(theme)
-                        }
-                    }
                 }
 
                 // Privacy
@@ -311,5 +301,5 @@ struct FormatRow: View {
 #Preview {
     SettingsView()
         .environmentObject(PaymentsManager.shared)
-        .environmentObject(ThemeManager())
+        .environmentObject(Privacy.PrivacyManager.shared)
 }

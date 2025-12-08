@@ -121,6 +121,13 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
     - Tap boxes to include/exclude from redaction (selected = black, excluded = gray)
     - Page navigation for multi-page documents
     - Info labels for items with/without visual boxes
+  - **Settings cleanup:**
+    - Removed unnecessary Appearance/Theme section (app is dark-only)
+  - **Privacy Dashboard accuracy fixes:**
+    - Renamed "Encrypted Memory" to "Secure Processing" (memory is not actually encrypted)
+    - Renamed "Zero Tracking" to "No Cloud Upload" (more accurate)
+    - Marked Advanced Features (File Forensics, Document Sanitizer, Encryption Center) as "Coming Soon"
+    - Backend code exists but UI not fully implemented yet
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
@@ -135,6 +142,8 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - `OneBox/OneBox/Views/PageOrganizerView.swift` - Added workflowMode parameter, "Proceed" button
 - `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Added workflowMode parameter, "Proceed" button
 - `OneBox/OneBox/Views/RedactionView.swift` - Added workflowMode, visual tap-to-toggle preview mode
+- `OneBox/OneBox/Views/SettingsView.swift` - Removed theme picker (dark-only app)
+- `OneBox/OneBox/Views/PrivacyDashboardView.swift` - Fixed misleading claims, marked Advanced Features as Coming Soon
 
 ---
 

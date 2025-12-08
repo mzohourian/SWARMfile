@@ -112,6 +112,15 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
   - **Fixed biometric authentication (Face ID) not working on iPhone:**
     - Added missing `NSFaceIDUsageDescription` to Info.plist
     - This key is required by iOS for Face ID permission
+  - **UX improvements for workflow interactive steps:**
+    - Changed "Done" button to "Proceed" in workflow mode for clarity
+    - Added `workflowMode` parameter to PageOrganizerView, InteractiveSignPDFView, RedactionView
+  - **Added visual tap-to-toggle for redaction:**
+    - New "Visual" mode in RedactionView with List/Visual segmented picker
+    - Shows PDF page with redaction boxes overlaid
+    - Tap boxes to include/exclude from redaction (selected = black, excluded = gray)
+    - Page navigation for multi-page documents
+    - Info labels for items with/without visual boxes
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
@@ -119,10 +128,13 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - Verify automated steps work correctly after interactive steps
 
 **Files Modified:**
-- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Interactive workflow support, fixed blank page, performance fix
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Interactive workflow support, fixed blank page, performance fix, workflowMode for views
 - `OneBox/OneBox/Services/WorkflowExecutionService.swift` - Added executeSingleStep method
 - `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed signature position (center at tap, not corner)
 - `OneBox/OneBox/Info.plist` - Added NSFaceIDUsageDescription for Face ID permission
+- `OneBox/OneBox/Views/PageOrganizerView.swift` - Added workflowMode parameter, "Proceed" button
+- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Added workflowMode parameter, "Proceed" button
+- `OneBox/OneBox/Views/RedactionView.swift` - Added workflowMode, visual tap-to-toggle preview mode
 
 ---
 

@@ -143,7 +143,7 @@ struct WorkflowConciergeView: View {
         // Interactive Page Organizer - uses existing view
         .fullScreenCover(isPresented: $showingPageOrganizer) {
             if let url = interactiveCurrentURL {
-                PageOrganizerView(pdfURL: url)
+                PageOrganizerView(pdfURL: url, workflowMode: true)
                     .environmentObject(jobManager)
                     .environmentObject(paymentsManager)
                     .onDisappear {
@@ -154,7 +154,7 @@ struct WorkflowConciergeView: View {
         // Interactive Sign PDF - uses existing view
         .fullScreenCover(isPresented: $showingInteractiveSign) {
             if let url = interactiveCurrentURL {
-                InteractiveSignPDFView(pdfURL: url) { job in
+                InteractiveSignPDFView(pdfURL: url, workflowMode: true) { job in
                     // Job submitted - will be handled by onDisappear
                 }
                 .environmentObject(jobManager)
@@ -167,7 +167,7 @@ struct WorkflowConciergeView: View {
         // Interactive Redaction - uses existing RedactionView
         .fullScreenCover(isPresented: $showingRedactionView) {
             if let url = interactiveCurrentURL {
-                RedactionView(pdfURL: url)
+                RedactionView(pdfURL: url, workflowMode: true)
                     .environmentObject(jobManager)
                     .environmentObject(paymentsManager)
                     .onDisappear {

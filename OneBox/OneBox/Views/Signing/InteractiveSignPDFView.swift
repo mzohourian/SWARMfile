@@ -12,6 +12,7 @@ import JobEngine
 
 struct InteractiveSignPDFView: View {
     let pdfURL: URL
+    var workflowMode: Bool = false  // When true, changes "Done" to "Proceed" for workflow clarity
     let onJobSubmitted: (Job) -> Void
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var jobManager: JobManager
@@ -133,7 +134,7 @@ struct InteractiveSignPDFView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(workflowMode ? "Proceed" : "Done") {
                         processSignatures()
                     }
                     .foregroundColor(OneBoxColors.primaryGold)

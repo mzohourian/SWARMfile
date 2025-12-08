@@ -14,6 +14,7 @@ import UniformTypeIdentifiers
 
 struct PageOrganizerView: View {
     let pdfURL: URL
+    var workflowMode: Bool = false  // When true, changes "Done" to "Proceed" for workflow clarity
 
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var jobManager: JobManager
@@ -121,7 +122,7 @@ struct PageOrganizerView: View {
                 }
 
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Done") {
+                    Button(workflowMode ? "Proceed" : "Done") {
                         savePDF()
                     }
                     .disabled(pages.isEmpty)

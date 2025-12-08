@@ -126,8 +126,11 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
   - **Privacy Dashboard accuracy fixes:**
     - Renamed "Encrypted Memory" to "Secure Processing" (memory is not actually encrypted)
     - Renamed "Zero Tracking" to "No Cloud Upload" (more accurate)
-    - Marked Advanced Features (File Forensics, Document Sanitizer, Encryption Center) as "Coming Soon"
-    - Backend code exists but UI not fully implemented yet
+  - **Implemented Advanced Privacy Features (all 100% offline):**
+    - **File Forensics**: Select file → Generate SHA-256 hash → Verify on-device processing
+    - **Document Sanitizer**: Select file → Remove metadata, comments, hidden content → Share sanitized file
+    - **Encryption Center**: Select file → Set password → AES-256 encrypt → Share encrypted file
+    - All features use existing Privacy.swift backend (CryptoKit, PDFKit, no network)
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test

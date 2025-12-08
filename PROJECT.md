@@ -33,7 +33,7 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - Pro subscriptions (StoreKit 2)
 - On-device search
 - Workflow automation
-- Page organizer with undo/redo
+- Page organizer with undo/redo and swipe-to-select
 - Redaction with presets
 
 ### Broken / Blocked
@@ -131,6 +131,12 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
     - **Document Sanitizer**: Select file → Remove metadata, comments, hidden content → Share sanitized file
     - **Encryption Center**: Select file → Set password → AES-256 encrypt → Share encrypted file
     - All features use existing Privacy.swift backend (CryptoKit, PDFKit, no network)
+  - **Added swipe-to-select in Page Organizer (iOS Photos-like):**
+    - Swipe across pages to select/deselect multiple pages at once
+    - First page touched determines mode: if selected, swipe deselects; if not selected, swipe selects
+    - Haptic feedback on each page touched during swipe
+    - Only activates when swipe starts on a cell (not in empty space between cells)
+    - Uses PreferenceKey system to track cell frames for hit testing
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
@@ -142,7 +148,7 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - `OneBox/OneBox/Services/WorkflowExecutionService.swift` - Added executeSingleStep method
 - `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed signature position (center at tap, not corner)
 - `OneBox/OneBox/Info.plist` - Added NSFaceIDUsageDescription for Face ID permission
-- `OneBox/OneBox/Views/PageOrganizerView.swift` - Added workflowMode parameter, "Proceed" button
+- `OneBox/OneBox/Views/PageOrganizerView.swift` - Added workflowMode parameter, "Proceed" button, swipe-to-select gesture
 - `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Added workflowMode parameter, "Proceed" button
 - `OneBox/OneBox/Views/RedactionView.swift` - Added workflowMode, visual tap-to-toggle preview mode
 - `OneBox/OneBox/Views/SettingsView.swift` - Removed theme picker (dark-only app)

@@ -77,7 +77,9 @@ class SignatureFieldDetectionService {
         let textRequest = VNRecognizeTextRequest()
         textRequest.recognitionLevel = .accurate
         textRequest.usesLanguageCorrection = true
-        
+        // Support multiple languages for international documents
+        textRequest.recognitionLanguages = ["en-US", "fr-FR", "de-DE", "es-ES", "it-IT", "pt-BR", "zh-Hans", "zh-Hant", "ja-JP", "ko-KR", "ar-SA", "fa-IR"]
+
         // Detect rectangles (for signature boxes)
         let rectangleRequest = VNDetectRectanglesRequest()
         rectangleRequest.minimumAspectRatio = 2.0 // Signature fields are typically wide (width > 2x height)

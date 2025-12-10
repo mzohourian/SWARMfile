@@ -353,8 +353,7 @@ struct RedactionView: View {
                     .frame(width: max(width, 20), height: max(height, 8))
                     .overlay(
                         RoundedRectangle(cornerRadius: 2)
-                            .stroke(Color.gray, lineWidth: 1)
-                            .strokeStyle(StrokeStyle(lineWidth: 1, dash: [4, 2]))
+                            .stroke(Color.gray, style: StrokeStyle(lineWidth: 1, dash: [4, 2]))
                     )
             }
         }
@@ -442,7 +441,7 @@ struct RedactionView: View {
                         Image(systemName: "checkmark.shield.fill")
                         Text(workflowMode ? "Proceed" : "Apply \(selectedCount) Redactions")
                     }
-                    .font(OneBoxTypography.buttonLabel)
+                    .font(OneBoxTypography.caption)
                     .foregroundColor(selectedCount > 0 ? OneBoxColors.primaryGraphite : OneBoxColors.tertiaryText)
                     .padding(.horizontal, OneBoxSpacing.medium)
                     .padding(.vertical, OneBoxSpacing.small)
@@ -527,21 +526,12 @@ struct RedactionView: View {
                         let pageBounds = page.bounds(for: .mediaBox)
                         let pageAspect = pageBounds.width / pageBounds.height
 
-                        // Use full available space
+                        // Use full available space - calculate base dimensions
                         let availableWidth = geometry.size.width
                         let availableHeight = geometry.size.height
-                        let baseWidth: CGFloat
-                        let baseHeight: CGFloat
-
-                        if availableWidth / availableHeight > pageAspect {
-                            // Height-constrained
-                            baseHeight = availableHeight
-                            baseWidth = baseHeight * pageAspect
-                        } else {
-                            // Width-constrained
-                            baseWidth = availableWidth
-                            baseHeight = baseWidth / pageAspect
-                        }
+                        let isHeightConstrained = availableWidth / availableHeight > pageAspect
+                        let baseHeight = isHeightConstrained ? availableHeight : (availableWidth / pageAspect)
+                        let baseWidth = isHeightConstrained ? (baseHeight * pageAspect) : availableWidth
 
                         let finalWidth = baseWidth * fullScreenZoom
                         let finalHeight = baseHeight * fullScreenZoom

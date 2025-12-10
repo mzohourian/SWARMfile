@@ -40,6 +40,12 @@ struct RedactionView: View {
     @State private var drawStartPoint: CGPoint?
     @State private var currentDrawRect: CGRect?
 
+    // Zoom state
+    @State private var zoomScale: CGFloat = 1.0
+    @State private var lastZoomScale: CGFloat = 1.0
+    private let minZoom: CGFloat = 1.0
+    private let maxZoom: CGFloat = 4.0
+
     // Processing state
     @State private var isProcessing = false
     @State private var completedJob: Job?
@@ -130,7 +136,7 @@ struct RedactionView: View {
     // MARK: - Visual Redaction Editor (Main View)
     private var visualRedactionEditor: some View {
         VStack(spacing: 0) {
-            // Instructions header
+            // Instructions header with zoom controls
             instructionsHeader
 
             // PDF page with redaction overlay
@@ -140,10 +146,12 @@ struct RedactionView: View {
                     let pageAspect = pageBounds.width / pageBounds.height
                     let availableWidth = geometry.size.width - 32
                     let availableHeight = geometry.size.height - 20
-                    let finalHeight = min(availableWidth / pageAspect, availableHeight)
-                    let finalWidth = finalHeight * pageAspect
+                    let baseHeight = min(availableWidth / pageAspect, availableHeight)
+                    let baseWidth = baseHeight * pageAspect
+                    let finalWidth = baseWidth * zoomScale
+                    let finalHeight = baseHeight * zoomScale
 
-                    ScrollView {
+                    ScrollView([.horizontal, .vertical], showsIndicators: true) {
                         ZStack(alignment: .topLeading) {
                             // PDF page rendering
                             RedactionPDFPageView(page: page)
@@ -172,7 +180,7 @@ struct RedactionView: View {
                             }
                         }
                         .frame(width: finalWidth, height: finalHeight)
-                        .frame(maxWidth: .infinity)
+                        .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
                         .contentShape(Rectangle())
                         .gesture(
                             DragGesture(minimumDistance: 10)
@@ -182,6 +190,17 @@ struct RedactionView: View {
                                 }
                                 .onEnded { value in
                                     handleDrawEnd(in: CGSize(width: finalWidth, height: finalHeight))
+                                }
+                        )
+                        .simultaneousGesture(
+                            MagnificationGesture()
+                                .onChanged { value in
+                                    let newScale = lastZoomScale * value
+                                    zoomScale = min(max(newScale, minZoom), maxZoom)
+                                }
+                                .onEnded { value in
+                                    lastZoomScale = zoomScale
+                                    HapticManager.shared.selection()
                                 }
                         )
                     }
@@ -222,15 +241,66 @@ struct RedactionView: View {
                         .font(OneBoxTypography.micro)
                 }
                 .foregroundColor(OneBoxColors.secondaryText)
+
+                Divider()
+                    .frame(height: 12)
+
+                // Pinch hint
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 12))
+                    Text("Pinch to zoom")
+                        .font(OneBoxTypography.micro)
+                }
+                .foregroundColor(OneBoxColors.secondaryText)
             }
             .padding(.vertical, OneBoxSpacing.small)
 
-            // Stats
-            let selectedCount = redactionBoxes.filter { $0.isSelected }.count
-            let totalCount = redactionBoxes.count
-            Text("\(selectedCount) of \(totalCount) redactions selected")
-                .font(OneBoxTypography.caption)
-                .foregroundColor(selectedCount > 0 ? OneBoxColors.primaryGold : OneBoxColors.tertiaryText)
+            // Zoom controls and stats
+            HStack {
+                // Zoom controls
+                HStack(spacing: OneBoxSpacing.small) {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            zoomScale = max(zoomScale - 0.5, minZoom)
+                            lastZoomScale = zoomScale
+                        }
+                        HapticManager.shared.selection()
+                    }) {
+                        Image(systemName: "minus.magnifyingglass")
+                            .font(.system(size: 16))
+                            .foregroundColor(zoomScale > minZoom ? OneBoxColors.primaryGold : OneBoxColors.tertiaryText)
+                    }
+                    .disabled(zoomScale <= minZoom)
+
+                    Text("\(Int(zoomScale * 100))%")
+                        .font(OneBoxTypography.micro)
+                        .foregroundColor(OneBoxColors.secondaryText)
+                        .frame(width: 40)
+
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            zoomScale = min(zoomScale + 0.5, maxZoom)
+                            lastZoomScale = zoomScale
+                        }
+                        HapticManager.shared.selection()
+                    }) {
+                        Image(systemName: "plus.magnifyingglass")
+                            .font(.system(size: 16))
+                            .foregroundColor(zoomScale < maxZoom ? OneBoxColors.primaryGold : OneBoxColors.tertiaryText)
+                    }
+                    .disabled(zoomScale >= maxZoom)
+                }
+
+                Spacer()
+
+                // Stats
+                let selectedCount = redactionBoxes.filter { $0.isSelected }.count
+                let totalCount = redactionBoxes.count
+                Text("\(selectedCount) of \(totalCount) redactions")
+                    .font(OneBoxTypography.caption)
+                    .foregroundColor(selectedCount > 0 ? OneBoxColors.primaryGold : OneBoxColors.tertiaryText)
+            }
         }
         .padding(.horizontal, OneBoxSpacing.medium)
         .padding(.top, OneBoxSpacing.small)
@@ -278,6 +348,9 @@ struct RedactionView: View {
             Button(action: {
                 if currentPageIndex > 0 {
                     currentPageIndex -= 1
+                    // Reset zoom when changing pages
+                    zoomScale = 1.0
+                    lastZoomScale = 1.0
                     HapticManager.shared.selection()
                 }
             }) {
@@ -298,6 +371,9 @@ struct RedactionView: View {
             Button(action: {
                 if currentPageIndex < totalPages - 1 {
                     currentPageIndex += 1
+                    // Reset zoom when changing pages
+                    zoomScale = 1.0
+                    lastZoomScale = 1.0
                     HapticManager.shared.selection()
                 }
             }) {
@@ -521,35 +597,44 @@ struct RedactionView: View {
 
         Task(priority: .userInitiated) {
             var detectedBoxes: [RedactionBox] = []
+            var allOcrResults: [Int: [OCRTextBlock]] = [:]
             let pageCount = document.pageCount
 
             for pageIndex in 0..<pageCount {
                 if Task.isCancelled { break }
 
-                let pageBoxes: [RedactionBox] = await withCheckedContinuation { continuation in
+                let (pageBoxes, pageOcrBlocks): ([RedactionBox], [OCRTextBlock]) = await withCheckedContinuation { continuation in
                     autoreleasepool {
                         guard let page = document.page(at: pageIndex) else {
-                            continuation.resume(returning: [])
+                            continuation.resume(returning: ([], []))
                             return
                         }
 
-                        // Get text from page (embedded or via OCR)
-                        var pageText: String? = page.string
+                        // ALWAYS run OCR to get bounding boxes - this is essential for redaction
+                        // Even PDFs with embedded text need OCR for visual bounding box locations
+                        let (ocrText, textBlocks) = performOCRAndGetBlocks(on: page, pageIndex: pageIndex)
 
-                        if pageText == nil || pageText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
-                            pageText = performOCRSync(on: page, pageIndex: pageIndex)
-                        }
+                        // Get text from page (embedded text may be more accurate, use if available)
+                        let embeddedText = page.string
+
+                        // Use embedded text if available, otherwise OCR text
+                        let pageText = (embeddedText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+                            ? embeddedText
+                            : ocrText
 
                         if let text = pageText, !text.isEmpty {
-                            let items = detectSensitiveDataSync(in: text, pageNumber: pageIndex)
-                            continuation.resume(returning: items)
+                            let items = detectSensitiveDataWithBlocks(in: text, pageNumber: pageIndex, textBlocks: textBlocks)
+                            continuation.resume(returning: (items, textBlocks))
                         } else {
-                            continuation.resume(returning: [])
+                            continuation.resume(returning: ([], textBlocks))
                         }
                     }
                 }
 
                 detectedBoxes.append(contentsOf: pageBoxes)
+                if !pageOcrBlocks.isEmpty {
+                    allOcrResults[pageIndex] = pageOcrBlocks
+                }
 
                 await MainActor.run {
                     analysisProgress = Double(pageIndex + 1) / Double(pageCount)
@@ -559,6 +644,7 @@ struct RedactionView: View {
             }
 
             await MainActor.run {
+                self.ocrResults = allOcrResults
                 self.redactionBoxes = detectedBoxes
                 self.isAnalyzing = false
                 self.analysisProgress = 1.0
@@ -566,10 +652,11 @@ struct RedactionView: View {
         }
     }
 
-    private func performOCRSync(on page: PDFPage, pageIndex: Int) -> String? {
+    /// Performs OCR and returns both the recognized text and text blocks with bounding boxes
+    private func performOCRAndGetBlocks(on page: PDFPage, pageIndex: Int) -> (String?, [OCRTextBlock]) {
         let pageRect = page.bounds(for: .mediaBox)
-        let scale: CGFloat = 1.5
-        let maxDimension: CGFloat = 2000
+        let scale: CGFloat = 2.0 // Higher resolution for better detection
+        let maxDimension: CGFloat = 2500
         var finalScale = scale
         let imageSize = CGSize(width: pageRect.width * scale, height: pageRect.height * scale)
         if imageSize.width > maxDimension || imageSize.height > maxDimension {
@@ -586,7 +673,7 @@ struct RedactionView: View {
             page.draw(with: .mediaBox, to: context.cgContext)
         }
 
-        guard let cgImage = image.cgImage else { return nil }
+        guard let cgImage = image.cgImage else { return (nil, []) }
 
         var recognizedText: String?
         var textBlocks: [OCRTextBlock] = []
@@ -612,29 +699,20 @@ struct RedactionView: View {
             recognizedText = allText.joined(separator: " ")
         }
 
-        request.recognitionLevel = .fast
-        request.usesLanguageCorrection = false
+        request.recognitionLevel = .accurate // More accurate for better bounding boxes
+        request.usesLanguageCorrection = true
 
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         do {
             try handler.perform([request])
-            _ = semaphore.wait(timeout: .now() + 5.0)
+            _ = semaphore.wait(timeout: .now() + 10.0)
         } catch { }
 
-        if !textBlocks.isEmpty {
-            DispatchQueue.main.async {
-                self.ocrResults[pageIndex] = textBlocks
-            }
-        }
-
-        return recognizedText?.isEmpty == true ? nil : recognizedText
+        return (recognizedText?.isEmpty == true ? nil : recognizedText, textBlocks)
     }
 
-    private func detectSensitiveDataSync(in text: String, pageNumber: Int) -> [RedactionBox] {
+    private func detectSensitiveDataWithBlocks(in text: String, pageNumber: Int, textBlocks: [OCRTextBlock]) -> [RedactionBox] {
         var boxes: [RedactionBox] = []
-
-        // Get OCR text blocks for this page to find bounding boxes
-        let textBlocks = ocrResults[pageNumber] ?? []
 
         // Patterns to detect
         let patterns: [(String, String)] = [

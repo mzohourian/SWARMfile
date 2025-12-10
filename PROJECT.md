@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-08
+**Last Updated:** 2025-12-10
 
 ## What This Is
 **OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -42,11 +42,13 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ### Needs Testing
 - **Redact PDF** - Completely redesigned with visual-first approach:
-  - Shows document preview with black boxes overlaid
+  - Shows document preview with black boxes overlaid on detected sensitive data
   - Tap any box to REMOVE it (becomes gray/dashed outline)
   - Draw/drag on page to ADD new redaction boxes
+  - Pinch-to-zoom or use +/- buttons for better visibility (up to 400%)
   - Bottom bar shows count and "Apply X Redactions" button
   - Works on both text-based and scanned/image PDFs via OCR
+  - **NEW:** Fixed OCR always runs to detect bounding boxes for visual overlay
 - **Watermark PDF** - Multiple fixes applied, needs user verification:
   - Size slider now has dramatic effect (5%-50% for images, 2%-15% for text)
   - Density slider now has dramatic effect (0.6x to 5x spacing)
@@ -81,15 +83,20 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 **What Was Done:**
 
-**1. Redesigned RedactionView with visual-first editing:**
-- User requested: "see the redacted document first, decide if they want to remove or add boxes"
-- New flow: Load → Analyze → Show preview with boxes → Tap to remove / Draw to add → Apply
-- Tap any black box to toggle it off (becomes gray dashed outline)
-- Draw/drag gesture to add new manual redaction boxes
-- Bottom bar shows "Apply X Redactions" with count
-- Removed confusing list view and preset filters
+**1. Fixed redaction boxes not showing on visual preview:**
+- Root cause: OCR was only run for scanned PDFs, but bounding boxes are needed for ALL PDFs
+- Fixed `performSensitiveDataAnalysis()` to ALWAYS run OCR for bounding box detection
+- Refactored to pass text blocks directly to avoid race conditions with state updates
+- Increased OCR resolution (2.0 scale) and accuracy level for better detection
 
-**2. Previous fixes (from earlier in session):**
+**2. Added zoom functionality to RedactionView:**
+- Pinch-to-zoom gesture (100% to 400%)
+- Zoom +/- buttons in header bar with percentage display
+- Two-axis scrolling when zoomed in
+- Zoom resets when changing pages
+- Added "Pinch to zoom" hint in instructions
+
+**3. Previous fixes (from earlier in session):**
 - Multi-page signing now works (all signatures applied)
 - PDF merge normalizes page sizes (small PDFs scaled up)
 - Workflow redaction timing fixed
@@ -97,7 +104,7 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - Face ID crash diagnosed (rebuild needed)
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/RedactionView.swift` - Complete redesign for visual-first editing
+- `OneBox/OneBox/Views/RedactionView.swift` - Fixed OCR bounding boxes + zoom functionality
 
 ---
 

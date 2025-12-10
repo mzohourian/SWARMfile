@@ -904,7 +904,8 @@ struct RedactionView: View {
             (#"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"#, "Email"),
             (#"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b"#, "Date"),
             (#"\b[A-Z]{1,2}\d{6,9}\b"#, "Passport"),
-            (#"[۰-۹]{8,9}"#, "Passport (Persian)"),
+            (#"[۰-۹]{7,9}"#, "Passport (Persian)"),
+            (#"[٠-٩]{7,9}"#, "Passport (Arabic-Indic)"),
         ]
 
         // Check each block for sensitive data and get PRECISE bounding boxes

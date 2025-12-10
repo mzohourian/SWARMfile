@@ -313,9 +313,15 @@ struct RedactionView: View {
                 // Stats
                 let selectedCount = redactionBoxes.filter { $0.isSelected }.count
                 let totalCount = redactionBoxes.count
-                Text("\(selectedCount) of \(totalCount) redactions")
-                    .font(OneBoxTypography.caption)
-                    .foregroundColor(selectedCount > 0 ? OneBoxColors.primaryGold : OneBoxColors.tertiaryText)
+                if totalCount > 0 {
+                    Text("\(selectedCount) selected of \(totalCount)")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(selectedCount > 0 ? OneBoxColors.primaryGold : OneBoxColors.tertiaryText)
+                } else {
+                    Text("No text detected")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.tertiaryText)
+                }
             }
         }
         .padding(.horizontal, OneBoxSpacing.medium)
@@ -895,6 +901,7 @@ struct RedactionView: View {
 
     private func detectSensitiveDataWithBlocks(in text: String, pageNumber: Int, textBlocks: [OCRTextBlock]) -> [RedactionBox] {
         var boxes: [RedactionBox] = []
+        var sensitiveBlockIds = Set<String>()
 
         // Patterns to detect
         let patterns: [(String, String)] = [
@@ -906,33 +913,50 @@ struct RedactionView: View {
             (#"\b[A-Z]{1,2}\d{6,9}\b"#, "Passport"),
         ]
 
-        for (pattern, _) in patterns {
-            do {
-                let regex = try NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-                let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.count))
+        // First pass: identify blocks with sensitive data
+        for block in textBlocks {
+            let blockText = block.text
+            let blockId = "\(block.boundingBox.origin.x)-\(block.boundingBox.origin.y)"
 
-                for match in matches {
-                    if let range = Range(match.range, in: text) {
-                        let matchedText = String(text[range])
+            for (pattern, _) in patterns {
+                do {
+                    let regex = try NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+                    let range = NSRange(location: 0, length: blockText.utf16.count)
 
-                        // Find bounding box for this match
-                        if let box = findBoundingBox(for: matchedText, in: textBlocks) {
-                            boxes.append(RedactionBox(
-                                pageIndex: pageNumber,
-                                normalizedRect: box,
-                                source: .automatic,
-                                detectedText: matchedText,
-                                isSelected: true
-                            ))
-                        }
+                    if regex.firstMatch(in: blockText, options: [], range: range) != nil {
+                        sensitiveBlockIds.insert(blockId)
+                        break
                     }
-                }
-            } catch { }
+                } catch { }
+            }
+        }
+
+        // Second pass: add ALL text blocks as potential redactions
+        // Blocks with sensitive data are pre-selected, others are unselected
+        for block in textBlocks {
+            let blockText = block.text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            // Skip very short blocks (likely noise) unless they match patterns
+            let blockId = "\(block.boundingBox.origin.x)-\(block.boundingBox.origin.y)"
+            let isSensitive = sensitiveBlockIds.contains(blockId)
+
+            if blockText.count < 2 && !isSensitive {
+                continue
+            }
+
+            boxes.append(RedactionBox(
+                pageIndex: pageNumber,
+                normalizedRect: block.boundingBox,
+                source: isSensitive ? .automatic : .manual,
+                detectedText: blockText,
+                isSelected: isSensitive // Pre-select only sensitive data
+            ))
         }
 
         return boxes
     }
 
+    // findBoundingBox is no longer needed - kept for potential future use
     private func findBoundingBox(for text: String, in textBlocks: [OCRTextBlock]) -> CGRect? {
         let textLower = text.lowercased()
 

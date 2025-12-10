@@ -115,17 +115,17 @@ struct RedactionView: View {
             Spacer()
 
             VStack(spacing: OneBoxSpacing.medium) {
-                Image(systemName: "eye.slash.fill")
+                Image(systemName: "brain")
                     .font(.system(size: 48))
                     .foregroundColor(OneBoxColors.primaryGold)
                     .scaleEffect(isAnalyzing ? 1.1 : 1.0)
                     .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isAnalyzing)
 
-                Text("Detecting Sensitive Data")
+                Text("Analyzing Document")
                     .font(OneBoxTypography.sectionTitle)
                     .foregroundColor(OneBoxColors.primaryText)
 
-                Text("Scanning document for personal information...")
+                Text("Detecting sensitive information...")
                     .font(OneBoxTypography.body)
                     .foregroundColor(OneBoxColors.secondaryText)
 
@@ -231,7 +231,7 @@ struct RedactionView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "hand.tap.fill")
                         .font(.system(size: 12))
-                    Text("Tap to remove")
+                    Text("Double-tap to remove")
                         .font(OneBoxTypography.micro)
                 }
                 .foregroundColor(OneBoxColors.secondaryText)
@@ -314,11 +314,11 @@ struct RedactionView: View {
                 let selectedCount = redactionBoxes.filter { $0.isSelected }.count
                 let totalCount = redactionBoxes.count
                 if totalCount > 0 {
-                    Text("\(selectedCount) selected of \(totalCount)")
+                    Text("\(selectedCount) of \(totalCount) items")
                         .font(OneBoxTypography.caption)
-                        .foregroundColor(selectedCount > 0 ? OneBoxColors.primaryGold : OneBoxColors.tertiaryText)
+                        .foregroundColor(OneBoxColors.primaryGold)
                 } else {
-                    Text("No text detected")
+                    Text("No sensitive data found")
                         .font(OneBoxTypography.caption)
                         .foregroundColor(OneBoxColors.tertiaryText)
                 }
@@ -358,7 +358,8 @@ struct RedactionView: View {
             }
         }
         .position(x: x + width/2, y: y + height/2)
-        .onTapGesture {
+        .onTapGesture(count: 2) {
+            // Double-tap to toggle - prevents accidental toggles while scrolling/zooming
             toggleBox(box)
         }
     }
@@ -615,7 +616,7 @@ struct RedactionView: View {
                         Text("\(selectedCount) redactions")
                             .font(OneBoxTypography.body)
                             .foregroundColor(OneBoxColors.primaryGold)
-                        Text("Tap boxes to toggle")
+                        Text("Double-tap boxes to toggle")
                             .font(OneBoxTypography.micro)
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -891,9 +892,8 @@ struct RedactionView: View {
 
     private func detectSensitiveDataWithBlocks(in text: String, pageNumber: Int, textBlocks: [OCRTextBlock]) -> [RedactionBox] {
         var boxes: [RedactionBox] = []
-        var sensitiveBlockIds = Set<String>()
 
-        // Patterns to detect
+        // Patterns to detect sensitive data
         let patterns: [(String, String)] = [
             (#"(?:\d{3}-?\d{2}-?\d{4}|\d{9})"#, "SSN"),
             (#"(?:\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4})"#, "Credit Card"),
@@ -903,10 +903,9 @@ struct RedactionView: View {
             (#"\b[A-Z]{1,2}\d{6,9}\b"#, "Passport"),
         ]
 
-        // First pass: identify blocks with sensitive data
+        // Only add boxes for blocks that contain sensitive data
         for block in textBlocks {
             let blockText = block.text
-            let blockId = "\(block.boundingBox.origin.x)-\(block.boundingBox.origin.y)"
 
             for (pattern, _) in patterns {
                 do {
@@ -914,33 +913,18 @@ struct RedactionView: View {
                     let range = NSRange(location: 0, length: blockText.utf16.count)
 
                     if regex.firstMatch(in: blockText, options: [], range: range) != nil {
-                        sensitiveBlockIds.insert(blockId)
-                        break
+                        // This block contains sensitive data - add it
+                        boxes.append(RedactionBox(
+                            pageIndex: pageNumber,
+                            normalizedRect: block.boundingBox,
+                            source: .automatic,
+                            detectedText: blockText,
+                            isSelected: true // Pre-selected for redaction
+                        ))
+                        break // Only add each block once
                     }
                 } catch { }
             }
-        }
-
-        // Second pass: add ALL text blocks as potential redactions
-        // Blocks with sensitive data are pre-selected, others are unselected
-        for block in textBlocks {
-            let blockText = block.text.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            // Skip very short blocks (likely noise) unless they match patterns
-            let blockId = "\(block.boundingBox.origin.x)-\(block.boundingBox.origin.y)"
-            let isSensitive = sensitiveBlockIds.contains(blockId)
-
-            if blockText.count < 2 && !isSensitive {
-                continue
-            }
-
-            boxes.append(RedactionBox(
-                pageIndex: pageNumber,
-                normalizedRect: block.boundingBox,
-                source: isSensitive ? .automatic : .manual,
-                detectedText: blockText,
-                isSelected: isSensitive // Pre-select only sensitive data
-            ))
         }
 
         return boxes

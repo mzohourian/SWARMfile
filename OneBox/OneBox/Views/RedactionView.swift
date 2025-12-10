@@ -903,25 +903,65 @@ struct RedactionView: View {
             (#"\b[A-Z]{1,2}\d{6,9}\b"#, "Passport"),
         ]
 
-        // Only add boxes for blocks that contain sensitive data
+        // Check each block for sensitive data and get PRECISE bounding boxes
         for block in textBlocks {
             let blockText = block.text
 
             for (pattern, _) in patterns {
                 do {
                     let regex = try NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-                    let range = NSRange(location: 0, length: blockText.utf16.count)
+                    let fullRange = NSRange(location: 0, length: blockText.utf16.count)
 
-                    if regex.firstMatch(in: blockText, options: [], range: range) != nil {
-                        // This block contains sensitive data - add it
-                        boxes.append(RedactionBox(
-                            pageIndex: pageNumber,
-                            normalizedRect: block.boundingBox,
-                            source: .automatic,
-                            detectedText: blockText,
-                            isSelected: true // Pre-selected for redaction
-                        ))
-                        break // Only add each block once
+                    // Find ALL matches in this block (there could be multiple)
+                    let matches = regex.matches(in: blockText, options: [], range: fullRange)
+
+                    for match in matches {
+                        guard let swiftRange = Range(match.range, in: blockText) else { continue }
+                        let matchedText = String(blockText[swiftRange])
+
+                        // Try to get PRECISE bounding box for just the matched text
+                        var boundingRect: CGRect? = nil
+
+                        if let recognizedText = block.recognizedText {
+                            // Use Vision's character-level bounding box
+                            do {
+                                if let preciseBox = try recognizedText.boundingBox(for: swiftRange) {
+                                    boundingRect = preciseBox.boundingBox
+                                }
+                            } catch {
+                                // Fall back to approximation
+                            }
+                        }
+
+                        // If precise box failed, approximate based on position in text
+                        if boundingRect == nil {
+                            let startIndex = blockText.distance(from: blockText.startIndex, to: swiftRange.lowerBound)
+                            let matchLength = matchedText.count
+                            let totalLength = blockText.count
+
+                            if totalLength > 0 {
+                                let startRatio = CGFloat(startIndex) / CGFloat(totalLength)
+                                let widthRatio = CGFloat(matchLength) / CGFloat(totalLength)
+
+                                boundingRect = CGRect(
+                                    x: block.boundingBox.origin.x + block.boundingBox.width * startRatio,
+                                    y: block.boundingBox.origin.y,
+                                    width: block.boundingBox.width * widthRatio,
+                                    height: block.boundingBox.height
+                                )
+                            }
+                        }
+
+                        // Add the box with precise or approximated bounds
+                        if let rect = boundingRect {
+                            boxes.append(RedactionBox(
+                                pageIndex: pageNumber,
+                                normalizedRect: rect,
+                                source: .automatic,
+                                detectedText: matchedText,
+                                isSelected: true
+                            ))
+                        }
                     }
                 } catch { }
             }

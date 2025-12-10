@@ -26,7 +26,7 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 ### Working
 - Images to PDF conversion
 - PDF merge, split, compress
-- PDF signing (interactive, touch-to-place)
+- PDF signing (interactive, touch-to-place, multi-page support)
 - Image resize and compress
 - Job queue with progress tracking
 - Free tier (3 exports/day)
@@ -34,18 +34,19 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - On-device search
 - Workflow automation
 - Page organizer with undo/redo and tap-to-select
-- Redaction with presets
+- Redaction - visual-first editing (tap to remove, draw to add)
 - File preview (QuickLook) - fixed stale path issue
 
 ### Broken / Blocked
 - None currently (rebuild app to get latest Info.plist)
 
 ### Needs Testing
-- **Redact PDF** - Completely rebuilt with precise character-level redaction:
-  - Fixed file not saving (2 bugs: PDF context timing + ShareSheet deletion)
-  - Redaction now actually works on scanned/image-based PDFs
-  - **NEW**: Uses Vision's character-level bounding boxes (`VNRecognizedText.boundingBox(for:)`) to redact ONLY the exact matched text, not entire lines
-  - Simplified UI - removed Automatic/Manual/Combined modes, single unified flow
+- **Redact PDF** - Completely redesigned with visual-first approach:
+  - Shows document preview with black boxes overlaid
+  - Tap any box to REMOVE it (becomes gray/dashed outline)
+  - Draw/drag on page to ADD new redaction boxes
+  - Bottom bar shows count and "Apply X Redactions" button
+  - Works on both text-based and scanned/image PDFs via OCR
 - **Watermark PDF** - Multiple fixes applied, needs user verification:
   - Size slider now has dramatic effect (5%-50% for images, 2%-15% for text)
   - Density slider now has dramatic effect (0.6x to 5x spacing)
@@ -76,38 +77,27 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2025-12-08 (continued session)
+**Date:** 2025-12-10
 
 **What Was Done:**
 
-**1. Fixed multi-page signing in workflows:**
-- Root cause: `InteractiveSignPDFView.processSignatures()` only processed the first signature placement
-- Fix: Added `SignaturePlacementData` struct and `signaturePlacements` array to JobSettings
-- Modified `InteractiveSignPDFView` to convert ALL placements to job settings
-- Added `processMultipleSignatures()` in JobEngine to chain sign operations
-- All signatures on all pages now apply correctly
+**1. Redesigned RedactionView with visual-first editing:**
+- User requested: "see the redacted document first, decide if they want to remove or add boxes"
+- New flow: Load → Analyze → Show preview with boxes → Tap to remove / Draw to add → Apply
+- Tap any black box to toggle it off (becomes gray dashed outline)
+- Draw/drag gesture to add new manual redaction boxes
+- Bottom bar shows "Apply X Redactions" with count
+- Removed confusing list view and preset filters
 
-**2. Fixed PDF merge page size normalization:**
-- Root cause: `mergePDFs()` just inserted pages without scaling
-- Fix: Modified merge to find largest page dimensions and scale all pages to match
-- Smaller pages are now centered on white background at the target size
-- Single-page PDFs no longer appear tiny in merged output
-
-**3. Fixed redaction not applying in workflow:**
-- Root cause: Timing issue - `handleInteractiveStepCompleted()` retrieved wrong job
-- Fix: Added 500ms delay to ensure job is fully submitted
-- Now matches jobs by input filename instead of just grabbing last completed job
-- Added logging for debugging
-
-**4. Previous fixes still in place:**
-- Preview blank screen fixed (path reconstruction)
-- Face ID crash diagnosed (rebuild app needed)
+**2. Previous fixes (from earlier in session):**
+- Multi-page signing now works (all signatures applied)
+- PDF merge normalizes page sizes (small PDFs scaled up)
+- Workflow redaction timing fixed
+- Preview blank screen fixed
+- Face ID crash diagnosed (rebuild needed)
 
 **Files Modified This Session:**
-- `OneBox/Modules/CorePDF/CorePDF.swift` - PDF merge page normalization
-- `OneBox/Modules/JobEngine/JobEngine.swift` - Multi-signature support, SignaturePlacementData
-- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Process all signature placements
-- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Fixed interactive step job matching
+- `OneBox/OneBox/Views/RedactionView.swift` - Complete redesign for visual-first editing
 
 ---
 

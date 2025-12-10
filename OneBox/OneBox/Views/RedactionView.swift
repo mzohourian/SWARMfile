@@ -44,7 +44,10 @@ struct RedactionView: View {
     @State private var zoomScale: CGFloat = 1.0
     @State private var lastZoomScale: CGFloat = 1.0
     private let minZoom: CGFloat = 1.0
-    private let maxZoom: CGFloat = 4.0
+    private let maxZoom: CGFloat = 5.0
+
+    // Full-screen mode
+    @State private var isFullScreen = false
 
     // Processing state
     @State private var isProcessing = false
@@ -82,6 +85,9 @@ struct RedactionView: View {
             if let job = completedJob {
                 JobResultView(job: job)
             }
+        }
+        .fullScreenCover(isPresented: $isFullScreen) {
+            fullScreenEditor
         }
         .overlay {
             if isProcessing {
@@ -256,7 +262,7 @@ struct RedactionView: View {
             }
             .padding(.vertical, OneBoxSpacing.small)
 
-            // Zoom controls and stats
+            // Zoom controls, full-screen button, and stats
             HStack {
                 // Zoom controls
                 HStack(spacing: OneBoxSpacing.small) {
@@ -290,6 +296,16 @@ struct RedactionView: View {
                             .foregroundColor(zoomScale < maxZoom ? OneBoxColors.primaryGold : OneBoxColors.tertiaryText)
                     }
                     .disabled(zoomScale >= maxZoom)
+
+                    // Full-screen button
+                    Button(action: {
+                        isFullScreen = true
+                        HapticManager.shared.selection()
+                    }) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 16))
+                            .foregroundColor(OneBoxColors.primaryGold)
+                    }
                 }
 
                 Spacer()
@@ -460,6 +476,178 @@ struct RedactionView: View {
         }
     }
 
+    // MARK: - Full-Screen Editor
+    @State private var fullScreenZoom: CGFloat = 1.0
+    @State private var fullScreenLastZoom: CGFloat = 1.0
+
+    private var fullScreenEditor: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // Top bar with close button and page info
+                HStack {
+                    Button(action: {
+                        isFullScreen = false
+                        HapticManager.shared.selection()
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+
+                    Spacer()
+
+                    if let document = pdfDocument {
+                        Text("Page \(currentPageIndex + 1) of \(document.pageCount)")
+                            .font(OneBoxTypography.body)
+                            .foregroundColor(.white)
+                    }
+
+                    Spacer()
+
+                    // Zoom indicator
+                    Text("\(Int(fullScreenZoom * 100))%")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(.white.opacity(0.6))
+                        .frame(width: 50)
+                }
+                .padding(.horizontal, OneBoxSpacing.medium)
+                .padding(.top, OneBoxSpacing.small)
+
+                // Full-screen page view
+                GeometryReader { geometry in
+                    if let document = pdfDocument, let page = document.page(at: currentPageIndex) {
+                        let pageBounds = page.bounds(for: .mediaBox)
+                        let pageAspect = pageBounds.width / pageBounds.height
+
+                        // Use full available space
+                        let availableWidth = geometry.size.width
+                        let availableHeight = geometry.size.height
+                        let baseWidth: CGFloat
+                        let baseHeight: CGFloat
+
+                        if availableWidth / availableHeight > pageAspect {
+                            // Height-constrained
+                            baseHeight = availableHeight
+                            baseWidth = baseHeight * pageAspect
+                        } else {
+                            // Width-constrained
+                            baseWidth = availableWidth
+                            baseHeight = baseWidth / pageAspect
+                        }
+
+                        let finalWidth = baseWidth * fullScreenZoom
+                        let finalHeight = baseHeight * fullScreenZoom
+
+                        ScrollView([.horizontal, .vertical], showsIndicators: false) {
+                            ZStack(alignment: .topLeading) {
+                                // PDF page rendering
+                                RedactionPDFPageView(page: page)
+                                    .frame(width: finalWidth, height: finalHeight)
+                                    .background(Color.white)
+
+                                // Redaction boxes overlay
+                                ForEach(boxesForCurrentPage()) { box in
+                                    redactionBoxView(box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
+                                }
+
+                                // Current drawing rectangle
+                                if let drawRect = currentDrawRect {
+                                    Rectangle()
+                                        .fill(Color.black.opacity(0.5))
+                                        .frame(width: drawRect.width, height: drawRect.height)
+                                        .position(x: drawRect.midX, y: drawRect.midY)
+                                        .overlay(
+                                            Rectangle()
+                                                .stroke(OneBoxColors.primaryGold, lineWidth: 2)
+                                                .frame(width: drawRect.width, height: drawRect.height)
+                                                .position(x: drawRect.midX, y: drawRect.midY)
+                                        )
+                                }
+                            }
+                            .frame(width: finalWidth, height: finalHeight)
+                            .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 10)
+                                    .onChanged { value in
+                                        handleDrawStart(value.startLocation, in: CGSize(width: finalWidth, height: finalHeight))
+                                        handleDrawUpdate(value.location, in: CGSize(width: finalWidth, height: finalHeight))
+                                    }
+                                    .onEnded { value in
+                                        handleDrawEnd(in: CGSize(width: finalWidth, height: finalHeight))
+                                    }
+                            )
+                            .simultaneousGesture(
+                                MagnificationGesture()
+                                    .onChanged { value in
+                                        let newScale = fullScreenLastZoom * value
+                                        fullScreenZoom = min(max(newScale, 1.0), 5.0)
+                                    }
+                                    .onEnded { value in
+                                        fullScreenLastZoom = fullScreenZoom
+                                        HapticManager.shared.selection()
+                                    }
+                            )
+                        }
+                    }
+                }
+
+                // Bottom controls
+                HStack(spacing: OneBoxSpacing.large) {
+                    // Previous page
+                    Button(action: {
+                        if currentPageIndex > 0 {
+                            currentPageIndex -= 1
+                            fullScreenZoom = 1.0
+                            fullScreenLastZoom = 1.0
+                            HapticManager.shared.selection()
+                        }
+                    }) {
+                        Image(systemName: "chevron.left.circle.fill")
+                            .font(.system(size: 36))
+                            .foregroundColor(currentPageIndex > 0 ? .white : .white.opacity(0.3))
+                    }
+                    .disabled(currentPageIndex == 0)
+
+                    Spacer()
+
+                    // Stats
+                    let selectedCount = redactionBoxes.filter { $0.isSelected }.count
+                    VStack(spacing: 2) {
+                        Text("\(selectedCount) redactions")
+                            .font(OneBoxTypography.body)
+                            .foregroundColor(OneBoxColors.primaryGold)
+                        Text("Tap boxes to toggle")
+                            .font(OneBoxTypography.micro)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+
+                    Spacer()
+
+                    // Next page
+                    Button(action: {
+                        if let document = pdfDocument, currentPageIndex < document.pageCount - 1 {
+                            currentPageIndex += 1
+                            fullScreenZoom = 1.0
+                            fullScreenLastZoom = 1.0
+                            HapticManager.shared.selection()
+                        }
+                    }) {
+                        Image(systemName: "chevron.right.circle.fill")
+                            .font(.system(size: 36))
+                            .foregroundColor(pdfDocument.map { currentPageIndex < $0.pageCount - 1 } ?? false ? .white : .white.opacity(0.3))
+                    }
+                    .disabled(pdfDocument.map { currentPageIndex >= $0.pageCount - 1 } ?? true)
+                }
+                .padding(.horizontal, OneBoxSpacing.large)
+                .padding(.vertical, OneBoxSpacing.medium)
+                .background(Color.black.opacity(0.8))
+            }
+        }
+    }
+
     // MARK: - Load Error View
     private func loadErrorView(_ error: String) -> some View {
         VStack(spacing: OneBoxSpacing.large) {
@@ -614,15 +802,9 @@ struct RedactionView: View {
                         // Even PDFs with embedded text need OCR for visual bounding box locations
                         let (ocrText, textBlocks) = performOCRAndGetBlocks(on: page, pageIndex: pageIndex)
 
-                        // Get text from page (embedded text may be more accurate, use if available)
-                        let embeddedText = page.string
-
-                        // Use embedded text if available, otherwise OCR text
-                        let pageText = (embeddedText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
-                            ? embeddedText
-                            : ocrText
-
-                        if let text = pageText, !text.isEmpty {
+                        // IMPORTANT: Use OCR text for pattern matching since bounding boxes come from OCR
+                        // Using embedded text would cause mismatches - detected text won't be found in OCR blocks
+                        if let text = ocrText, !text.isEmpty {
                             let items = detectSensitiveDataWithBlocks(in: text, pageNumber: pageIndex, textBlocks: textBlocks)
                             continuation.resume(returning: (items, textBlocks))
                         } else {

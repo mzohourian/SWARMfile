@@ -45,10 +45,11 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
   - Shows document preview with black boxes overlaid on detected sensitive data
   - Tap any box to REMOVE it (becomes gray/dashed outline)
   - Draw/drag on page to ADD new redaction boxes
-  - Pinch-to-zoom or use +/- buttons for better visibility (up to 400%)
+  - Pinch-to-zoom or use +/- buttons for better visibility (up to 500%)
+  - **NEW:** Full-screen mode button for maximum visibility and precise editing
   - Bottom bar shows count and "Apply X Redactions" button
   - Works on both text-based and scanned/image PDFs via OCR
-  - **NEW:** Fixed OCR always runs to detect bounding boxes for visual overlay
+  - **FIXED:** Pattern matching now uses OCR text to ensure bounding boxes are found
 - **Watermark PDF** - Multiple fixes applied, needs user verification:
   - Size slider now has dramatic effect (5%-50% for images, 2%-15% for text)
   - Density slider now has dramatic effect (0.6x to 5x spacing)
@@ -84,19 +85,25 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **What Was Done:**
 
 **1. Fixed redaction boxes not showing on visual preview:**
-- Root cause: OCR was only run for scanned PDFs, but bounding boxes are needed for ALL PDFs
-- Fixed `performSensitiveDataAnalysis()` to ALWAYS run OCR for bounding box detection
-- Refactored to pass text blocks directly to avoid race conditions with state updates
+- Root cause 1: OCR was only run for scanned PDFs, but bounding boxes are needed for ALL PDFs
+- Root cause 2: Pattern matching used embedded text but bounding box lookup used OCR text (mismatch!)
+- Fix: Now ALWAYS use OCR text for pattern matching since that's where bounding boxes come from
 - Increased OCR resolution (2.0 scale) and accuracy level for better detection
 
 **2. Added zoom functionality to RedactionView:**
-- Pinch-to-zoom gesture (100% to 400%)
+- Pinch-to-zoom gesture (100% to 500%)
 - Zoom +/- buttons in header bar with percentage display
 - Two-axis scrolling when zoomed in
 - Zoom resets when changing pages
-- Added "Pinch to zoom" hint in instructions
 
-**3. Previous fixes (from earlier in session):**
+**3. Added full-screen editing mode:**
+- Full-screen button (expand icon) opens page at maximum size
+- Dark background for better contrast
+- Page navigation at bottom
+- All redaction features work (tap to toggle, draw to add)
+- Pinch-to-zoom works in full-screen too
+
+**4. Previous fixes (from earlier in session):**
 - Multi-page signing now works (all signatures applied)
 - PDF merge normalizes page sizes (small PDFs scaled up)
 - Workflow redaction timing fixed

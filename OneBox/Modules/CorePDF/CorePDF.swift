@@ -1193,7 +1193,7 @@ public actor PDFProcessor {
         // The position represents the CENTER of where user tapped, so offset by half text size
         let textSize = (text as NSString).size(withAttributes: attributes)
         let centerX = bounds.minX + (bounds.width * clampedX)
-        let centerY = bounds.minY + (bounds.height * (1.0 - clampedY)) // Flip Y coordinate
+        let centerY = bounds.minY + (bounds.height * clampedY) // UIKit coordinates (Y=0 at top)
 
         // Calculate origin by offsetting from center
         let point = CGPoint(
@@ -1235,7 +1235,7 @@ public actor PDFProcessor {
         // Custom position is in normalized coordinates (0.0 to 1.0)
         // The position represents the CENTER of where user tapped, so offset by half signature size
         let centerX = bounds.minX + (bounds.width * clampedX)
-        let centerY = bounds.minY + (bounds.height * (1.0 - clampedY)) // Flip Y coordinate
+        let centerY = bounds.minY + (bounds.height * clampedY) // UIKit coordinates (Y=0 at top)
 
         // Calculate origin by offsetting from center
         let origin = CGPoint(

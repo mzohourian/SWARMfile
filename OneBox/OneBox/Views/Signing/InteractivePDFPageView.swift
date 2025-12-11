@@ -214,13 +214,25 @@ struct InteractivePDFPageView: View {
     }
     
     private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
-        // Simplified: Convert screen tap point directly to normalized coordinates (0.0-1.0)
-        // This matches the simplified coordinate system used in SignaturePlacementOverlay
-        // No need to account for PDF scale/offset since we're using screen-relative coordinates
-        
-        let normalizedX = max(0.0, min(1.0, point.x / size.width))
-        let normalizedY = max(0.0, min(1.0, point.y / size.height))
-        
+        // Convert screen tap point to PDF page coordinates
+        // The PDF page is scaled and centered within the view
+
+        // Calculate the scaled PDF page dimensions
+        let scaledWidth = pageBounds.width * scale
+        let scaledHeight = pageBounds.height * scale
+
+        // Calculate where the PDF page is positioned (centered in view)
+        let pageOriginX = offset.width + (size.width - scaledWidth) / 2
+        let pageOriginY = offset.height + (size.height - scaledHeight) / 2
+
+        // Convert tap point to be relative to the PDF page
+        let relativeX = point.x - pageOriginX
+        let relativeY = point.y - pageOriginY
+
+        // Normalize to 0.0-1.0 relative to the PDF page size
+        let normalizedX = max(0.0, min(1.0, relativeX / scaledWidth))
+        let normalizedY = max(0.0, min(1.0, relativeY / scaledHeight))
+
         return CGPoint(x: normalizedX, y: normalizedY)
     }
 }
@@ -413,11 +425,16 @@ struct SignaturePlacementOverlay: View {
     }
     
     var body: some View {
-        // Simplified: Use normalized position directly on screen (0.0-1.0 maps to screen)
-        // This is simpler and should work regardless of PDF scale
+        // Convert normalized PDF position (0.0-1.0) to screen position
+        // The PDF page is scaled and centered within the view
+        let scaledWidth = pageBounds.width * pdfScale
+        let scaledHeight = pageBounds.height * pdfScale
+        let pageOriginX = pdfOffset.width + (geometry.size.width - scaledWidth) / 2
+        let pageOriginY = pdfOffset.height + (geometry.size.height - scaledHeight) / 2
+
         let baseScreenPos = CGPoint(
-            x: placement.position.x * geometry.size.width,
-            y: placement.position.y * geometry.size.height
+            x: pageOriginX + (placement.position.x * scaledWidth),
+            y: pageOriginY + (placement.position.y * scaledHeight)
         )
         let screenPos = CGPoint(
             x: baseScreenPos.x + dragOffset.width,
@@ -507,17 +524,20 @@ struct SignaturePlacementOverlay: View {
                         // Calculate final screen position: base position + final translation
                         let finalScreenX = baseScreenPos.x + value.translation.width
                         let finalScreenY = baseScreenPos.y + value.translation.height
-                        
-                        // Convert back to normalized coordinates (0.0-1.0)
+
+                        // Convert back to normalized PDF coordinates (0.0-1.0)
+                        // Must account for PDF page being centered and scaled
+                        let relativeX = finalScreenX - pageOriginX
+                        let relativeY = finalScreenY - pageOriginY
                         let newPosition = CGPoint(
-                            x: max(0.0, min(1.0, finalScreenX / geometry.size.width)),
-                            y: max(0.0, min(1.0, finalScreenY / geometry.size.height))
+                            x: max(0.0, min(1.0, relativeX / scaledWidth)),
+                            y: max(0.0, min(1.0, relativeY / scaledHeight))
                         )
-                        
+
                         var updated = placement
                         updated.position = newPosition
                         onUpdate(updated)
-                        
+
                         // Update current position to match
                         currentPosition = newPosition
                         dragOffset = .zero

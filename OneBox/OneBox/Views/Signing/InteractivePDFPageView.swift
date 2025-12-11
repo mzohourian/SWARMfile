@@ -427,14 +427,14 @@ struct SignaturePlacementOverlay: View {
     var body: some View {
         // Convert normalized PDF position (0.0-1.0) to screen position
         // The PDF page is scaled and centered within the view
-        let scaledWidth = pageBounds.width * pdfScale
-        let scaledHeight = pageBounds.height * pdfScale
-        let pageOriginX = pdfOffset.width + (geometry.size.width - scaledWidth) / 2
-        let pageOriginY = pdfOffset.height + (geometry.size.height - scaledHeight) / 2
+        let pdfPageScaledWidth = pageBounds.width * pdfScale
+        let pdfPageScaledHeight = pageBounds.height * pdfScale
+        let pageOriginX = pdfOffset.width + (geometry.size.width - pdfPageScaledWidth) / 2
+        let pageOriginY = pdfOffset.height + (geometry.size.height - pdfPageScaledHeight) / 2
 
         let baseScreenPos = CGPoint(
-            x: pageOriginX + (placement.position.x * scaledWidth),
-            y: pageOriginY + (placement.position.y * scaledHeight)
+            x: pageOriginX + (placement.position.x * pdfPageScaledWidth),
+            y: pageOriginY + (placement.position.y * pdfPageScaledHeight)
         )
         let screenPos = CGPoint(
             x: baseScreenPos.x + dragOffset.width,
@@ -530,8 +530,8 @@ struct SignaturePlacementOverlay: View {
                         let relativeX = finalScreenX - pageOriginX
                         let relativeY = finalScreenY - pageOriginY
                         let newPosition = CGPoint(
-                            x: max(0.0, min(1.0, relativeX / scaledWidth)),
-                            y: max(0.0, min(1.0, relativeY / scaledHeight))
+                            x: max(0.0, min(1.0, relativeX / pdfPageScaledWidth)),
+                            y: max(0.0, min(1.0, relativeY / pdfPageScaledHeight))
                         )
 
                         var updated = placement

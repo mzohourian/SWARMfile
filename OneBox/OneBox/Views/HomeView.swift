@@ -6,10 +6,12 @@
 import SwiftUI
 import UIComponents
 import Privacy
+import JobEngine
 
 struct LegacyHomeView: View {
     @EnvironmentObject var paymentsManager: PaymentsManager
     @EnvironmentObject var privacyManager: Privacy.PrivacyManager
+    @EnvironmentObject var jobManager: JobManager
     @State private var searchText = ""
     @State private var selectedTool: ToolType?
     @State private var showingToolFlow = false
@@ -51,6 +53,8 @@ struct LegacyHomeView: View {
             .searchable(text: $searchText, prompt: "Search tools...")
             .sheet(item: $selectedTool) { tool in
                 ToolFlowView(tool: tool)
+                    .environmentObject(jobManager)
+                    .environmentObject(paymentsManager)
             }
         }
     }

@@ -159,12 +159,24 @@ public actor PDFProcessor {
         var totalPages = 0
         var allPages: [(page: PDFPage, url: URL)] = []
 
+        // Track security-scoped resource access for cleanup
+        var accessedURLs: [URL] = []
+
         // First pass: Collect all pages and find target size (largest dimensions)
         var maxWidth: CGFloat = 0
         var maxHeight: CGFloat = 0
 
         for url in pdfURLs {
+            // Start security-scoped resource access (required for files from document picker/iCloud)
+            if url.startAccessingSecurityScopedResource() {
+                accessedURLs.append(url)
+            }
+
             guard let pdf = PDFDocument(url: url) else {
+                // Stop accessing resources before throwing
+                for accessedURL in accessedURLs {
+                    accessedURL.stopAccessingSecurityScopedResource()
+                }
                 throw PDFError.invalidPDF(url.lastPathComponent)
             }
             totalPages += pdf.pageCount
@@ -235,6 +247,11 @@ public actor PDFProcessor {
 
         UIGraphicsEndPDFContext()
 
+        // Stop accessing security-scoped resources
+        for accessedURL in accessedURLs {
+            accessedURL.stopAccessingSecurityScopedResource()
+        }
+
         // Verify output file was created
         guard FileManager.default.fileExists(atPath: outputURL.path) else {
             throw PDFError.writeFailed
@@ -250,6 +267,14 @@ public actor PDFProcessor {
         ranges: [ClosedRange<Int>],
         progressHandler: @escaping (Double) -> Void
     ) async throws -> [URL] {
+
+        // Start security-scoped resource access (required for files from document picker/iCloud)
+        let startedAccessing = pdfURL.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
 
         guard let sourcePDF = PDFDocument(url: pdfURL) else {
             throw PDFError.invalidPDF(pdfURL.lastPathComponent)
@@ -287,7 +312,15 @@ public actor PDFProcessor {
         targetSizeMB: Double? = nil,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
-        
+
+        // Start security-scoped resource access (required for files from document picker/iCloud)
+        let startedAccessing = pdfURL.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
         // Validate file size and memory before processing
         if let fileSize = getFileSize(url: pdfURL) {
             let validation = await MainActor.run {
@@ -1412,6 +1445,14 @@ public actor PDFProcessor {
         print("🔵 CorePDF.redactPDF: Input PDF: \(pdfURL.path)")
         print("🔵 CorePDF.redactPDF: Redaction items: \(redactionItems)")
 
+        // Start security-scoped resource access (required for files from document picker/iCloud)
+        let startedAccessing = pdfURL.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
         guard let sourcePDF = PDFDocument(url: pdfURL) else {
             print("❌ CorePDF.redactPDF: Failed to load source PDF")
             throw PDFError.invalidPDF(pdfURL.lastPathComponent)
@@ -1565,11 +1606,19 @@ public actor PDFProcessor {
         stamps: [String], // Simplified stamp array
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
-        
+
+        // Start security-scoped resource access (required for files from document picker/iCloud)
+        let startedAccessing = pdfURL.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
         guard let sourcePDF = PDFDocument(url: pdfURL) else {
             throw PDFError.invalidPDF(pdfURL.lastPathComponent)
         }
-        
+
         let outputURL = temporaryOutputURL(prefix: "form_filled")
         let pageCount = sourcePDF.pageCount
 

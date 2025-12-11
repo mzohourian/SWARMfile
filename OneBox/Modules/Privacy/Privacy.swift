@@ -50,7 +50,7 @@ public protocol JobPrivacyDelegate {
     func getBiometricLockEnabled() -> Bool
     func getStealthModeEnabled() -> Bool
     func getSelectedComplianceMode() -> ComplianceMode
-    func performAuthenticationForProcessing() async throws
+    @MainActor func performAuthenticationForProcessing() async throws
     func makeSecureTemporaryURL() -> URL
     func performSecureFilesCleanup()
     func performDocumentSanitization(at url: URL) throws -> String // Returns summary
@@ -146,25 +146,26 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
     }
     
     // MARK: - Biometric Authentication
-    
+
+    @MainActor
     public func authenticateForProcessing() async throws {
         guard isBiometricLockEnabled else { return }
-        
+
         let context = LAContext()
         var error: NSError?
-        
+
         guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
             throw PrivacyError.biometricNotAvailable
         }
-        
+
         let reason = "Authenticate to process files securely"
-        
+
         do {
             let success = try await context.evaluatePolicy(
                 .deviceOwnerAuthenticationWithBiometrics,
                 localizedReason: reason
             )
-            
+
             if success {
                 logAuditEvent(.biometricAuthenticationSucceeded)
             } else {
@@ -594,6 +595,7 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
         return selectedComplianceMode
     }
     
+    @MainActor
     public func performAuthenticationForProcessing() async throws {
         try await authenticateForProcessing()
     }

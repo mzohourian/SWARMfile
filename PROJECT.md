@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-10
+**Last Updated:** 2025-12-11
 
 ## What This Is
 **OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -35,6 +35,7 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - Workflow automation
 - Page organizer with undo/redo and tap-to-select
 - Redaction - visual-first editing (tap to remove, draw to add)
+- Multi-language OCR (12 languages including Arabic, Persian, CJK)
 - File preview (QuickLook) - fixed stale path issue
 
 ### Broken / Blocked
@@ -80,38 +81,32 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2025-12-10
+**Date:** 2025-12-11
 
 **What Was Done:**
 
-**1. Fixed redaction boxes not showing on visual preview:**
-- Root cause 1: OCR was only run for scanned PDFs, but bounding boxes are needed for ALL PDFs
-- Root cause 2: Pattern matching used embedded text but bounding box lookup used OCR text (mismatch!)
-- Fix: Now ALWAYS use OCR text for pattern matching since that's where bounding boxes come from
-- Increased OCR resolution (2.0 scale) and accuracy level for better detection
+**1. Added multi-language OCR support across all Vision-based features:**
+- Added 12 languages: English, French, German, Spanish, Italian, Portuguese, Chinese (Simplified & Traditional), Japanese, Korean, Arabic, Persian/Farsi
+- Updated 6 files: RedactionView, SignatureFieldDetectionService, AdvancedImageToPDFView, FormFillingStampView, AdaptiveWatermarkView, SmartSplitView
+- Enables better text recognition for international documents
 
-**2. Added zoom functionality to RedactionView:**
-- Pinch-to-zoom gesture (100% to 500%)
-- Zoom +/- buttons in header bar with percentage display
-- Two-axis scrolling when zoomed in
-- Zoom resets when changing pages
+**2. Added international phone number detection for redaction:**
+- Pattern for formats like +98 21 22283831 (country code + area + local)
+- Supports Iranian and other international phone formats
 
-**3. Added full-screen editing mode:**
-- Full-screen button (expand icon) opens page at maximum size
-- Dark background for better contrast
-- Page navigation at bottom
-- All redaction features work (tap to toggle, draw to add)
-- Pinch-to-zoom works in full-screen too
-
-**4. Previous fixes (from earlier in session):**
-- Multi-page signing now works (all signatures applied)
-- PDF merge normalizes page sizes (small PDFs scaled up)
-- Workflow redaction timing fixed
-- Preview blank screen fixed
-- Face ID crash diagnosed (rebuild needed)
+**3. Attempted Persian passport number detection:**
+- Added patterns for Persian numerals (۰-۹) and Arabic-Indic numerals (٠-٩)
+- Added 8-digit ID number pattern
+- Vision OCR may not reliably recognize Persian numerals in passport images
+- User can use "Draw to add" for manual redaction of Persian numbers
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/RedactionView.swift` - Fixed OCR bounding boxes + zoom functionality
+- `OneBox/OneBox/Views/RedactionView.swift` - International phone + Persian patterns
+- `OneBox/OneBox/Services/SignatureFieldDetectionService.swift` - Multi-language OCR
+- `OneBox/OneBox/Views/Advanced/AdvancedImageToPDFView.swift` - Multi-language OCR
+- `OneBox/OneBox/Views/Advanced/FormFillingStampView.swift` - Multi-language OCR
+- `OneBox/OneBox/Views/Advanced/AdaptiveWatermarkView.swift` - Multi-language OCR
+- `OneBox/OneBox/Views/Advanced/SmartSplitView.swift` - Multi-language OCR
 
 ---
 

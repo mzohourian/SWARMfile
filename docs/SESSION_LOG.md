@@ -4,6 +4,42 @@
 
 ---
 
+## 2025-12-11: Multi-Language OCR & International Phone Detection
+
+**What Was Done:**
+
+**1. Multi-language OCR support added to all Vision-based features:**
+- Added 12 languages: English, French, German, Spanish, Italian, Portuguese, Chinese (Simplified & Traditional), Japanese, Korean, Arabic, Persian/Farsi
+- Updated all 6 files that use VNRecognizeTextRequest:
+  - RedactionView.swift
+  - SignatureFieldDetectionService.swift
+  - AdvancedImageToPDFView.swift
+  - FormFillingStampView.swift
+  - AdaptiveWatermarkView.swift
+  - SmartSplitView.swift
+
+**2. International phone number detection for redaction:**
+- Added pattern: `\+\d{1,3}[-.\s]+\d{2,4}[-.\s]+\d{6,8}`
+- Catches formats like +98 21 22283831 (Iranian) and other international numbers
+
+**3. Persian passport number detection (partial):**
+- Added patterns for Persian numerals (۰-۹) and Arabic-Indic numerals (٠-٩)
+- Added 8-digit standalone number pattern
+- **Limitation:** Vision OCR may not reliably detect Persian numerals in passport images
+- Workaround: Users can use "Draw to add" for manual redaction
+
+**Files Modified:**
+- `OneBox/OneBox/Views/RedactionView.swift`
+- `OneBox/OneBox/Services/SignatureFieldDetectionService.swift`
+- `OneBox/OneBox/Views/Advanced/AdvancedImageToPDFView.swift`
+- `OneBox/OneBox/Views/Advanced/FormFillingStampView.swift`
+- `OneBox/OneBox/Views/Advanced/AdaptiveWatermarkView.swift`
+- `OneBox/OneBox/Views/Advanced/SmartSplitView.swift`
+
+**Status:** Multi-language OCR complete. Persian numeral detection limited by Vision framework capabilities.
+
+---
+
 ## 2025-12-08: Workflow Fixes - Signing, Merge, Redaction (Continued Session)
 
 **Problems Reported:**

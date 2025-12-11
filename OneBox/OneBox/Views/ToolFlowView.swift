@@ -2130,17 +2130,30 @@ struct PDFSplitRangeSelector: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            Text("Select Page Ranges")
-                .font(.headline)
-
+            // Prominent page count header
             if totalPages > 0 {
-                Text("PDF has \(totalPages) page\(totalPages == 1 ? "" : "s")")
-                    .font(.subheadline)
-                    .foregroundColor(.accentColor)
-                    .fontWeight(.medium)
+                HStack {
+                    Image(systemName: "doc.text.fill")
+                        .foregroundColor(OneBoxColors.primaryGold)
+                    Text("Total Pages: \(totalPages)")
+                        .font(.headline)
+                        .foregroundColor(OneBoxColors.primaryText)
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 20)
+                .background(OneBoxColors.primaryGold.opacity(0.15))
+                .cornerRadius(12)
+            } else {
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Loading PDF info...")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
             }
 
-            Text("Add page ranges to convert (e.g., 1-3, 5, 7-10)")
+            Text("Add page ranges to split (e.g., 1-3, 5, 7-10)")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
@@ -2154,6 +2167,9 @@ struct PDFSplitRangeSelector: View {
                         .textFieldStyle(.roundedBorder)
                         .keyboardType(.numberPad)
                         .frame(width: 80)
+                        .onChange(of: startPage) { newValue in
+                            validatePageNumber(&startPage, value: newValue)
+                        }
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -2164,6 +2180,9 @@ struct PDFSplitRangeSelector: View {
                         .textFieldStyle(.roundedBorder)
                         .keyboardType(.numberPad)
                         .frame(width: 80)
+                        .onChange(of: endPage) { newValue in
+                            validatePageNumber(&endPage, value: newValue)
+                        }
                 }
 
                 Button(action: addRange) {
@@ -2171,6 +2190,7 @@ struct PDFSplitRangeSelector: View {
                         .font(.title2)
                         .foregroundColor(.accentColor)
                 }
+                .disabled(totalPages == 0)
             }
 
             // Error message
@@ -2219,11 +2239,29 @@ struct PDFSplitRangeSelector: View {
     }
 
     private func loadPDFInfo() {
-        guard let url = pdfURL, let pdf = PDFDocument(url: url) else {
+        guard let url = pdfURL else {
+            totalPages = 0
+            return
+        }
+
+        // Start security-scoped resource access (required for files from document picker/iCloud)
+        let startedAccessing = url.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        guard let pdf = PDFDocument(url: url) else {
             totalPages = 0
             return
         }
         totalPages = pdf.pageCount
+
+        // Set sensible defaults for end page
+        if totalPages > 0 {
+            endPage = "\(totalPages)"
+        }
     }
 
     private func addRange() {
@@ -2261,6 +2299,27 @@ struct PDFSplitRangeSelector: View {
 
     private func removeRange(at index: Int) {
         pageRanges.remove(at: index)
+    }
+
+    private func validatePageNumber(_ field: inout String, value: String) {
+        // Only allow numeric input
+        let filtered = value.filter { $0.isNumber }
+        if filtered != value {
+            field = filtered
+            return
+        }
+
+        // Validate against total pages if known
+        if totalPages > 0, let pageNum = Int(filtered), pageNum > totalPages {
+            field = "\(totalPages)"
+            errorMessage = "Maximum page is \(totalPages)"
+            // Clear error after 2 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                if errorMessage == "Maximum page is \(totalPages)" {
+                    errorMessage = nil
+                }
+            }
+        }
     }
 }
 

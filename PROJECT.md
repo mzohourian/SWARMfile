@@ -68,14 +68,15 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **Workflow hybrid interactive/automated redesign** - Major workflow fix:
-  - Interactive steps (Organize, Sign) now use existing app views (PageOrganizerView, InteractiveSignPDFView)
-  - Automated steps (Compress, Watermark, etc.) run with pre-configured settings
-  - Workflow pauses for interactive steps, continues after user completes them
-  - Fixed page numbers showing literal `{page}` - now properly replaced per-page
-  - Fixed date stamp showing "Processed:" prefix and ugly formatting
-  - Made compression more aggressive for visible file size reduction
-- All previous workflow fixes remain in place
+- **PDF "Invalid PDF" error** - Fixed security-scoped resource access:
+  - PDFs from document picker/iCloud require `startAccessingSecurityScopedResource()` before loading
+  - Added proper resource access to: merge, split, compress, redact, fillFormFields
+  - Ensures cleanup with `defer` and proper error handling
+- **Signature placement** - Fixed Y-coordinate inversion and normalization
+- **PNG rejection** - Fixed broken format validation logic (was checking characters, not extension)
+- **Face ID** - Added @MainActor for LocalAuthentication on main thread
+- **Crash on proceed** - Added missing environment objects to IntegrityDashboardView/HomeView
+- **PDF password protection** - Implemented native PDF encryption with user password input
 
 ---
 
@@ -85,38 +86,51 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 **What Was Done:**
 
-**1. Added multi-language OCR support across all Vision-based features:**
-- Added 12 languages: English, French, German, Spanish, Italian, Portuguese, Chinese (Simplified & Traditional), Japanese, Korean, Arabic, Persian/Farsi
-- Updated 6 files: RedactionView, SignatureFieldDetectionService, AdvancedImageToPDFView, FormFillingStampView, AdaptiveWatermarkView, SmartSplitView
-- Enables better text recognition for international documents
+**1. Fixed PDF loading "Invalid PDF" errors:**
+- Root cause: `PDFDocument(url:)` returns nil for files from document picker/iCloud without security-scoped access
+- Added `startAccessingSecurityScopedResource()` to: merge, split, compress, redact, fillFormFields
+- Proper cleanup with `defer` and error handling for cleanup before throwing
 
-**2. Added international phone number detection for redaction:**
-- Pattern for formats like +98 21 22283831 (country code + area + local)
-- Supports Iranian and other international phone formats
+**2. Fixed signature placement issues:**
+- Removed Y-coordinate flip (UIKit coordinates, not PDF coordinates)
+- Fixed coordinate normalization to account for scaled/centered PDF pages
 
-**3. Attempted Persian passport number detection:**
-- Added patterns for Persian numerals (۰-۹) and Arabic-Indic numerals (٠-٩)
-- Added 8-digit ID number pattern
-- Vision OCR may not reliably recognize Persian numerals in passport images
-- User can use "Draw to add" for manual redaction of Persian numbers
+**3. Fixed PNG image rejection:**
+- Bug: format validation checked if any CHARACTER was in array, not the whole extension
+- Fixed to check if extension string is in supported formats array
+
+**4. Fixed Face ID not triggering:**
+- LocalAuthentication must run on main thread
+- Added @MainActor to `authenticateForProcessing()` and protocol
+
+**5. Fixed app crash on "Proceed":**
+- Missing `@EnvironmentObject` for `paymentsManager` and `jobManager`
+- Added to IntegrityDashboardView and LegacyHomeView
+
+**6. Implemented PDF password protection:**
+- Added password input field in ToolFlowView
+- Native PDFKit encryption using `PDFDocumentWriteOption.userPasswordOption`
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/RedactionView.swift` - International phone + Persian patterns
-- `OneBox/OneBox/Services/SignatureFieldDetectionService.swift` - Multi-language OCR
-- `OneBox/OneBox/Views/Advanced/AdvancedImageToPDFView.swift` - Multi-language OCR
-- `OneBox/OneBox/Views/Advanced/FormFillingStampView.swift` - Multi-language OCR
-- `OneBox/OneBox/Views/Advanced/AdaptiveWatermarkView.swift` - Multi-language OCR
-- `OneBox/OneBox/Views/Advanced/SmartSplitView.swift` - Multi-language OCR
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Security-scoped access, signature fix, format fix, password protection
+- `OneBox/OneBox/Services/Privacy.swift` - @MainActor for biometric auth
+- `OneBox/Modules/JobEngine/JobEngine.swift` - PDF-native encryption
+- `OneBox/OneBox/Views/ToolFlowView.swift` - Password input field
+- `OneBox/OneBox/Views/WorkflowAutomationView.swift` - Password capture
+- `OneBox/OneBox/Views/IntegrityDashboardView.swift` - Environment objects
+- `OneBox/OneBox/Views/HomeView.swift` - Environment objects
+- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift` - Coordinate normalization
 
 ---
 
 ## Next Steps (Priority Order)
 
-1. **REBUILD APP IN XCODE** - Critical: fixes Face ID crash in workflows
-2. **Test preview function** - Verify QuickLook now shows files properly after path fix
-3. **Test workflow with biometric lock** - Should work after rebuild
-4. **Test Redact PDF** - Verify file saving/sharing works correctly
-5. Address Swift 6 warnings (optional, non-blocking)
+1. **REBUILD APP IN XCODE** - Critical: get latest fixes including security-scoped access
+2. **Test PDF merge** - Should now work with files from document picker/iCloud
+3. **Test preview function** - Verify QuickLook now shows files properly
+4. **Test workflow with biometric lock** - Should work after rebuild
+5. **Test Redact PDF** - Verify file saving/sharing works correctly
+6. Address Swift 6 warnings (optional, non-blocking)
 
 ---
 

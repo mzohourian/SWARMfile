@@ -1138,18 +1138,32 @@ actor JobProcessor {
             }
         }
         
-        // Apply encryption if enabled
-        if job.settings.enableEncryption, 
+        // Apply password protection if enabled
+        if job.settings.enableEncryption,
            let password = job.settings.encryptionPassword,
-           let delegate = privacyDelegate {
-            var encryptedURLs: [URL] = []
+           !password.isEmpty {
+            var protectedURLs: [URL] = []
             for url in processedURLs {
-                let encryptedURL = try await MainActor.run {
-                    try delegate.performFileEncryption(at: url, password: password)
+                // Use PDF-native password protection for PDFs
+                if url.pathExtension.lowercased() == "pdf" {
+                    let processor = CorePDF.PDFProcessor()
+                    let protectedURL = try await processor.passwordProtectPDF(
+                        url,
+                        password: password,
+                        progressHandler: { _ in }
+                    )
+                    protectedURLs.append(protectedURL)
+                } else if let delegate = privacyDelegate {
+                    // Use file-level encryption for non-PDF files
+                    let encryptedURL = try await MainActor.run {
+                        try delegate.performFileEncryption(at: url, password: password)
+                    }
+                    protectedURLs.append(encryptedURL)
+                } else {
+                    protectedURLs.append(url)
                 }
-                encryptedURLs.append(encryptedURL)
             }
-            processedURLs = encryptedURLs
+            processedURLs = protectedURLs
         }
         
         // Generate forensics report

@@ -22,7 +22,9 @@ struct WorkflowAutomationView: View {
     @State private var recentExecutions: [WorkflowExecution] = []
     @State private var searchText = ""
     @State private var selectedCategory: WorkflowCategory = .all
-    
+    @State private var showingPasswordAlert = false
+    @State private var generatedPasswordToShow: String = ""
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -86,6 +88,15 @@ struct WorkflowAutomationView: View {
         }
         .sheet(isPresented: $showingTemplateLibrary) {
             WorkflowTemplateLibraryView(onTemplateSelected: addWorkflowFromTemplate)
+        }
+        .alert("Encryption Password", isPresented: $showingPasswordAlert) {
+            Button("Copy Password") {
+                UIPasteboard.general.string = generatedPasswordToShow
+                HapticManager.shared.notification(.success)
+            }
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Your file was encrypted with this auto-generated password. Save it securely:\n\n\(generatedPasswordToShow)")
         }
         .onAppear {
             loadWorkflows()
@@ -911,7 +922,7 @@ struct WorkflowAutomationView: View {
                     if let index = recentExecutions.firstIndex(where: { $0.id == executionId }) {
                         recentExecutions[index] = execution
                     }
-                    
+
                     // Update workflow statistics
                     if let workflowIndex = workflows.firstIndex(where: { $0.id == workflow.id }) {
                         workflows[workflowIndex].executionCount += 1
@@ -920,10 +931,16 @@ struct WorkflowAutomationView: View {
                         let successCount = totalExecutions * workflows[workflowIndex].successRate + 1
                         workflows[workflowIndex].successRate = successCount / totalExecutions
                     }
-                    
+
+                    // Show generated password if encryption was used
+                    if let password = results.generatedPassword {
+                        generatedPasswordToShow = password
+                        showingPasswordAlert = true
+                    }
+
                     HapticManager.shared.notification(.success)
                 }
-                
+
             } catch {
                 let endTime = Date()
                 let duration = endTime.timeIntervalSince(startTime)
@@ -956,44 +973,51 @@ struct WorkflowAutomationView: View {
     private func executeWorkflowActions(_ workflow: AutomationWorkflow) async throws -> WorkflowExecutionResult {
         var processedFiles: Set<URL> = []
         var outputFiles: [URL] = []
-        
+        var generatedPassword: String? = nil
+
         // Get input files based on workflow triggers
         var inputFiles = try await getWorkflowInputFiles(workflow)
-        
+
         guard !inputFiles.isEmpty else {
             throw WorkflowExecutionError.noInputFiles
         }
-        
+
         // Execute each action in sequence
         for action in workflow.actions {
             let jobType = convertActionToJobType(action)
-            let jobSettings = convertActionToJobSettings(action)
-            
+            let (jobSettings, actionPassword) = convertActionToJobSettingsWithPassword(action)
+
+            // Capture auto-generated password
+            if actionPassword != nil {
+                generatedPassword = actionPassword
+            }
+
             // Create and submit real job to JobEngine
             let job = Job(
                 type: jobType,
                 inputs: inputFiles,
                 settings: jobSettings
             )
-            
+
             // Execute job synchronously and wait for completion
             let jobOutputs = try await executeJobSynchronously(job)
-            
+
             // Track processed files
             processedFiles.formUnion(inputFiles)
             outputFiles.append(contentsOf: jobOutputs)
-            
+
             // Use outputs as inputs for next action
             if !jobOutputs.isEmpty {
                 inputFiles.removeAll()
                 inputFiles.append(contentsOf: jobOutputs)
             }
         }
-        
+
         return WorkflowExecutionResult(
             processedFileCount: processedFiles.count,
             outputFiles: outputFiles,
-            executionSuccess: true
+            executionSuccess: true,
+            generatedPassword: generatedPassword
         )
     }
     
@@ -1120,10 +1144,63 @@ struct WorkflowAutomationView: View {
         // Apply security settings
         settings.stripMetadata = true
         settings.enableDocumentSanitization = true
-        
+
         return settings
     }
-    
+
+    /// Converts action to job settings and returns any auto-generated password
+    private func convertActionToJobSettingsWithPassword(_ action: WorkflowAction) -> (JobSettings, String?) {
+        var settings = JobSettings()
+        var generatedPassword: String? = nil
+
+        switch action.type {
+        case .compress:
+            if let qualityStr = action.configuration["quality"] {
+                switch qualityStr.lowercased() {
+                case "high": settings.compressionQuality = .high
+                case "low": settings.compressionQuality = .low
+                default: settings.compressionQuality = .medium
+                }
+            }
+
+        case .watermark:
+            settings.watermarkText = action.configuration["text"]
+            if let positionStr = action.configuration["position"] {
+                switch positionStr.lowercased() {
+                case "center": settings.watermarkPosition = .center
+                case "topleft": settings.watermarkPosition = .topLeft
+                case "topright": settings.watermarkPosition = .topRight
+                case "bottomleft": settings.watermarkPosition = .bottomLeft
+                default: settings.watermarkPosition = .bottomRight
+                }
+            }
+
+        case .encrypt:
+            settings.enableEncryption = true
+            if action.configuration["password"] == "auto" {
+                let autoPassword = generateSecurePassword()
+                settings.encryptionPassword = autoPassword
+                generatedPassword = autoPassword // Capture for showing to user
+            } else {
+                settings.encryptionPassword = action.configuration["password"]
+            }
+
+        case .split:
+            if let rangesStr = action.configuration["ranges"] {
+                settings.splitRanges = Self.parsePageRanges(rangesStr)
+            }
+
+        default:
+            break
+        }
+
+        // Apply security settings
+        settings.stripMetadata = true
+        settings.enableDocumentSanitization = true
+
+        return (settings, generatedPassword)
+    }
+
     // Helper functions for file operations
     private func getDocumentsDirectory() -> URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -1398,6 +1475,7 @@ struct WorkflowExecution: Identifiable {
     var duration: TimeInterval
     var processedFiles: Int
     var errorMessage: String?
+    var generatedPassword: String? // Auto-generated password for encryption
 }
 
 struct AutomationWorkflowTemplate: Identifiable {
@@ -2552,6 +2630,7 @@ struct WorkflowExecutionResult {
     let processedFileCount: Int
     let outputFiles: [URL]
     let executionSuccess: Bool
+    var generatedPassword: String? // Auto-generated encryption password to show user
 }
 
 enum WorkflowExecutionError: LocalizedError {

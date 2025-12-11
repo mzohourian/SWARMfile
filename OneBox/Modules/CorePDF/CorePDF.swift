@@ -1774,6 +1774,69 @@ public actor PDFProcessor {
         return size
     }
 
+    // MARK: - PDF Password Protection
+
+    /// Adds password protection to a PDF file
+    /// - Parameters:
+    ///   - pdfURL: URL of the PDF to protect
+    ///   - password: Password to set for opening the PDF
+    ///   - progressHandler: Progress callback
+    /// - Returns: URL of the password-protected PDF
+    public func passwordProtectPDF(
+        _ pdfURL: URL,
+        password: String,
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> URL {
+        // Validate password
+        guard !password.isEmpty else {
+            throw PDFError.invalidParameters("Password cannot be empty")
+        }
+
+        // Validate PDF
+        try validatePDF(url: pdfURL)
+
+        // Handle security-scoped resources
+        var startedAccessing = false
+        if pdfURL.startAccessingSecurityScopedResource() {
+            startedAccessing = true
+        }
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        guard let document = PDFDocument(url: pdfURL) else {
+            throw PDFError.invalidPDF(pdfURL.lastPathComponent)
+        }
+
+        progressHandler(0.3)
+
+        let outputURL = temporaryOutputURL(prefix: "protected_pdf")
+
+        // Create write options with password protection
+        let writeOptions: [PDFDocumentWriteOption: Any] = [
+            .userPasswordOption: password,
+            .ownerPasswordOption: password
+        ]
+
+        progressHandler(0.6)
+
+        // Write password-protected PDF
+        guard document.write(to: outputURL, withOptions: writeOptions) else {
+            throw PDFError.writeFailed
+        }
+
+        progressHandler(1.0)
+
+        // Verify output
+        guard FileManager.default.fileExists(atPath: outputURL.path) else {
+            throw PDFError.writeFailed
+        }
+
+        return outputURL
+    }
+
     // MARK: - Helper Methods
     private func temporaryOutputURL(prefix: String) -> URL {
         let tempDir = FileManager.default.temporaryDirectory

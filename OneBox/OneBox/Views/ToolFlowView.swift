@@ -1397,10 +1397,42 @@ struct ConfigurationView: View {
                 
                 VStack(spacing: OneBoxSpacing.small) {
                     privacyOption("Strip Metadata", "Remove personal information from files", $settings.stripMetadata)
-                    
+
                     if tool != .imageResize {
                         privacyOption("Secure Vault", "Store output in encrypted vault", $settings.enableSecureVault)
                         privacyOption("Zero Trace", "No processing history saved", $settings.enableZeroTrace)
+
+                        // PDF Encryption with password
+                        VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
+                            Toggle(isOn: $settings.enableEncryption) {
+                                VStack(alignment: .leading, spacing: OneBoxSpacing.tiny) {
+                                    Text("Password Protect")
+                                        .font(OneBoxTypography.body)
+                                        .foregroundColor(OneBoxColors.primaryText)
+
+                                    Text("Encrypt PDF with password")
+                                        .font(OneBoxTypography.caption)
+                                        .foregroundColor(OneBoxColors.secondaryText)
+                                }
+                            }
+                            .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
+
+                            if settings.enableEncryption {
+                                SecureField("Enter password", text: Binding(
+                                    get: { settings.encryptionPassword ?? "" },
+                                    set: { settings.encryptionPassword = $0.isEmpty ? nil : $0 }
+                                ))
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .padding(.leading, OneBoxSpacing.large)
+
+                                if settings.encryptionPassword == nil || settings.encryptionPassword!.isEmpty {
+                                    Text("Password required for encryption")
+                                        .font(OneBoxTypography.micro)
+                                        .foregroundColor(OneBoxColors.warningAmber)
+                                        .padding(.leading, OneBoxSpacing.large)
+                                }
+                            }
+                        }
                     }
                 }
             }

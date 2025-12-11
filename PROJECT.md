@@ -71,12 +71,16 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - **PDF "Invalid PDF" error** - Fixed security-scoped resource access:
   - PDFs from document picker/iCloud require `startAccessingSecurityScopedResource()` before loading
   - Added proper resource access to: merge, split, compress, redact, fillFormFields
+  - Also fixed in JobEngine.processPDFSplit for page count detection
   - Ensures cleanup with `defer` and proper error handling
 - **Signature placement** - Fixed Y-coordinate inversion and normalization
 - **PNG rejection** - Fixed broken format validation logic (was checking characters, not extension)
 - **Face ID** - Added @MainActor for LocalAuthentication on main thread
 - **Crash on proceed** - Added missing environment objects to IntegrityDashboardView/HomeView
 - **PDF password protection** - Implemented native PDF encryption with user password input
+- **Merge PDF UI** - Moved "Add More" button to bottom, increased list height, added file count
+- **Split PDF UI** - Fixed page count display (security-scoped access), added real-time validation
+- **Export flow** - Fixed result view not showing after progress completes (removed premature dismiss)
 
 ---
 
@@ -111,25 +115,43 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - Added password input field in ToolFlowView
 - Native PDFKit encryption using `PDFDocumentWriteOption.userPasswordOption`
 
+**7. Fixed Merge PDF UI:**
+- Moved "Add More" button to bottom using Spacer
+- Increased list height from 300px to 400px for more visibility
+- Added file count to header ("3 files • Drag to reorder")
+
+**8. Fixed Split PDF UI:**
+- Fixed page count not showing (security-scoped access in loadPDFInfo)
+- Made page count display more prominent with gold background
+- Added real-time validation to prevent pages beyond PDF length
+- Auto-fills end page to total pages on load
+
+**9. Fixed Export flow:**
+- Result view wasn't showing after progress reached 100%
+- Root cause: ExportPreviewView called dismiss() after onConfirm()
+- Removed premature dismiss() - now shows JobResultView with "Share & Save"
+
 **Files Modified This Session:**
 - `OneBox/Modules/CorePDF/CorePDF.swift` - Security-scoped access, signature fix, format fix, password protection
 - `OneBox/OneBox/Services/Privacy.swift` - @MainActor for biometric auth
-- `OneBox/Modules/JobEngine/JobEngine.swift` - PDF-native encryption
-- `OneBox/OneBox/Views/ToolFlowView.swift` - Password input field
+- `OneBox/Modules/JobEngine/JobEngine.swift` - PDF-native encryption, split PDF security access
+- `OneBox/OneBox/Views/ToolFlowView.swift` - Password input, split PDF validation
 - `OneBox/OneBox/Views/WorkflowAutomationView.swift` - Password capture
 - `OneBox/OneBox/Views/IntegrityDashboardView.swift` - Environment objects
 - `OneBox/OneBox/Views/HomeView.swift` - Environment objects
 - `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift` - Coordinate normalization
+- `OneBox/Modules/UIComponents/UIComponents.swift` - Merge PDF button position
+- `OneBox/OneBox/Views/ExportPreviewView.swift` - Export flow fix
 
 ---
 
 ## Next Steps (Priority Order)
 
-1. **REBUILD APP IN XCODE** - Critical: get latest fixes including security-scoped access
-2. **Test PDF merge** - Should now work with files from document picker/iCloud
-3. **Test preview function** - Verify QuickLook now shows files properly
-4. **Test workflow with biometric lock** - Should work after rebuild
-5. **Test Redact PDF** - Verify file saving/sharing works correctly
+1. **REBUILD APP IN XCODE** - Critical: get all fixes from this session
+2. **Test Split PDF** - Page count should display, validation should work
+3. **Test Merge PDF** - "Add More" button at bottom, files visible
+4. **Test Export flow** - Should show result view with "Share & Save" after progress
+5. **Test PDF merge** - Should work with files from document picker/iCloud
 6. Address Swift 6 warnings (optional, non-blocking)
 
 ---

@@ -4,6 +4,37 @@
 
 ---
 
+## 2025-12-11: Security-Scoped Access & UI Fixes (Continuation)
+
+**Problems Reported:**
+1. PDF merge/split showing "Invalid PDF" or "Invalid input files" errors
+2. Split PDF not showing page count or validating ranges
+3. Merge PDF "Add More" button too high, files not visible
+4. Export flow progress reaches 100% but nothing happens
+
+**Root Causes Found:**
+1. `PDFDocument(url:)` returns nil for files from document picker without security-scoped access
+2. Same issue in `loadPDFInfo()` for Split PDF UI and `processPDFSplit()` in JobEngine
+3. ReorderableFileListView had button after list with no spacer
+4. ExportPreviewView called `dismiss()` after `onConfirm()`, closing sheet before result view shown
+
+**Fixes Applied:**
+1. Added `startAccessingSecurityScopedResource()` to all PDF loading functions in CorePDF.swift
+2. Fixed Split PDF in JobEngine.swift and ToolFlowView.swift (PDFSplitRangeSelector)
+3. Added Spacer to push button to bottom, increased list height to 400px
+4. Removed premature `dismiss()` from ExportPreviewView
+
+**Files Modified:**
+- `OneBox/Modules/CorePDF/CorePDF.swift`
+- `OneBox/Modules/JobEngine/JobEngine.swift`
+- `OneBox/OneBox/Views/ToolFlowView.swift`
+- `OneBox/Modules/UIComponents/UIComponents.swift`
+- `OneBox/OneBox/Views/ExportPreviewView.swift`
+
+**Status:** All issues fixed. Requires rebuild to test.
+
+---
+
 ## 2025-12-11: Multi-Language OCR & International Phone Detection
 
 **What Was Done:**

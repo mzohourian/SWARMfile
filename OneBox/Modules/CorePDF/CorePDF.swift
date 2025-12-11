@@ -71,7 +71,8 @@ public actor PDFProcessor {
                 }
                 
                 // Validate image file and format
-                guard imageURL.pathExtension.lowercased().contains(where: { ["jpg", "jpeg", "png", "heic", "heif"].contains(String($0)) }) else {
+                let supportedFormats = ["jpg", "jpeg", "png", "heic", "heif", "gif", "bmp", "tiff", "tif", "webp"]
+                guard supportedFormats.contains(imageURL.pathExtension.lowercased()) else {
                     UIGraphicsEndPDFContext()
                     throw PDFError.invalidImage("Unsupported format: \(imageURL.lastPathComponent)")
                 }

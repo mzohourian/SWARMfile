@@ -831,18 +831,19 @@ struct ExportPreviewView: View {
     
     private func startExportProgress() {
         exportProgress = 0
-        
+
         Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
             exportProgress += 0.05
-            
+
             if exportProgress >= 1.0 {
                 timer.invalidate()
                 exportProgress = 1.0
-                
+
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     HapticManager.shared.notification(.success)
                     onConfirm()
-                    dismiss()
+                    // Note: Don't call dismiss() here - onConfirm() handles the transition
+                    // to the result view. Calling dismiss() would close the entire flow.
                 }
             }
         }

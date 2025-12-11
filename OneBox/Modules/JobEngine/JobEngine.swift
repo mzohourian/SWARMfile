@@ -836,6 +836,14 @@ actor JobProcessor {
             throw JobError.invalidInput
         }
 
+        // Start security-scoped resource access (required for files from document picker/iCloud)
+        let startedAccessing = pdfURL.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
         // Get total page count from PDF
         guard let pdf = PDFDocument(url: pdfURL) else {
             throw JobError.invalidInput

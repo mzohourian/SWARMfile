@@ -4,6 +4,47 @@
 
 ---
 
+## 2025-12-15: Button Aesthetics & Signature Position Fixes (Continued)
+
+**Issues Reported:**
+1. Disabled button opacity looks harsh - needs aesthetic improvement
+2. Signature appears in different position than where user placed it
+3. Signature size doesn't match what user expected
+
+**Root Causes & Fixes:**
+
+**1. Disabled Button Aesthetics**
+- File: `OneBox/Modules/UIComponents/OneBoxStandard.swift`
+- Old approach: Simple `.opacity(isDisabled ? 0.4 : 1.0)` looked harsh
+- New approach: Elegant disabled state with multiple visual cues:
+  - Muted background color (surfaceGraphite at 50% opacity)
+  - Muted text color (tertiaryText instead of bright colors)
+  - Subtle border to maintain button shape visibility
+  - Desaturation effect (saturation: 0.3) for professional appearance
+  - Smooth animation when transitioning between states
+
+**2. Signature Position Mismatch**
+- File: `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift`
+- Root cause: Y coordinate NOT inverted when passing to CorePDF
+- Screen coordinates have Y=0 at TOP, PDF coordinates have Y=0 at BOTTOM
+- Fix: Invert Y when creating signature position: `y: 1.0 - firstPlacement.position.y`
+- Now signature appears exactly where user placed it
+
+**3. Signature Size Mismatch**
+- File: `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift`
+- Root cause: Size calculation used raw PDF page width instead of screen-relative ratio
+- Old approach: `signatureWidth / pageWidth` (comparing screen pixels to PDF points)
+- Fix: Use screen-relative ratio with estimated view width (400px)
+- Result: Signature size now matches visual proportion user created
+
+**Files Modified:**
+- `OneBox/Modules/UIComponents/OneBoxStandard.swift`
+- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift`
+
+**Status:** Needs user testing
+
+---
+
 ## 2025-12-15: UX Fixes & State Persistence
 
 **Issues Reported:**

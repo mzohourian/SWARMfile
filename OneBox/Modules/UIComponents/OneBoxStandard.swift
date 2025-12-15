@@ -271,15 +271,29 @@ public struct OneBoxButton: View {
                     .font(OneBoxTypography.body)
                     .fontWeight(.medium)
             }
-            .foregroundColor(textColor)
+            .foregroundColor(isDisabled ? disabledTextColor : textColor)
             .padding(.horizontal, OneBoxSpacing.medium)
             .padding(.vertical, OneBoxSpacing.small)
-            .background(backgroundView)
+            .background(isDisabled ? disabledBackgroundView : backgroundView)
             .cornerRadius(OneBoxRadius.button)
+            .overlay(
+                RoundedRectangle(cornerRadius: OneBoxRadius.button)
+                    .stroke(isDisabled ? OneBoxColors.tertiaryText.opacity(0.3) : Color.clear, lineWidth: 1)
+            )
         }
         .buttonStyle(OneBoxButtonStyle(style: style))
         .disabled(isDisabled)
-        .opacity(isDisabled ? 0.4 : 1.0)
+        .saturation(isDisabled ? 0.3 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: isDisabled)
+    }
+
+    private var disabledTextColor: Color {
+        OneBoxColors.tertiaryText
+    }
+
+    @ViewBuilder
+    private var disabledBackgroundView: some View {
+        OneBoxColors.surfaceGraphite.opacity(0.5)
     }
     
     private var textColor: Color {

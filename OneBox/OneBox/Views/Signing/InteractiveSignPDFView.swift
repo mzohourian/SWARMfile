@@ -481,29 +481,27 @@ struct InteractiveSignPDFView: View {
             return
         }
         
-        let pageBounds = page.bounds(for: .mediaBox)
-        let pageWidth = pageBounds.width
-        let pageHeight = pageBounds.height
-        
         // Calculate signature size as a ratio of page width (must be between 0.0 and 1.0)
-        // The placement size is in screen pixels (e.g., 300x120), we need to normalize it to page coordinates
-        // Use a reasonable default size if calculation would be invalid
-        let signatureWidthInPoints = firstPlacement.size.width
+        // The placement size is in screen pixels (e.g., 300x120)
+        // The signature is displayed on a view that fits the PDF page
+        // So we need to calculate: (signature screen size) / (view width) ≈ ratio of page
+        // Since we don't have exact view width, use a typical iOS screen width (~390-430 for iPhones)
+        // This gives us the ratio of screen the signature takes up, which equals the ratio of PDF page
+        let signatureWidthInPixels = firstPlacement.size.width
+        let estimatedViewWidth: CGFloat = 400.0 // Typical view width for PDF display
         let calculatedSize: Double
-        
-        if pageWidth > 0 && signatureWidthInPoints > 0 {
-            // Convert screen pixels to PDF points ratio
-            // Assume screen is roughly 400-500 points wide, so 300px signature ≈ 0.6-0.75 of screen
-            // For a typical PDF page (612 points wide), this would be roughly 0.15-0.2
-            // Use a more conservative calculation
-            let sizeRatio = Double(signatureWidthInPoints) / Double(max(pageWidth, 612.0))
+
+        if signatureWidthInPixels > 0 {
+            // Calculate as ratio of estimated view width
+            // This gives us the visual proportion the user intended
+            let sizeRatio = Double(signatureWidthInPixels) / Double(estimatedViewWidth)
             calculatedSize = sizeRatio
         } else {
-            calculatedSize = 0.15 // Safe default
+            calculatedSize = 0.25 // Safe default (1/4 of page width)
         }
-        
-        // Clamp size to reasonable range (0.05 to 0.5 of page width)
-        let signatureSize = max(0.05, min(0.5, calculatedSize))
+
+        // Clamp size to reasonable range (0.1 to 0.6 of page width)
+        let signatureSize = max(0.1, min(0.6, calculatedSize))
         
         // Validate signature data
         var settings = JobSettings()
@@ -532,9 +530,11 @@ struct InteractiveSignPDFView: View {
         }
         
         // Validate position is within bounds (0.0 to 1.0)
+        // IMPORTANT: Invert Y coordinate because screen has Y=0 at TOP, but PDF has Y=0 at BOTTOM
+        // Screen position 0.8 (80% from top = near bottom) should become PDF position 0.2 (20% from bottom = near bottom)
         let clampedPosition = CGPoint(
             x: max(0.0, min(1.0, firstPlacement.position.x)),
-            y: max(0.0, min(1.0, firstPlacement.position.y))
+            y: max(0.0, min(1.0, 1.0 - firstPlacement.position.y))
         )
         
         // Validate page index

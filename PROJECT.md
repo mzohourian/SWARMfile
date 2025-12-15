@@ -78,55 +78,49 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-15
 
 **What Was Done:**
-- **Fixed "Continue Securely" button visual state:**
-  - Added opacity 0.4 when disabled so button appears faded
-  - User can now clearly see when button is not yet available
+- **Enhanced disabled button aesthetics:**
+  - Replaced simple opacity with elegant disabled state
+  - Uses muted background color (surfaceGraphite at 50% opacity)
+  - Uses muted text color (tertiaryText)
+  - Adds subtle border to maintain button shape
+  - Applies desaturation (saturation: 0.3) for professional look
+  - Smooth animation transition between enabled/disabled states
 
-- **Fixed preview showing black/blank page:**
-  - QuickLookPreview now always returns 1 item (not 0)
-  - Added fallback logic to always return valid preview item
-  - Improved file accessibility handling
+- **Fixed signature position mismatch (appears in wrong location):**
+  - Inverted Y coordinate when processing signatures for PDF
+  - Screen has Y=0 at top, PDF has Y=0 at bottom - now correctly converted
+  - Signature now appears where user actually placed it
 
-- **Fixed Sign PDF stray dots (resize handles appearing elsewhere):**
-  - Changed from `.position()` to `.offset()` for resize handles
-  - Handles now appear correctly at signature corners
-  - Increased handle size for better touch targets
+- **Fixed signature size mismatch (appears different size):**
+  - Improved size calculation to use screen-relative ratio
+  - Uses estimated view width (400px) to calculate intended proportion
+  - Increased size clamp range (0.1 to 0.6) for better flexibility
 
-- **Improved Sign PDF zoom gesture:**
-  - Changed from simultaneousGesture to regular gesture for priority
-  - Added haptic feedback during resize
-  - Better min/max size limits
-
-- **Added state persistence on app minimize:**
-  - Created WorkflowStateManager service
-  - Saves workflow state when app goes to background
-  - Offers "Continue Where You Left Off?" dialog when returning
-  - State expires after 1 hour
-  - Only restores if files still exist
+**Previous Session (same day):**
+- Fixed preview showing black/blank page
+- Fixed Sign PDF stray dots (resize handles appearing elsewhere)
+- Improved Sign PDF zoom gesture
+- Added state persistence on app minimize
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
 - All fixes need user testing
 
 **Files Modified This Session:**
-- `OneBox/Modules/UIComponents/OneBoxStandard.swift` - Button opacity when disabled
-- `OneBox/OneBox/Views/JobResultView.swift` - Preview loading fixes
-- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift` - Resize handles + zoom gesture
-- `OneBox/OneBox/Views/ToolFlowView.swift` - State persistence integration
-
-**Files Created This Session:**
-- `OneBox/OneBox/Services/WorkflowStateManager.swift` - State persistence service
+- `OneBox/Modules/UIComponents/OneBoxStandard.swift` - Enhanced disabled button styling
+- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Fixed signature position and size
 
 ---
 
 ## Next Steps (Priority Order)
 
 1. **Build and test in Xcode** - Verify all changes compile
-2. **Test "Continue Securely" button** - Verify it's faded when disabled
-3. **Test preview functionality** - Check file preview works without black screen
-4. **Test Sign PDF** - Verify resize handles appear at correct positions
-5. **Test state persistence** - Minimize app during workflow, verify restore dialog appears
-6. Address Swift 6 warnings (optional, non-blocking)
+2. **Test disabled button styling** - Verify elegant muted appearance when disabled
+3. **Test Sign PDF position** - Place signature and verify it appears in correct location after processing
+4. **Test Sign PDF size** - Verify signature size matches what user intended
+5. **Test preview functionality** - Check file preview works without black screen
+6. **Test state persistence** - Minimize app during workflow, verify restore dialog appears
+7. Address Swift 6 warnings (optional, non-blocking)
 
 ---
 

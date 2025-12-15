@@ -478,13 +478,15 @@ struct SignaturePlacementOverlay: View {
                 RoundedRectangle(cornerRadius: 4)
                     .stroke(OneBoxColors.primaryGold, lineWidth: 2)
                     .frame(width: scaledSignatureWidth + 10, height: scaledSignatureHeight + 10)
-                
-                // Resize handles (corners)
+
+                // Resize handles (corners) - use offset instead of position
+                // so handles appear relative to the signature center, not absolute on page
                 ForEach(0..<4) { index in
                     Circle()
                         .fill(OneBoxColors.primaryGold)
-                        .frame(width: 12, height: 12)
-                        .position(resizeHandlePosition(for: index))
+                        .frame(width: 16, height: 16)
+                        .offset(x: resizeHandleOffset(for: index, width: scaledSignatureWidth, height: scaledSignatureHeight).x,
+                                y: resizeHandleOffset(for: index, width: scaledSignatureWidth, height: scaledSignatureHeight).y)
                 }
             }
         }
@@ -524,63 +526,67 @@ struct SignaturePlacementOverlay: View {
                     }
                 }
         )
-        .simultaneousGesture(
-            // Signature resize gesture (works when signature is selected)
-            // Use simultaneousGesture so it doesn't block page zoom when signature is not selected
+        .gesture(
+            // Signature resize gesture (only works when signature is selected)
+            // Use regular gesture (not simultaneous) so it takes priority when selected
             MagnificationGesture()
                 .onChanged { value in
-                    if isSelected {
-                        // Calculate scale relative to original placement size
-                        let scale = value
-                        let newWidth = placement.size.width * scale
-                        let newHeight = placement.size.height * scale
-                        
-                        // Clamp size - larger range for better usability
-                        let minSize: CGFloat = 80
-                        let maxSize: CGFloat = 800
-                        currentSize = CGSize(
-                            width: max(minSize, min(maxSize, newWidth)),
-                            height: max(minSize, min(maxSize, newHeight))
-                        )
+                    guard isSelected else { return }
+                    // Calculate scale relative to current size for smoother interaction
+                    let scale = value
+                    let newWidth = placement.size.width * scale
+                    let newHeight = placement.size.height * scale
+
+                    // Clamp size - larger range for better usability
+                    let minSize: CGFloat = 60
+                    let maxSize: CGFloat = 600
+                    currentSize = CGSize(
+                        width: max(minSize, min(maxSize, newWidth)),
+                        height: max(minSize, min(maxSize, newHeight))
+                    )
+                    // Haptic feedback during resize
+                    if abs(scale - lastMagnification) > 0.1 {
+                        HapticManager.shared.impact(.light)
+                        lastMagnification = scale
                     }
                 }
                 .onEnded { finalValue in
-                    if isSelected {
-                        // Calculate final size based on original placement size
-                        let finalWidth = placement.size.width * finalValue
-                        let finalHeight = placement.size.height * finalValue
-                        
-                        // Clamp and update - larger range for better usability
-                        let minSize: CGFloat = 80
-                        let maxSize: CGFloat = 800
-                        let finalSize = CGSize(
-                            width: max(minSize, min(maxSize, finalWidth)),
-                            height: max(minSize, min(maxSize, finalHeight))
-                        )
-                        
-                        var updated = placement
-                        updated.size = finalSize
-                        onUpdate(updated)
-                        
-                        // Update tracking variables
-                        currentSize = finalSize
-                        lastScale = finalValue
-                    }
+                    guard isSelected else { return }
+                    // Calculate final size based on original placement size
+                    let finalWidth = placement.size.width * finalValue
+                    let finalHeight = placement.size.height * finalValue
+
+                    // Clamp and update
+                    let minSize: CGFloat = 60
+                    let maxSize: CGFloat = 600
+                    let finalSize = CGSize(
+                        width: max(minSize, min(maxSize, finalWidth)),
+                        height: max(minSize, min(maxSize, finalHeight))
+                    )
+
+                    var updated = placement
+                    updated.size = finalSize
+                    onUpdate(updated)
+
+                    // Update tracking variables
+                    currentSize = finalSize
+                    lastScale = finalValue
+                    lastMagnification = 1.0
+                    HapticManager.shared.impact(.medium)
                 }
         )
     }
     
-    private func resizeHandlePosition(for index: Int) -> CGPoint {
-        let scaledWidth = currentSize.width * pdfScale
-        let scaledHeight = currentSize.height * pdfScale
-        let halfWidth = scaledWidth / 2 + 5
-        let halfHeight = scaledHeight / 2 + 5
-        
+    // Calculate offset for resize handles relative to signature center
+    private func resizeHandleOffset(for index: Int, width: CGFloat, height: CGFloat) -> CGPoint {
+        let halfWidth = width / 2 + 5
+        let halfHeight = height / 2 + 5
+
         switch index {
         case 0: return CGPoint(x: -halfWidth, y: -halfHeight) // Top-left
         case 1: return CGPoint(x: halfWidth, y: -halfHeight)  // Top-right
-        case 2: return CGPoint(x: -halfWidth, y: halfHeight) // Bottom-left
-        case 3: return CGPoint(x: halfWidth, y: halfHeight)  // Bottom-right
+        case 2: return CGPoint(x: -halfWidth, y: halfHeight)  // Bottom-left
+        case 3: return CGPoint(x: halfWidth, y: halfHeight)   // Bottom-right
         default: return .zero
         }
     }

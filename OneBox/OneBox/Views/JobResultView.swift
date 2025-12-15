@@ -553,37 +553,48 @@ struct QuickLookPreview: UIViewControllerRepresentable {
         }
 
         func numberOfPreviewItems(in controller: QLPreviewController) -> Int {
+            // Always return 1 - we'll provide a fallback in previewItemAt if needed
             // If preview item is nil, try to create it with retry logic
             if previewItem == nil && retryCount < maxRetries {
                 retryCount += 1
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                     guard let self = self else { return }
                     self.previewItem = self.createPreviewItem(from: self.currentURL)
                     controller.reloadData()
                 }
             }
-            return previewItem != nil ? 1 : 0
+            return 1
         }
 
         func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
-            // If still no preview item after retries, return URL directly as fallback
-            guard let item = previewItem else {
-                print("⚠️ No preview item available after \(retryCount) retries, using URL directly")
-                return currentURL as QLPreviewItem
-            }
-            
-            // Verify the preview item URL is still accessible
-            if let previewURL = item.previewItemURL,
-               !FileManager.default.fileExists(atPath: previewURL.path) {
-                print("⚠️ Preview file no longer exists, recreating...")
-                self.previewItem = createPreviewItem(from: currentURL)
-                if let newItem = self.previewItem {
-                    return newItem
+            // Try to use existing preview item first
+            if let item = previewItem {
+                // Verify the preview item URL is still accessible
+                if let previewURL = item.previewItemURL,
+                   FileManager.default.fileExists(atPath: previewURL.path) {
+                    print("✅ QuickLook Preview loaded successfully")
+                    return item
+                } else {
+                    print("⚠️ Preview file no longer exists, recreating...")
+                    self.previewItem = createPreviewItem(from: currentURL)
+                    if let newItem = self.previewItem {
+                        return newItem
+                    }
                 }
             }
-            
-            print("✅ QuickLook Preview loaded successfully")
-            return item
+
+            // Fallback: try to create preview item one more time
+            if let newItem = createPreviewItem(from: currentURL) {
+                self.previewItem = newItem
+                print("✅ QuickLook Preview created on fallback")
+                return newItem
+            }
+
+            // Last resort: return URL directly (QuickLook can sometimes handle this)
+            print("⚠️ No preview item available, using URL directly: \(currentURL.path)")
+            // Ensure we have security-scoped access
+            _ = currentURL.startAccessingSecurityScopedResource()
+            return currentURL as QLPreviewItem
         }
         
         private func createPreviewItem(from sourceURL: URL) -> QuickLookPreviewItem? {

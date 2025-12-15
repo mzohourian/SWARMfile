@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-08
+**Last Updated:** 2025-12-15
 
 ## What This Is
 **OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -75,44 +75,58 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2025-12-08 (continued session)
+**Date:** 2025-12-15
 
 **What Was Done:**
-- **Added swipe-to-select in Page Organizer (iOS Photos-like):**
-  - Swipe across pages to select/deselect multiple at once
-  - First page touched determines mode (select or deselect)
-  - Haptic feedback on each page touched
-  - Only activates when starting on a cell (preserves scrolling)
-  - Uses PreferenceKey system for cell frame tracking
+- **Fixed "Continue Securely" button visual state:**
+  - Added opacity 0.4 when disabled so button appears faded
+  - User can now clearly see when button is not yet available
 
-- **Fixed RedactionView failing to load PDF in workflow:**
-  - Added retry logic (3 attempts, 0.5s delay each)
-  - Fixed security-scoped resource management in WorkflowConciergeView
-  - Keep security access open for fallback URLs if temp copy fails
-  - Release access only when workflow finishes
+- **Fixed preview showing black/blank page:**
+  - QuickLookPreview now always returns 1 item (not 0)
+  - Added fallback logic to always return valid preview item
+  - Improved file accessibility handling
 
-- **Fixed redaction analysis not triggering:**
-  - Removed broken `onChange(of: pdfDocument)` - PDFDocument doesn't conform to Equatable
-  - Now calls `performSensitiveDataAnalysis()` directly when PDF loads successfully
+- **Fixed Sign PDF stray dots (resize handles appearing elsewhere):**
+  - Changed from `.position()` to `.offset()` for resize handles
+  - Handles now appear correctly at signature corners
+  - Increased handle size for better touch targets
+
+- **Improved Sign PDF zoom gesture:**
+  - Changed from simultaneousGesture to regular gesture for priority
+  - Added haptic feedback during resize
+  - Better min/max size limits
+
+- **Added state persistence on app minimize:**
+  - Created WorkflowStateManager service
+  - Saves workflow state when app goes to background
+  - Offers "Continue Where You Left Off?" dialog when returning
+  - State expires after 1 hour
+  - Only restores if files still exist
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
-- Swipe-to-select needs user testing for feel/responsiveness
+- All fixes need user testing
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/PageOrganizerView.swift` - Swipe-to-select gesture
-- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Fixed security-scoped resource management
-- `OneBox/OneBox/Views/RedactionView.swift` - Fixed PDF loading retry + analysis trigger
+- `OneBox/Modules/UIComponents/OneBoxStandard.swift` - Button opacity when disabled
+- `OneBox/OneBox/Views/JobResultView.swift` - Preview loading fixes
+- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift` - Resize handles + zoom gesture
+- `OneBox/OneBox/Views/ToolFlowView.swift` - State persistence integration
+
+**Files Created This Session:**
+- `OneBox/OneBox/Services/WorkflowStateManager.swift` - State persistence service
 
 ---
 
 ## Next Steps (Priority Order)
 
 1. **Build and test in Xcode** - Verify all changes compile
-2. **Test workflow with interactive steps** - Create a workflow with Organize/Sign and verify they open existing views
-3. **Verify workflow chaining** - Test that automated steps run correctly after interactive steps complete
-4. **Test Redact PDF** - Verify file saving/sharing works correctly
-5. Address Swift 6 warnings (optional, non-blocking)
+2. **Test "Continue Securely" button** - Verify it's faded when disabled
+3. **Test preview functionality** - Check file preview works without black screen
+4. **Test Sign PDF** - Verify resize handles appear at correct positions
+5. **Test state persistence** - Minimize app during workflow, verify restore dialog appears
+6. Address Swift 6 warnings (optional, non-blocking)
 
 ---
 

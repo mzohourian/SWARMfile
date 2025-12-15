@@ -266,7 +266,7 @@ public struct OneBoxButton: View {
                     Image(systemName: icon)
                         .font(.system(size: 16, weight: .medium))
                 }
-                
+
                 Text(title)
                     .font(OneBoxTypography.body)
                     .fontWeight(.medium)
@@ -276,6 +276,7 @@ public struct OneBoxButton: View {
             .padding(.vertical, OneBoxSpacing.small)
             .background(backgroundView)
             .cornerRadius(OneBoxRadius.button)
+            .opacity(isDisabled ? 0.4 : 1.0)
         }
         .buttonStyle(OneBoxButtonStyle(style: style))
         .disabled(isDisabled)

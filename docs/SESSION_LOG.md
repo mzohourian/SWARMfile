@@ -4,6 +4,61 @@
 
 ---
 
+## 2025-12-15: UX Fixes & State Persistence
+
+**Issues Reported:**
+1. "Continue Securely" button selectable when it should be disabled/faded
+2. Preview shows black/blank page instead of actual file
+3. Sign PDF has stray dots (resize handles) appearing in wrong positions
+4. Sign PDF zoom gesture hard to use
+5. User loses work when minimizing the app
+
+**Fixes Applied:**
+
+**1. Continue Securely Button Visual State**
+- File: `OneBox/Modules/UIComponents/OneBoxStandard.swift`
+- Added `.opacity(isDisabled ? 0.4 : 1.0)` to OneBoxButton
+- Button now visually fades when disabled
+
+**2. Preview Black Page Fix**
+- File: `OneBox/OneBox/Views/JobResultView.swift`
+- Fixed `numberOfPreviewItems` to always return 1 (not 0)
+- Added fallback logic in `previewItemAt` to always return a valid item
+- Improved file accessibility handling with retry logic
+
+**3. Sign PDF Resize Handles (Stray Dots)**
+- File: `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift`
+- Root cause: `.position()` placed handles absolutely in coordinate space
+- Fix: Changed to `.offset()` so handles appear relative to signature center
+- Increased handle size from 12 to 16 for better touch targets
+
+**4. Sign PDF Zoom Gesture**
+- File: `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift`
+- Changed from `simultaneousGesture` to regular `gesture` for priority
+- Added haptic feedback during resize for better user feedback
+- Reduced min/max size range for more reasonable zoom limits
+
+**5. State Persistence on App Minimize**
+- Created: `OneBox/OneBox/Services/WorkflowStateManager.swift`
+- File: `OneBox/OneBox/Views/ToolFlowView.swift`
+- Saves workflow state when app goes to background
+- Offers to restore when user returns to the same tool
+- State expires after 1 hour
+- Only restores if selected files still exist
+
+**Files Modified:**
+- `OneBox/Modules/UIComponents/OneBoxStandard.swift`
+- `OneBox/OneBox/Views/JobResultView.swift`
+- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift`
+- `OneBox/OneBox/Views/ToolFlowView.swift`
+
+**Files Created:**
+- `OneBox/OneBox/Services/WorkflowStateManager.swift`
+
+**Status:** Needs user testing
+
+---
+
 ## 2025-12-08: Page Organizer & Redaction Fixes
 
 **Features Added:**

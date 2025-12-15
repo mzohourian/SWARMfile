@@ -26,6 +26,7 @@ struct InteractivePDFPageView: View {
     @State private var lastOffset: CGSize = .zero
     @State private var viewSize: CGSize = .zero
     @State private var initialFitScale: CGFloat = 1.0 // Store the initial fit scale
+    @State private var signatureResizeScale: CGFloat = 1.0 // Track signature resize during gesture
 
     // Calculate the PDF page's display rectangle within the view
     private func pdfDisplayRect(in viewSize: CGSize) -> CGRect {
@@ -96,6 +97,7 @@ struct InteractivePDFPageView: View {
                         pdfScale: scale,
                         pdfOffset: offset,
                         isSelected: selectedPlacement?.id == placement.id,
+                        activeResizeScale: selectedPlacement?.id == placement.id ? signatureResizeScale : 1.0,
                         onTap: {
                             onPlacementTap(placement)
                         },
@@ -173,24 +175,46 @@ struct InteractivePDFPageView: View {
         }
     }
     
-    // Page zoom gesture - only active when NO signature is selected
-    // This prevents gesture conflicts between page zoom and signature resize
+    // Universal pinch gesture - works anywhere on screen
+    // When signature is selected: resizes the signature
+    // When no signature selected: zooms the page
     private var pageZoomGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
-                // Only zoom page if no signature is selected
-                guard selectedPlacement == nil else { return }
-                let newScale = lastScale * value
-                // Allow zoom from 2% (very small) to 500% (5x)
-                scale = min(max(newScale, 0.02), 5.0)
+                if let selected = selectedPlacement {
+                    // Resize the selected signature
+                    signatureResizeScale = value
+                    // Provide haptic feedback at certain thresholds
+                    if abs(value - 1.0) > 0.1 {
+                        HapticManager.shared.impact(.light)
+                    }
+                } else {
+                    // Zoom the page
+                    let newScale = lastScale * value
+                    scale = min(max(newScale, 0.02), 5.0)
+                }
             }
             .onEnded { value in
-                // Only zoom page if no signature is selected
-                guard selectedPlacement == nil else { return }
-                let finalScale = lastScale * value
-                scale = min(max(finalScale, 0.02), 5.0)
-                lastScale = scale
-                lastOffset = offset
+                if let selected = selectedPlacement {
+                    // Apply final size to signature
+                    let minSize: CGFloat = 40
+                    let maxSize: CGFloat = 600
+                    let newWidth = max(minSize, min(maxSize, selected.size.width * value))
+                    let newHeight = max(minSize, min(maxSize, selected.size.height * value))
+
+                    var updated = selected
+                    updated.size = CGSize(width: newWidth, height: newHeight)
+                    onPlacementUpdate?(updated)
+
+                    signatureResizeScale = 1.0
+                    HapticManager.shared.impact(.medium)
+                } else {
+                    // Finalize page zoom
+                    let finalScale = lastScale * value
+                    scale = min(max(finalScale, 0.02), 5.0)
+                    lastScale = scale
+                    lastOffset = offset
+                }
             }
     }
 
@@ -400,27 +424,24 @@ struct SignaturePlacementOverlay: View {
     let pdfScale: CGFloat
     let pdfOffset: CGSize
     let isSelected: Bool
+    let activeResizeScale: CGFloat  // Scale from parent's pinch gesture for visual feedback
     let onTap: () -> Void
     let onUpdate: (SignaturePlacement) -> Void
-    
-    @State private var currentSize: CGSize
+
     @State private var currentPosition: CGPoint
-    @State private var lastMagnification: CGFloat = 1.0
     @State private var dragOffset: CGSize = .zero
-    @State private var lastScale: CGFloat = 1.0
-    
-    init(placement: SignaturePlacement, pageBounds: CGRect, geometry: GeometryProxy, pdfScale: CGFloat, pdfOffset: CGSize, isSelected: Bool, onTap: @escaping () -> Void, onUpdate: @escaping (SignaturePlacement) -> Void) {
+
+    init(placement: SignaturePlacement, pageBounds: CGRect, geometry: GeometryProxy, pdfScale: CGFloat, pdfOffset: CGSize, isSelected: Bool, activeResizeScale: CGFloat = 1.0, onTap: @escaping () -> Void, onUpdate: @escaping (SignaturePlacement) -> Void) {
         self.placement = placement
         self.pageBounds = pageBounds
         self.geometry = geometry
         self.pdfScale = pdfScale
         self.pdfOffset = pdfOffset
         self.isSelected = isSelected
+        self.activeResizeScale = activeResizeScale
         self.onTap = onTap
         self.onUpdate = onUpdate
-        _currentSize = State(initialValue: placement.size)
         _currentPosition = State(initialValue: placement.position)
-        _lastScale = State(initialValue: 1.0)
     }
     
     // Calculate the PDF page's display rectangle within the view
@@ -447,11 +468,11 @@ struct SignaturePlacementOverlay: View {
             y: baseScreenPos.y + dragOffset.height
         )
 
-        // Signature size - use placement size directly (it's already in screen pixels)
-        let baseWidth = currentSize.width
-        let baseHeight = currentSize.height
-        let scaledSignatureWidth = max(80, baseWidth)
-        let scaledSignatureHeight = max(40, baseHeight)
+        // Signature size - apply activeResizeScale for live visual feedback during pinch
+        let baseWidth = placement.size.width * activeResizeScale
+        let baseHeight = placement.size.height * activeResizeScale
+        let scaledSignatureWidth = max(40, baseWidth)
+        let scaledSignatureHeight = max(20, baseHeight)
         
         ZStack {
             if case .image(let data) = placement.signatureData {
@@ -548,55 +569,8 @@ struct SignaturePlacementOverlay: View {
                     }
                 }
         )
-        .gesture(
-            // Signature resize gesture (only works when signature is selected)
-            // Use regular gesture (not simultaneous) so it takes priority when selected
-            MagnificationGesture()
-                .onChanged { value in
-                    guard isSelected else { return }
-                    // Calculate scale relative to current size for smoother interaction
-                    let scale = value
-                    let newWidth = placement.size.width * scale
-                    let newHeight = placement.size.height * scale
-
-                    // Clamp size - larger range for better usability
-                    let minSize: CGFloat = 60
-                    let maxSize: CGFloat = 600
-                    currentSize = CGSize(
-                        width: max(minSize, min(maxSize, newWidth)),
-                        height: max(minSize, min(maxSize, newHeight))
-                    )
-                    // Haptic feedback during resize
-                    if abs(scale - lastMagnification) > 0.1 {
-                        HapticManager.shared.impact(.light)
-                        lastMagnification = scale
-                    }
-                }
-                .onEnded { finalValue in
-                    guard isSelected else { return }
-                    // Calculate final size based on original placement size
-                    let finalWidth = placement.size.width * finalValue
-                    let finalHeight = placement.size.height * finalValue
-
-                    // Clamp and update
-                    let minSize: CGFloat = 60
-                    let maxSize: CGFloat = 600
-                    let finalSize = CGSize(
-                        width: max(minSize, min(maxSize, finalWidth)),
-                        height: max(minSize, min(maxSize, finalHeight))
-                    )
-
-                    var updated = placement
-                    updated.size = finalSize
-                    onUpdate(updated)
-
-                    // Update tracking variables
-                    currentSize = finalSize
-                    lastScale = finalValue
-                    lastMagnification = 1.0
-                    HapticManager.shared.impact(.medium)
-                }
-        )
+        // Note: Magnification gesture for resizing is handled at the page level
+        // This allows pinch-to-resize to work anywhere on screen when signature is selected
     }
     
     // Calculate offset for resize handles relative to signature center

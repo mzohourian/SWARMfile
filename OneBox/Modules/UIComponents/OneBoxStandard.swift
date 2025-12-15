@@ -276,10 +276,10 @@ public struct OneBoxButton: View {
             .padding(.vertical, OneBoxSpacing.small)
             .background(backgroundView)
             .cornerRadius(OneBoxRadius.button)
-            .opacity(isDisabled ? 0.4 : 1.0)
         }
         .buttonStyle(OneBoxButtonStyle(style: style))
         .disabled(isDisabled)
+        .opacity(isDisabled ? 0.4 : 1.0)
     }
     
     private var textColor: Color {

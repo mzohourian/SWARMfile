@@ -78,51 +78,47 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-15
 
 **What Was Done:**
-- **Complete signature system overhaul (3 root cause fixes):**
+- **Complete signature coordinate system fix:**
+  - **Root cause found:** Signature position was relative to VIEW, not PDF PAGE
+  - The PDF page is centered within the view with margins
+  - Tapping at "center" of view was not "center" of PDF page!
 
-  1. **Position Fix - Removed double Y inversion:**
-     - Y coordinate was being inverted TWICE (in processSignatures AND in CorePDF)
-     - Removed the redundant inversion - CorePDF already handles coordinate conversion
-     - Signature now appears exactly where user taps
+  1. **Position Fix - PDF-relative coordinates:**
+     - Added `pdfDisplayRect()` function to calculate PDF page rectangle within view
+     - All tap positions now normalized relative to PDF page, not view
+     - Signature overlay also positions relative to PDF page
+     - Drag updates use PDF-relative coordinates
 
-  2. **Size Fix - Use actual view width:**
-     - Added `viewWidthAtPlacement` to SignaturePlacement model
-     - Stores the actual view width when signature is placed
-     - Size ratio now calculated accurately regardless of device size
-     - Increased clamp range (0.1 to 0.8) for better flexibility
+  2. **Size Fix - Use PDF display width:**
+     - Pass actual PDF display width (not view width) for size calculation
+     - Size ratio now matches visual proportion on PDF page
 
-  3. **Zoom Fix - Eliminated gesture conflicts:**
-     - Extracted page zoom into dedicated `pageZoomGesture` computed property
-     - Page zoom only activates when NO signature is selected
-     - Signature resize works without interference when signature IS selected
-     - Removed `simultaneousGesture` that was causing erratic behavior
+  3. **Zoom out limit increased:**
+     - Changed minimum zoom from 0.1 (10%) to 0.02 (2%)
+     - User can now zoom out much more
 
-- **Enhanced disabled button aesthetics** (earlier this session)
+  4. **Added Unselect button:**
+     - New "Unselect" button appears when signature is selected
+     - Allows easy deselection without tapping elsewhere
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
-- All fixes need user testing
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Models/SignaturePlacement.swift` - Added viewWidthAtPlacement property
-- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Fixed position, size, callback
-- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift` - Fixed gestures, pass view width
-- `OneBox/Modules/UIComponents/OneBoxStandard.swift` - Enhanced disabled button styling
+- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift` - PDF-relative coordinates
+- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Added unselect button
 
 ---
 
 ## Next Steps (Priority Order)
 
 1. **Build and test in Xcode** - Verify all changes compile
-2. **Test Sign PDF feature thoroughly:**
-   - Place signature at different positions (corners, center, edges)
-   - Verify position matches where you tapped
-   - Resize signature and verify final size matches
-   - Test zoom without signature selected (should work)
-   - Test zoom with signature selected (should NOT zoom page)
-3. **Test disabled button styling** - Verify elegant muted appearance
-4. **Test preview functionality** - Check file preview works
-5. **Test state persistence** - Minimize app, verify restore dialog
+2. **Test Sign PDF feature:**
+   - Place signature and verify it appears at exact tap location in final PDF
+   - Verify size matches what you see on screen
+   - Test zoom out (should go very small now)
+   - Test unselect button
+3. **Test other features** - Button styling, preview, state persistence
 
 ---
 

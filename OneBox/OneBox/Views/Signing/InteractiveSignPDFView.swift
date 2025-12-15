@@ -219,15 +219,34 @@ struct InteractiveSignPDFView: View {
             Divider()
                 .background(OneBoxColors.surfaceGraphite)
             
-            // Mode indicator
+            // Mode indicator with unselect button
             if selectedPlacement != nil {
                 HStack {
                     Image(systemName: "hand.draw")
                         .font(.caption)
                         .foregroundColor(OneBoxColors.primaryGold)
-                    Text("Signature selected - Drag to move, pinch to resize")
+                    Text("Selected - Drag to move, pinch to resize")
                         .font(OneBoxTypography.caption)
                         .foregroundColor(OneBoxColors.secondaryText)
+
+                    Spacer()
+
+                    Button(action: {
+                        selectedPlacement = nil
+                        HapticManager.shared.selection()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.caption)
+                            Text("Unselect")
+                                .font(OneBoxTypography.caption)
+                        }
+                        .foregroundColor(OneBoxColors.primaryGold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(OneBoxColors.primaryGold.opacity(0.2))
+                        .cornerRadius(OneBoxRadius.small)
+                    }
                 }
                 .padding(.horizontal, OneBoxSpacing.medium)
                 .padding(.vertical, OneBoxSpacing.tiny)

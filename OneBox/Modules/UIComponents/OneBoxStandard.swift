@@ -274,7 +274,7 @@ public struct OneBoxButton: View {
             .foregroundColor(isDisabled ? disabledTextColor : textColor)
             .padding(.horizontal, OneBoxSpacing.medium)
             .padding(.vertical, OneBoxSpacing.small)
-            .background(isDisabled ? disabledBackgroundView : backgroundView)
+            .background(buttonBackground)
             .cornerRadius(OneBoxRadius.button)
             .overlay(
                 RoundedRectangle(cornerRadius: OneBoxRadius.button)
@@ -287,13 +287,17 @@ public struct OneBoxButton: View {
         .animation(.easeInOut(duration: 0.2), value: isDisabled)
     }
 
-    private var disabledTextColor: Color {
-        OneBoxColors.tertiaryText
+    @ViewBuilder
+    private var buttonBackground: some View {
+        if isDisabled {
+            OneBoxColors.surfaceGraphite.opacity(0.5)
+        } else {
+            backgroundView
+        }
     }
 
-    @ViewBuilder
-    private var disabledBackgroundView: some View {
-        OneBoxColors.surfaceGraphite.opacity(0.5)
+    private var disabledTextColor: Color {
+        OneBoxColors.tertiaryText
     }
     
     private var textColor: Color {

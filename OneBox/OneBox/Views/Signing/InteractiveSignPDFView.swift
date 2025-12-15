@@ -56,8 +56,8 @@ struct InteractiveSignPDFView: View {
                             pageBounds: pageBounds,
                             detectedFields: pageFields,
                             placements: pagePlacements,
-                            onTap: { point in
-                                handlePageTap(at: point, in: pageBounds)
+                            onTap: { point, viewWidth in
+                                handlePageTap(at: point, in: pageBounds, viewWidth: viewWidth)
                             },
                             onPlacementTap: { placement in
                                 // Toggle selection - if same placement, deselect
@@ -418,7 +418,7 @@ struct InteractiveSignPDFView: View {
         }
     }
     
-    private func handlePageTap(at point: CGPoint, in pageBounds: CGRect) {
+    private func handlePageTap(at point: CGPoint, in pageBounds: CGRect, viewWidth: CGFloat) {
         // Use current signature or load saved one
         let signatureToUse: SignatureData
         if let current = currentSignatureData {
@@ -430,13 +430,14 @@ struct InteractiveSignPDFView: View {
             // No signature ready - show alert or create one
             return
         }
-        
-        // Create placement at tap location
+
+        // Create placement at tap location with actual view width for accurate size calculation
         let placement = SignaturePlacement(
             pageIndex: currentPageIndex,
             position: point,
             size: placementSize,
-            signatureData: signatureToUse
+            signatureData: signatureToUse,
+            viewWidthAtPlacement: viewWidth
         )
         
         signaturePlacements.append(placement)
@@ -483,25 +484,22 @@ struct InteractiveSignPDFView: View {
         
         // Calculate signature size as a ratio of page width (must be between 0.0 and 1.0)
         // The placement size is in screen pixels (e.g., 300x120)
-        // The signature is displayed on a view that fits the PDF page
-        // So we need to calculate: (signature screen size) / (view width) ≈ ratio of page
-        // Since we don't have exact view width, use a typical iOS screen width (~390-430 for iPhones)
-        // This gives us the ratio of screen the signature takes up, which equals the ratio of PDF page
+        // Use the actual view width stored at placement time for accurate calculation
         let signatureWidthInPixels = firstPlacement.size.width
-        let estimatedViewWidth: CGFloat = 400.0 // Typical view width for PDF display
+        let actualViewWidth = firstPlacement.viewWidthAtPlacement
         let calculatedSize: Double
 
-        if signatureWidthInPixels > 0 {
-            // Calculate as ratio of estimated view width
-            // This gives us the visual proportion the user intended
-            let sizeRatio = Double(signatureWidthInPixels) / Double(estimatedViewWidth)
+        if signatureWidthInPixels > 0 && actualViewWidth > 0 {
+            // Calculate as ratio of actual view width at placement time
+            // This gives us the exact visual proportion the user created
+            let sizeRatio = Double(signatureWidthInPixels) / Double(actualViewWidth)
             calculatedSize = sizeRatio
         } else {
             calculatedSize = 0.25 // Safe default (1/4 of page width)
         }
 
-        // Clamp size to reasonable range (0.1 to 0.6 of page width)
-        let signatureSize = max(0.1, min(0.6, calculatedSize))
+        // Clamp size to reasonable range (0.1 to 0.8 of page width)
+        let signatureSize = max(0.1, min(0.8, calculatedSize))
         
         // Validate signature data
         var settings = JobSettings()
@@ -530,11 +528,11 @@ struct InteractiveSignPDFView: View {
         }
         
         // Validate position is within bounds (0.0 to 1.0)
-        // IMPORTANT: Invert Y coordinate because screen has Y=0 at TOP, but PDF has Y=0 at BOTTOM
-        // Screen position 0.8 (80% from top = near bottom) should become PDF position 0.2 (20% from bottom = near bottom)
+        // NOTE: Do NOT invert Y here - CorePDF already handles the coordinate system conversion
+        // from screen coordinates (Y=0 at top) to PDF coordinates (Y=0 at bottom)
         let clampedPosition = CGPoint(
             x: max(0.0, min(1.0, firstPlacement.position.x)),
-            y: max(0.0, min(1.0, 1.0 - firstPlacement.position.y))
+            y: max(0.0, min(1.0, firstPlacement.position.y))
         )
         
         // Validate page index

@@ -78,49 +78,51 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-15
 
 **What Was Done:**
-- **Enhanced disabled button aesthetics:**
-  - Replaced simple opacity with elegant disabled state
-  - Uses muted background color (surfaceGraphite at 50% opacity)
-  - Uses muted text color (tertiaryText)
-  - Adds subtle border to maintain button shape
-  - Applies desaturation (saturation: 0.3) for professional look
-  - Smooth animation transition between enabled/disabled states
+- **Complete signature system overhaul (3 root cause fixes):**
 
-- **Fixed signature position mismatch (appears in wrong location):**
-  - Inverted Y coordinate when processing signatures for PDF
-  - Screen has Y=0 at top, PDF has Y=0 at bottom - now correctly converted
-  - Signature now appears where user actually placed it
+  1. **Position Fix - Removed double Y inversion:**
+     - Y coordinate was being inverted TWICE (in processSignatures AND in CorePDF)
+     - Removed the redundant inversion - CorePDF already handles coordinate conversion
+     - Signature now appears exactly where user taps
 
-- **Fixed signature size mismatch (appears different size):**
-  - Improved size calculation to use screen-relative ratio
-  - Uses estimated view width (400px) to calculate intended proportion
-  - Increased size clamp range (0.1 to 0.6) for better flexibility
+  2. **Size Fix - Use actual view width:**
+     - Added `viewWidthAtPlacement` to SignaturePlacement model
+     - Stores the actual view width when signature is placed
+     - Size ratio now calculated accurately regardless of device size
+     - Increased clamp range (0.1 to 0.8) for better flexibility
 
-**Previous Session (same day):**
-- Fixed preview showing black/blank page
-- Fixed Sign PDF stray dots (resize handles appearing elsewhere)
-- Improved Sign PDF zoom gesture
-- Added state persistence on app minimize
+  3. **Zoom Fix - Eliminated gesture conflicts:**
+     - Extracted page zoom into dedicated `pageZoomGesture` computed property
+     - Page zoom only activates when NO signature is selected
+     - Signature resize works without interference when signature IS selected
+     - Removed `simultaneousGesture` that was causing erratic behavior
+
+- **Enhanced disabled button aesthetics** (earlier this session)
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
 - All fixes need user testing
 
 **Files Modified This Session:**
+- `OneBox/OneBox/Models/SignaturePlacement.swift` - Added viewWidthAtPlacement property
+- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Fixed position, size, callback
+- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift` - Fixed gestures, pass view width
 - `OneBox/Modules/UIComponents/OneBoxStandard.swift` - Enhanced disabled button styling
-- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Fixed signature position and size
 
 ---
 
 ## Next Steps (Priority Order)
 
 1. **Build and test in Xcode** - Verify all changes compile
-2. **Test disabled button styling** - Verify elegant muted appearance when disabled
-3. **Test Sign PDF position** - Place signature and verify it appears in correct location after processing
-4. **Test Sign PDF size** - Verify signature size matches what user intended
-5. **Test preview functionality** - Check file preview works without black screen
-6. **Test state persistence** - Minimize app during workflow, verify restore dialog appears
-7. Address Swift 6 warnings (optional, non-blocking)
+2. **Test Sign PDF feature thoroughly:**
+   - Place signature at different positions (corners, center, edges)
+   - Verify position matches where you tapped
+   - Resize signature and verify final size matches
+   - Test zoom without signature selected (should work)
+   - Test zoom with signature selected (should NOT zoom page)
+3. **Test disabled button styling** - Verify elegant muted appearance
+4. **Test preview functionality** - Check file preview works
+5. **Test state persistence** - Minimize app, verify restore dialog
 
 ---
 

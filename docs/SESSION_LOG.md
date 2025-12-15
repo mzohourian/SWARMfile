@@ -4,44 +4,75 @@
 
 ---
 
-## 2025-12-15: Button Aesthetics & Signature Position Fixes (Continued)
+## 2025-12-15: Complete Signature System Overhaul
 
 **Issues Reported:**
-1. Disabled button opacity looks harsh - needs aesthetic improvement
-2. Signature appears in different position than where user placed it
-3. Signature size doesn't match what user expected
+1. Signature appears in wrong position (not where user placed it)
+2. Signature size doesn't match what user created
+3. Zoom in/out is erratic and annoying - on and off behavior
 
-**Root Causes & Fixes:**
+**Deep Analysis - Root Causes Identified:**
 
-**1. Disabled Button Aesthetics**
-- File: `OneBox/Modules/UIComponents/OneBoxStandard.swift`
-- Old approach: Simple `.opacity(isDisabled ? 0.4 : 1.0)` looked harsh
-- New approach: Elegant disabled state with multiple visual cues:
-  - Muted background color (surfaceGraphite at 50% opacity)
-  - Muted text color (tertiaryText instead of bright colors)
-  - Subtle border to maintain button shape visibility
-  - Desaturation effect (saturation: 0.3) for professional appearance
-  - Smooth animation when transitioning between states
+**1. Position Bug - Double Y Inversion**
+- Data flow traced: User tap → normalize → store → process → CorePDF
+- Found Y coordinate was inverted TWICE:
+  - Once in `processSignatures()`: `y: 1.0 - position.y`
+  - Again in CorePDF: `bounds.height * (1.0 - clampedY)`
+- Result: Position ended up nearly correct but inverted from intended
 
-**2. Signature Position Mismatch**
-- File: `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift`
-- Root cause: Y coordinate NOT inverted when passing to CorePDF
-- Screen coordinates have Y=0 at TOP, PDF coordinates have Y=0 at BOTTOM
-- Fix: Invert Y when creating signature position: `y: 1.0 - firstPlacement.position.y`
-- Now signature appears exactly where user placed it
+**2. Size Bug - Hardcoded View Width**
+- Size calculation used hardcoded `estimatedViewWidth = 400.0`
+- Actual view width varies by device (iPhone SE: ~375, iPad: ~800+)
+- A 300px signature on a 500px view = 60%, but calculated as 75% (300/400)
 
-**3. Signature Size Mismatch**
-- File: `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift`
-- Root cause: Size calculation used raw PDF page width instead of screen-relative ratio
-- Old approach: `signatureWidth / pageWidth` (comparing screen pixels to PDF points)
-- Fix: Use screen-relative ratio with estimated view width (400px)
-- Result: Signature size now matches visual proportion user created
+**3. Zoom Bug - simultaneousGesture Conflict**
+- Page zoom used `simultaneousGesture(MagnificationGesture())`
+- This allowed BOTH page zoom and signature resize to recognize simultaneously
+- The `if selectedPlacement == nil` check happened AFTER gesture started
+- Result: Unpredictable zoom behavior
+
+**Fixes Applied:**
+
+**Fix 1: Remove Double Y Inversion**
+- File: `InteractiveSignPDFView.swift:535-537`
+- Removed the Y inversion since CorePDF already handles it
+- Before: `y: 1.0 - firstPlacement.position.y`
+- After: `y: firstPlacement.position.y`
+
+**Fix 2: Store Actual View Width**
+- File: `SignaturePlacement.swift` - Added `viewWidthAtPlacement: CGFloat`
+- File: `InteractivePDFPageView.swift` - Pass `geometry.size.width` in callback
+- File: `InteractiveSignPDFView.swift` - Use stored width for ratio calculation
+- Now calculates: `signatureWidth / actualViewWidth` = accurate ratio
+
+**Fix 3: Conditional Gesture Attachment**
+- File: `InteractivePDFPageView.swift`
+- Extracted page zoom to `pageZoomGesture` computed property
+- Added early `guard selectedPlacement == nil else { return }` in gesture handlers
+- Page zoom completely ignores input when signature is selected
+
+**Files Modified:**
+- `OneBox/OneBox/Models/SignaturePlacement.swift`
+- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift`
+- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift`
+
+**Status:** Needs user testing
+
+---
+
+## 2025-12-15: Button Aesthetics Fix
+
+**Issue:** Disabled button opacity (0.4) looked harsh and unprofessional
+
+**Fix:** Enhanced disabled state with elegant visual treatment:
+- Muted background (surfaceGraphite at 50% opacity)
+- Muted text color (tertiaryText)
+- Subtle border for visibility
+- Desaturation effect (0.3)
+- Smooth animation transition
 
 **Files Modified:**
 - `OneBox/Modules/UIComponents/OneBoxStandard.swift`
-- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift`
-
-**Status:** Needs user testing
 
 ---
 

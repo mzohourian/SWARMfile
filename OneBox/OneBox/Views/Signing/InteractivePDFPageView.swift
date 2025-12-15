@@ -15,7 +15,7 @@ struct InteractivePDFPageView: View {
     let pageBounds: CGRect
     let detectedFields: [DetectedSignatureField]
     let placements: [SignaturePlacement]
-    let onTap: (CGPoint) -> Void
+    let onTap: (CGPoint, CGFloat) -> Void  // (normalizedPoint, viewWidth)
     let onPlacementTap: (SignaturePlacement) -> Void
     let onPlacementUpdate: ((SignaturePlacement) -> Void)?
     let selectedPlacement: SignaturePlacement? // Pass from parent
@@ -136,53 +136,43 @@ struct InteractivePDFPageView: View {
                                 break
                             }
                         }
-                        
+
                         if !tappedOnSignature {
-                            // If a signature is selected, deselect it first, then allow placement
-                            // This allows users to easily place multiple signatures
-                            if selectedPlacement != nil {
-                                // Deselect by tapping the same placement (parent handles toggle)
-                                // We'll create a dummy placement to trigger deselection
-                                // Actually, we should just allow placement even with selection
-                                // The new placement will become the selected one
-                            }
-                            
                             // Allow tap-to-place when scale is reasonable (within 50% threshold)
                             // This makes it easier to place signatures even when slightly zoomed
                             let scaleThreshold = abs(scale - initialFitScale) / initialFitScale
                             if scaleThreshold < 0.5 {
                                 let normalizedPoint = normalizePoint(value.location, in: geometry.size)
-                                onTap(normalizedPoint)
+                                onTap(normalizedPoint, geometry.size.width)  // Pass view width for accurate size calculation
                                 HapticManager.shared.impact(.light)
                             }
                         }
                     }
             )
-            .simultaneousGesture(
-                // Page zoom gesture (only when no signature is selected)
-                // Use simultaneousGesture so it doesn't block other gestures
-                MagnificationGesture()
-                    .onChanged { value in
-                        // Only zoom page if no signature is selected
-                        if selectedPlacement == nil {
-                            let newScale = lastScale * value
-                            scale = min(max(newScale, 0.1), 5.0) // Clamp immediately for responsive feedback
-                        }
-                    }
-                    .onEnded { value in
-                        // Only zoom page if no signature is selected
-                        if selectedPlacement == nil {
-                            let finalScale = lastScale * value
-                            // Allow zooming out below initial scale, but clamp to reasonable limits
-                            scale = min(max(finalScale, 0.1), 5.0) // Allow zoom out to 0.1x, zoom in to 5x
-                            lastScale = scale
-                            lastOffset = offset // Update last offset when zoom ends
-                        }
-                    }
-            )
+            .gesture(pageZoomGesture)
         }
     }
     
+    // Page zoom gesture - only active when NO signature is selected
+    // This prevents gesture conflicts between page zoom and signature resize
+    private var pageZoomGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                // Only zoom page if no signature is selected
+                guard selectedPlacement == nil else { return }
+                let newScale = lastScale * value
+                scale = min(max(newScale, 0.1), 5.0)
+            }
+            .onEnded { value in
+                // Only zoom page if no signature is selected
+                guard selectedPlacement == nil else { return }
+                let finalScale = lastScale * value
+                scale = min(max(finalScale, 0.1), 5.0)
+                lastScale = scale
+                lastOffset = offset
+            }
+    }
+
     private func calculateInitialScale(viewSize: CGSize) {
         guard viewSize.width > 0 && viewSize.height > 0 else { return }
         guard pageBounds.width > 0 && pageBounds.height > 0 else { return }

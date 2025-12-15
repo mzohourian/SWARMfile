@@ -469,100 +469,102 @@ struct InteractiveSignPDFView: View {
     
     private func processSignatures() {
         guard !signaturePlacements.isEmpty else { return }
-        
-        // Convert placements to job settings
-        // For now, we'll use the first placement (we'll update CorePDF to support multiple later)
-        let firstPlacement = signaturePlacements[0]
-        
-        // Get the actual page bounds for size calculation
-        guard let document = pdfDocument,
-              let page = document.page(at: firstPlacement.pageIndex) else {
-            print("❌ InteractiveSignPDF: Cannot get page for signature placement")
+        guard let document = pdfDocument else {
+            print("❌ InteractiveSignPDF: No PDF document")
             return
         }
-        
-        let pageBounds = page.bounds(for: .mediaBox)
-        let pageWidth = pageBounds.width
-        let pageHeight = pageBounds.height
-        
-        // Calculate signature size as a ratio of page width (must be between 0.0 and 1.0)
-        // The placement size is in screen pixels (e.g., 300x120), we need to normalize it to page coordinates
-        // Use a reasonable default size if calculation would be invalid
-        let signatureWidthInPoints = firstPlacement.size.width
-        let calculatedSize: Double
-        
-        if pageWidth > 0 && signatureWidthInPoints > 0 {
-            // Convert screen pixels to PDF points ratio
-            // Assume screen is roughly 400-500 points wide, so 300px signature ≈ 0.6-0.75 of screen
-            // For a typical PDF page (612 points wide), this would be roughly 0.15-0.2
-            // Use a more conservative calculation
-            let sizeRatio = Double(signatureWidthInPoints) / Double(max(pageWidth, 612.0))
-            calculatedSize = sizeRatio
-        } else {
-            calculatedSize = 0.15 // Safe default
-        }
-        
-        // Clamp size to reasonable range (0.05 to 0.5 of page width)
-        let signatureSize = max(0.05, min(0.5, calculatedSize))
-        
-        // Validate signature data
+
+        print("🔵 InteractiveSignPDF: Processing \(signaturePlacements.count) signature placements")
+
         var settings = JobSettings()
-        
-        switch firstPlacement.signatureData {
-        case .text(let text):
-            guard !text.isEmpty else {
-                print("❌ InteractiveSignPDF: Empty signature text")
-                loadError = "Signature text cannot be empty. Please create a signature first."
-                return
+
+        // Convert all placements to SignaturePlacementData for the job
+        var placementDataArray: [SignaturePlacementData] = []
+
+        for (index, placement) in signaturePlacements.enumerated() {
+            // Get page bounds for size calculation
+            guard let page = document.page(at: placement.pageIndex) else {
+                print("⚠️ InteractiveSignPDF: Cannot get page \(placement.pageIndex) for placement \(index + 1)")
+                continue
             }
-            settings.signatureText = text
-        case .image(let data):
-            guard !data.isEmpty else {
-                print("❌ InteractiveSignPDF: Empty signature image data")
-                loadError = "Signature image is empty. Please create a signature first."
-                return
+
+            let pageBounds = page.bounds(for: .mediaBox)
+            let pageWidth = pageBounds.width
+
+            // Calculate signature size as a ratio of page width
+            let signatureWidthInPoints = placement.size.width
+            let calculatedSize: Double
+            if pageWidth > 0 && signatureWidthInPoints > 0 {
+                let sizeRatio = Double(signatureWidthInPoints) / Double(max(pageWidth, 612.0))
+                calculatedSize = sizeRatio
+            } else {
+                calculatedSize = 0.15
             }
-            // Validate image can be created from data
-            guard UIImage(data: data) != nil else {
-                print("❌ InteractiveSignPDF: Invalid signature image data")
-                loadError = "Signature image is invalid. Please create a new signature."
-                return
+            let signatureSize = max(0.05, min(0.5, calculatedSize))
+
+            // Validate and clamp position
+            let clampedPosition = CGPoint(
+                x: max(0.0, min(1.0, placement.position.x)),
+                y: max(0.0, min(1.0, placement.position.y))
+            )
+
+            // Validate page index
+            guard placement.pageIndex >= 0 && placement.pageIndex < document.pageCount else {
+                print("⚠️ InteractiveSignPDF: Invalid page index \(placement.pageIndex) for placement \(index + 1)")
+                continue
             }
-            settings.signatureImageData = data
+
+            // Extract signature data
+            var signatureText: String? = nil
+            var signatureImageData: Data? = nil
+
+            switch placement.signatureData {
+            case .text(let text):
+                guard !text.isEmpty else {
+                    print("⚠️ InteractiveSignPDF: Empty signature text for placement \(index + 1)")
+                    continue
+                }
+                signatureText = text
+            case .image(let data):
+                guard !data.isEmpty, UIImage(data: data) != nil else {
+                    print("⚠️ InteractiveSignPDF: Invalid signature image for placement \(index + 1)")
+                    continue
+                }
+                signatureImageData = data
+            }
+
+            let placementData = SignaturePlacementData(
+                pageIndex: placement.pageIndex,
+                position: clampedPosition,
+                size: signatureSize,
+                signatureText: signatureText,
+                signatureImageData: signatureImageData
+            )
+            placementDataArray.append(placementData)
+
+            print("🔵 InteractiveSignPDF: Added placement \(index + 1): page \(placement.pageIndex + 1), position: \(clampedPosition), size: \(signatureSize)")
         }
-        
-        // Validate position is within bounds (0.0 to 1.0)
-        let clampedPosition = CGPoint(
-            x: max(0.0, min(1.0, firstPlacement.position.x)),
-            y: max(0.0, min(1.0, firstPlacement.position.y))
-        )
-        
-        // Validate page index
-        guard firstPlacement.pageIndex >= 0 && firstPlacement.pageIndex < (document.pageCount) else {
-            print("❌ InteractiveSignPDF: Invalid page index: \(firstPlacement.pageIndex)")
-            loadError = "Invalid page index for signature. Please try placing the signature again."
+
+        guard !placementDataArray.isEmpty else {
+            loadError = "No valid signature placements. Please place at least one signature."
             return
         }
-        
-        settings.signaturePosition = .bottomRight // Default, will be overridden by custom position
-        settings.signatureCustomPosition = clampedPosition
-        settings.signaturePageIndex = firstPlacement.pageIndex
-        settings.signatureSize = signatureSize
-        settings.signatureOpacity = 1.0 // Full opacity by default
-        
-        print("🔵 InteractiveSignPDF: Processing signature with size: \(signatureSize), pageIndex: \(firstPlacement.pageIndex), position: \(clampedPosition), hasImage: \(settings.signatureImageData != nil)")
-        
+
+        settings.signaturePlacements = placementDataArray
+        settings.signatureOpacity = 1.0
+
+        print("🔵 InteractiveSignPDF: Submitting job with \(placementDataArray.count) placements")
+
         let job = Job(
             type: .pdfSign,
             inputs: [pdfURL],
             settings: settings
         )
-        
+
         Task {
             do {
                 await jobManager.submitJob(job)
                 await MainActor.run {
-                    // Notify parent that job was submitted, then dismiss
                     onJobSubmitted(job)
                     dismiss()
                 }
@@ -570,7 +572,6 @@ struct InteractiveSignPDFView: View {
             } catch {
                 print("❌ InteractiveSignPDF: Failed to submit job: \(error)")
                 await MainActor.run {
-                    // Show error to user
                     loadError = "Failed to submit signing job: \(error.localizedDescription)"
                 }
             }

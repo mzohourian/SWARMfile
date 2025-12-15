@@ -9,10 +9,12 @@ import SwiftUI
 import UIComponents
 import Privacy
 import JobEngine
+import Payments
 
 struct IntegrityDashboardView: View {
     @EnvironmentObject var privacyManager: Privacy.PrivacyManager
     @EnvironmentObject var jobManager: JobManager
+    @EnvironmentObject var paymentsManager: PaymentsManager
     @State private var storageUsage: StorageInfo = StorageInfo()
     @State private var recentActions: [SecureAction] = []
     @State private var insights: [ProactiveInsight] = []
@@ -52,6 +54,8 @@ struct IntegrityDashboardView: View {
         .sheet(isPresented: $showingToolFlow) {
             if let tool = selectedTool {
                 ToolFlowView(tool: tool)
+                    .environmentObject(jobManager)
+                    .environmentObject(paymentsManager)
             }
         }
         .onAppear {

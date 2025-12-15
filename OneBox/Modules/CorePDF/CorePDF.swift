@@ -71,7 +71,8 @@ public actor PDFProcessor {
                 }
                 
                 // Validate image file and format
-                guard imageURL.pathExtension.lowercased().contains(where: { ["jpg", "jpeg", "png", "heic", "heif"].contains(String($0)) }) else {
+                let supportedFormats = ["jpg", "jpeg", "png", "heic", "heif", "gif", "bmp", "tiff", "tif", "webp"]
+                guard supportedFormats.contains(imageURL.pathExtension.lowercased()) else {
                     UIGraphicsEndPDFContext()
                     throw PDFError.invalidImage("Unsupported format: \(imageURL.lastPathComponent)")
                 }
@@ -154,35 +155,109 @@ public actor PDFProcessor {
         }
 
         let outputURL = temporaryOutputURL(prefix: "merged")
-        let outputDocument = PDFDocument()
 
         var totalPages = 0
-        var processedPages = 0
+        var allPages: [(page: PDFPage, url: URL)] = []
 
-        // Calculate total pages
+        // Track security-scoped resource access for cleanup
+        var accessedURLs: [URL] = []
+
+        // First pass: Collect all pages and find target size (largest dimensions)
+        var maxWidth: CGFloat = 0
+        var maxHeight: CGFloat = 0
+
         for url in pdfURLs {
+            // Start security-scoped resource access (required for files from document picker/iCloud)
+            if url.startAccessingSecurityScopedResource() {
+                accessedURLs.append(url)
+            }
+
             guard let pdf = PDFDocument(url: url) else {
+                // Stop accessing resources before throwing
+                for accessedURL in accessedURLs {
+                    accessedURL.stopAccessingSecurityScopedResource()
+                }
                 throw PDFError.invalidPDF(url.lastPathComponent)
             }
             totalPages += pdf.pageCount
-        }
-
-        // Merge PDFs
-        for url in pdfURLs {
-            guard let pdf = PDFDocument(url: url) else { continue }
 
             for pageIndex in 0..<pdf.pageCount {
                 guard let page = pdf.page(at: pageIndex) else { continue }
-                outputDocument.insert(page, at: outputDocument.pageCount)
-                processedPages += 1
-                progressHandler(Double(processedPages) / Double(totalPages))
+                allPages.append((page: page, url: url))
+
+                let bounds = page.bounds(for: .mediaBox)
+                maxWidth = max(maxWidth, bounds.width)
+                maxHeight = max(maxHeight, bounds.height)
             }
         }
 
-        guard outputDocument.write(to: outputURL) else {
+        // Standard page sizes for reference
+        let standardA4Width: CGFloat = 612  // 8.5" x 72 DPI
+        let standardA4Height: CGFloat = 792 // 11" x 72 DPI
+
+        // Use the larger of: max found size or standard A4
+        let targetWidth = max(maxWidth, standardA4Width)
+        let targetHeight = max(maxHeight, standardA4Height)
+        let targetSize = CGSize(width: targetWidth, height: targetHeight)
+
+        print("🔵 CorePDF.mergePDFs: Target page size: \(targetWidth) x \(targetHeight)")
+
+        // Create output PDF with normalized page sizes
+        UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
+
+        for (index, pageInfo) in allPages.enumerated() {
+            let page = pageInfo.page
+            let originalBounds = page.bounds(for: .mediaBox)
+
+            // Calculate scale to fit page within target size while maintaining aspect ratio
+            let scaleX = targetWidth / originalBounds.width
+            let scaleY = targetHeight / originalBounds.height
+            let scale = min(scaleX, scaleY)
+
+            // Calculate centered position
+            let scaledWidth = originalBounds.width * scale
+            let scaledHeight = originalBounds.height * scale
+            let offsetX = (targetWidth - scaledWidth) / 2
+            let offsetY = (targetHeight - scaledHeight) / 2
+
+            // Create page with target size
+            let pageRect = CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight)
+            UIGraphicsBeginPDFPageWithInfo(pageRect, nil)
+
+            guard let context = UIGraphicsGetCurrentContext() else { continue }
+
+            // Fill background with white
+            context.setFillColor(UIColor.white.cgColor)
+            context.fill(pageRect)
+
+            // Draw the original page scaled and centered
+            context.saveGState()
+
+            // Move to center position and apply scale
+            context.translateBy(x: offsetX, y: targetHeight - offsetY)
+            context.scaleBy(x: scale, y: -scale)
+
+            // Draw page content
+            page.draw(with: .mediaBox, to: context)
+
+            context.restoreGState()
+
+            progressHandler(Double(index + 1) / Double(totalPages))
+        }
+
+        UIGraphicsEndPDFContext()
+
+        // Stop accessing security-scoped resources
+        for accessedURL in accessedURLs {
+            accessedURL.stopAccessingSecurityScopedResource()
+        }
+
+        // Verify output file was created
+        guard FileManager.default.fileExists(atPath: outputURL.path) else {
             throw PDFError.writeFailed
         }
 
+        print("✅ CorePDF.mergePDFs: Successfully merged \(allPages.count) pages")
         return outputURL
     }
 
@@ -192,6 +267,14 @@ public actor PDFProcessor {
         ranges: [ClosedRange<Int>],
         progressHandler: @escaping (Double) -> Void
     ) async throws -> [URL] {
+
+        // Start security-scoped resource access (required for files from document picker/iCloud)
+        let startedAccessing = pdfURL.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
 
         guard let sourcePDF = PDFDocument(url: pdfURL) else {
             throw PDFError.invalidPDF(pdfURL.lastPathComponent)
@@ -229,7 +312,15 @@ public actor PDFProcessor {
         targetSizeMB: Double? = nil,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
-        
+
+        // Start security-scoped resource access (required for files from document picker/iCloud)
+        let startedAccessing = pdfURL.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
         // Validate file size and memory before processing
         if let fileSize = getFileSize(url: pdfURL) {
             let validation = await MainActor.run {
@@ -1136,7 +1227,7 @@ public actor PDFProcessor {
         // The position represents the CENTER of where user tapped, so offset by half text size
         let textSize = (text as NSString).size(withAttributes: attributes)
         let centerX = bounds.minX + (bounds.width * clampedX)
-        let centerY = bounds.minY + (bounds.height * (1.0 - clampedY)) // Flip Y coordinate
+        let centerY = bounds.minY + (bounds.height * clampedY) // UIKit coordinates (Y=0 at top)
 
         // Calculate origin by offsetting from center
         let point = CGPoint(
@@ -1178,7 +1269,7 @@ public actor PDFProcessor {
         // Custom position is in normalized coordinates (0.0 to 1.0)
         // The position represents the CENTER of where user tapped, so offset by half signature size
         let centerX = bounds.minX + (bounds.width * clampedX)
-        let centerY = bounds.minY + (bounds.height * (1.0 - clampedY)) // Flip Y coordinate
+        let centerY = bounds.minY + (bounds.height * clampedY) // UIKit coordinates (Y=0 at top)
 
         // Calculate origin by offsetting from center
         let origin = CGPoint(
@@ -1354,6 +1445,14 @@ public actor PDFProcessor {
         print("🔵 CorePDF.redactPDF: Input PDF: \(pdfURL.path)")
         print("🔵 CorePDF.redactPDF: Redaction items: \(redactionItems)")
 
+        // Start security-scoped resource access (required for files from document picker/iCloud)
+        let startedAccessing = pdfURL.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
         guard let sourcePDF = PDFDocument(url: pdfURL) else {
             print("❌ CorePDF.redactPDF: Failed to load source PDF")
             throw PDFError.invalidPDF(pdfURL.lastPathComponent)
@@ -1507,11 +1606,19 @@ public actor PDFProcessor {
         stamps: [String], // Simplified stamp array
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
-        
+
+        // Start security-scoped resource access (required for files from document picker/iCloud)
+        let startedAccessing = pdfURL.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
         guard let sourcePDF = PDFDocument(url: pdfURL) else {
             throw PDFError.invalidPDF(pdfURL.lastPathComponent)
         }
-        
+
         let outputURL = temporaryOutputURL(prefix: "form_filled")
         let pageCount = sourcePDF.pageCount
 
@@ -1715,6 +1822,69 @@ public actor PDFProcessor {
             return nil
         }
         return size
+    }
+
+    // MARK: - PDF Password Protection
+
+    /// Adds password protection to a PDF file
+    /// - Parameters:
+    ///   - pdfURL: URL of the PDF to protect
+    ///   - password: Password to set for opening the PDF
+    ///   - progressHandler: Progress callback
+    /// - Returns: URL of the password-protected PDF
+    public func passwordProtectPDF(
+        _ pdfURL: URL,
+        password: String,
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> URL {
+        // Validate password
+        guard !password.isEmpty else {
+            throw PDFError.invalidParameters("Password cannot be empty")
+        }
+
+        // Validate PDF
+        try validatePDF(url: pdfURL)
+
+        // Handle security-scoped resources
+        var startedAccessing = false
+        if pdfURL.startAccessingSecurityScopedResource() {
+            startedAccessing = true
+        }
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        guard let document = PDFDocument(url: pdfURL) else {
+            throw PDFError.invalidPDF(pdfURL.lastPathComponent)
+        }
+
+        progressHandler(0.3)
+
+        let outputURL = temporaryOutputURL(prefix: "protected_pdf")
+
+        // Create write options with password protection
+        let writeOptions: [PDFDocumentWriteOption: Any] = [
+            .userPasswordOption: password,
+            .ownerPasswordOption: password
+        ]
+
+        progressHandler(0.6)
+
+        // Write password-protected PDF
+        guard document.write(to: outputURL, withOptions: writeOptions) else {
+            throw PDFError.writeFailed
+        }
+
+        progressHandler(1.0)
+
+        // Verify output
+        guard FileManager.default.fileExists(atPath: outputURL.path) else {
+            throw PDFError.writeFailed
+        }
+
+        return outputURL
     }
 
     // MARK: - Helper Methods

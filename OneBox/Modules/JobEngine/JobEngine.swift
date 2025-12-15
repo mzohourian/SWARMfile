@@ -103,6 +103,49 @@ public enum WorkflowRedactionPreset: String, Codable, CaseIterable {
     case custom     // User-defined patterns
 }
 
+// MARK: - Signature Placement Data (for multiple signatures)
+public struct SignaturePlacementData: Codable {
+    public var pageIndex: Int
+    public var position: CGPoint // Normalized (0.0-1.0)
+    public var size: Double // Width as fraction of page width
+    public var signatureText: String?
+    public var signatureImageData: Data?
+
+    public init(pageIndex: Int, position: CGPoint, size: Double, signatureText: String? = nil, signatureImageData: Data? = nil) {
+        self.pageIndex = pageIndex
+        self.position = position
+        self.size = size
+        self.signatureText = signatureText
+        self.signatureImageData = signatureImageData
+    }
+
+    // Custom Codable for CGPoint
+    enum CodingKeys: String, CodingKey {
+        case pageIndex, positionX, positionY, size, signatureText, signatureImageData
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        pageIndex = try container.decode(Int.self, forKey: .pageIndex)
+        let x = try container.decode(Double.self, forKey: .positionX)
+        let y = try container.decode(Double.self, forKey: .positionY)
+        position = CGPoint(x: x, y: y)
+        size = try container.decode(Double.self, forKey: .size)
+        signatureText = try container.decodeIfPresent(String.self, forKey: .signatureText)
+        signatureImageData = try container.decodeIfPresent(Data.self, forKey: .signatureImageData)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(pageIndex, forKey: .pageIndex)
+        try container.encode(position.x, forKey: .positionX)
+        try container.encode(position.y, forKey: .positionY)
+        try container.encode(size, forKey: .size)
+        try container.encodeIfPresent(signatureText, forKey: .signatureText)
+        try container.encodeIfPresent(signatureImageData, forKey: .signatureImageData)
+    }
+}
+
 // MARK: - Job Settings
 public struct JobSettings {
     // PDF Settings
@@ -143,6 +186,9 @@ public struct JobSettings {
     public var signaturePageIndex: Int = -1 // -1 means last page, 0+ means specific page
     public var signatureOpacity: Double = 1.0
     public var signatureSize: Double = 0.15
+
+    // Multiple Signature Placements (for interactive signing with multiple signatures)
+    public var signaturePlacements: [SignaturePlacementData] = []
     
     // PDF Redaction Settings
     public var redactionItems: [String] = [] // Text patterns to redact
@@ -183,7 +229,7 @@ extension JobSettings: Codable {
         case imageFormat, imageQuality, imageQualityPreset, maxDimension, resizePercentage, imageResolution
         case watermarkText, watermarkPosition, watermarkOpacity, watermarkSize, watermarkTileDensity
         case splitRanges, selectAllPages
-        case signatureText, signatureImageData, signaturePosition, signatureCustomPosition, signaturePageIndex, signatureOpacity, signatureSize
+        case signatureText, signatureImageData, signaturePosition, signatureCustomPosition, signaturePageIndex, signatureOpacity, signatureSize, signaturePlacements
         case redactionItems, redactionMode, redactionColor, redactionPreset
         case isPageNumbering, batesPrefix, batesStartNumber
         case isDateStamp
@@ -236,7 +282,8 @@ extension JobSettings: Codable {
         signaturePageIndex = try container.decodeIfPresent(Int.self, forKey: .signaturePageIndex) ?? -1
         signatureOpacity = try container.decodeIfPresent(Double.self, forKey: .signatureOpacity) ?? 1.0
         signatureSize = try container.decodeIfPresent(Double.self, forKey: .signatureSize) ?? 0.15
-        
+        signaturePlacements = try container.decodeIfPresent([SignaturePlacementData].self, forKey: .signaturePlacements) ?? []
+
         redactionItems = try container.decodeIfPresent([String].self, forKey: .redactionItems) ?? []
         redactionMode = try container.decodeIfPresent(String.self, forKey: .redactionMode) ?? "automatic"
         redactionColor = try container.decodeIfPresent(String.self, forKey: .redactionColor) ?? "#000000"
@@ -302,7 +349,8 @@ extension JobSettings: Codable {
         try container.encode(signaturePageIndex, forKey: .signaturePageIndex)
         try container.encode(signatureOpacity, forKey: .signatureOpacity)
         try container.encode(signatureSize, forKey: .signatureSize)
-        
+        try container.encode(signaturePlacements, forKey: .signaturePlacements)
+
         try container.encode(redactionItems, forKey: .redactionItems)
         try container.encode(redactionMode, forKey: .redactionMode)
         try container.encode(redactionColor, forKey: .redactionColor)
@@ -493,7 +541,67 @@ public class JobManager: ObservableObject {
               let loadedJobs = try? JSONDecoder().decode([Job].self, from: data) else {
             return
         }
-        jobs = loadedJobs
+
+        // Fix file paths that may have changed due to app container UUID changes
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+
+        jobs = loadedJobs.map { job in
+            var fixedJob = job
+
+            // Fix output URLs - reconstruct paths relative to current Documents directory
+            fixedJob.outputURLs = job.outputURLs.compactMap { url in
+                // If file exists at original path, use it
+                if FileManager.default.fileExists(atPath: url.path) {
+                    return url
+                }
+
+                // Try to reconstruct path relative to Documents directory
+                // Look for "Documents" in the path and reconstruct from there
+                let pathComponents = url.pathComponents
+                if let documentsIndex = pathComponents.firstIndex(of: "Documents") {
+                    let relativePath = pathComponents.dropFirst(documentsIndex + 1).joined(separator: "/")
+                    let reconstructedURL = documentsURL.appendingPathComponent(relativePath)
+
+                    if FileManager.default.fileExists(atPath: reconstructedURL.path) {
+                        print("✅ JobEngine: Reconstructed file path: \(reconstructedURL.path)")
+                        return reconstructedURL
+                    }
+                }
+
+                // If we still can't find it, try just the filename in Exports directory
+                let exportsURL = documentsURL.appendingPathComponent("Exports")
+                let filenameURL = exportsURL.appendingPathComponent(url.lastPathComponent)
+                if FileManager.default.fileExists(atPath: filenameURL.path) {
+                    print("✅ JobEngine: Found file by name in Exports: \(filenameURL.path)")
+                    return filenameURL
+                }
+
+                print("⚠️ JobEngine: Could not find file: \(url.lastPathComponent)")
+                return nil
+            }
+
+            // Fix input URLs similarly
+            fixedJob.inputs = job.inputs.compactMap { url in
+                if FileManager.default.fileExists(atPath: url.path) {
+                    return url
+                }
+
+                let pathComponents = url.pathComponents
+                if let documentsIndex = pathComponents.firstIndex(of: "Documents") {
+                    let relativePath = pathComponents.dropFirst(documentsIndex + 1).joined(separator: "/")
+                    let reconstructedURL = documentsURL.appendingPathComponent(relativePath)
+
+                    if FileManager.default.fileExists(atPath: reconstructedURL.path) {
+                        return reconstructedURL
+                    }
+                }
+
+                // Input files from user selection may not exist anymore - that's okay
+                return url
+            }
+
+            return fixedJob
+        }
 
         // Resume any running jobs
         for job in jobs where job.status == .running {
@@ -728,6 +836,14 @@ actor JobProcessor {
             throw JobError.invalidInput
         }
 
+        // Start security-scoped resource access (required for files from document picker/iCloud)
+        let startedAccessing = pdfURL.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
         // Get total page count from PDF
         guard let pdf = PDFDocument(url: pdfURL) else {
             throw JobError.invalidInput
@@ -802,16 +918,22 @@ actor JobProcessor {
         guard let pdfURL = job.inputs.first else {
             throw JobError.invalidInput
         }
-        
+
+        // Check if we have multiple signature placements (from interactive signing)
+        if !job.settings.signaturePlacements.isEmpty {
+            return try await processMultipleSignatures(job: job, pdfURL: pdfURL, processor: processor, progressHandler: progressHandler)
+        }
+
+        // Legacy single signature handling
         // Validate that we have a signature before processing
-        guard (job.settings.signatureText != nil && !job.settings.signatureText!.isEmpty) || 
+        guard (job.settings.signatureText != nil && !job.settings.signatureText!.isEmpty) ||
               job.settings.signatureImageData != nil else {
             throw JobError.processingFailed("Please provide a signature. Either enter text or draw a signature.")
         }
-        
+
         // Use signature position directly from CommonTypes
         let signaturePos = job.settings.signaturePosition
-        
+
         // Convert image data to UIImage if present
         let signatureImage: UIImage? = {
             if let imageData = job.settings.signatureImageData {
@@ -823,7 +945,7 @@ actor JobProcessor {
             }
             return nil
         }()
-        
+
         do {
             let outputURL = try await processor.signPDF(
                 pdfURL,
@@ -870,6 +992,60 @@ actor JobProcessor {
             // Handle any other errors
             throw JobError.processingFailed("Failed to sign PDF: \(error.localizedDescription)")
         }
+    }
+
+    /// Process multiple signature placements by chaining sign operations
+    private func processMultipleSignatures(job: Job, pdfURL: URL, processor: PDFProcessor, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
+        let placements = job.settings.signaturePlacements
+        var currentInputURL = pdfURL
+        let totalPlacements = Double(placements.count)
+
+        print("🔵 JobEngine: Processing \(placements.count) signature placements")
+
+        for (index, placement) in placements.enumerated() {
+            // Get signature image or text for this placement
+            let signatureImage: UIImage? = {
+                if let imageData = placement.signatureImageData {
+                    return UIImage(data: imageData)
+                }
+                return nil
+            }()
+
+            // Validate we have either text or image
+            guard (placement.signatureText != nil && !placement.signatureText!.isEmpty) || signatureImage != nil else {
+                print("⚠️ JobEngine: Skipping placement \(index + 1) - no signature data")
+                continue
+            }
+
+            print("🔵 JobEngine: Applying signature \(index + 1)/\(placements.count) on page \(placement.pageIndex + 1)")
+
+            do {
+                let outputURL = try await processor.signPDF(
+                    currentInputURL,
+                    text: placement.signatureText,
+                    image: signatureImage,
+                    position: .bottomRight, // Default, overridden by customPosition
+                    customPosition: placement.position,
+                    targetPageIndex: placement.pageIndex,
+                    opacity: job.settings.signatureOpacity,
+                    size: placement.size,
+                    progressHandler: { progress in
+                        // Calculate overall progress across all placements
+                        let baseProgress = Double(index) / totalPlacements
+                        let stepProgress = progress / totalPlacements
+                        progressHandler(baseProgress + stepProgress)
+                    }
+                )
+
+                // Use output as input for next signature
+                currentInputURL = outputURL
+            } catch {
+                throw JobError.processingFailed("Failed to apply signature \(index + 1): \(error.localizedDescription)")
+            }
+        }
+
+        print("✅ JobEngine: All \(placements.count) signatures applied successfully")
+        return try await applyPostProcessing(job: job, urls: [currentInputURL])
     }
 
     private func processImageResize(job: Job, progressHandler: @escaping (Double) -> Void) async throws -> [URL] {
@@ -970,18 +1146,32 @@ actor JobProcessor {
             }
         }
         
-        // Apply encryption if enabled
-        if job.settings.enableEncryption, 
+        // Apply password protection if enabled
+        if job.settings.enableEncryption,
            let password = job.settings.encryptionPassword,
-           let delegate = privacyDelegate {
-            var encryptedURLs: [URL] = []
+           !password.isEmpty {
+            var protectedURLs: [URL] = []
             for url in processedURLs {
-                let encryptedURL = try await MainActor.run {
-                    try delegate.performFileEncryption(at: url, password: password)
+                // Use PDF-native password protection for PDFs
+                if url.pathExtension.lowercased() == "pdf" {
+                    let processor = CorePDF.PDFProcessor()
+                    let protectedURL = try await processor.passwordProtectPDF(
+                        url,
+                        password: password,
+                        progressHandler: { _ in }
+                    )
+                    protectedURLs.append(protectedURL)
+                } else if let delegate = privacyDelegate {
+                    // Use file-level encryption for non-PDF files
+                    let encryptedURL = try await MainActor.run {
+                        try delegate.performFileEncryption(at: url, password: password)
+                    }
+                    protectedURLs.append(encryptedURL)
+                } else {
+                    protectedURLs.append(url)
                 }
-                encryptedURLs.append(encryptedURL)
             }
-            processedURLs = encryptedURLs
+            processedURLs = protectedURLs
         }
         
         // Generate forensics report

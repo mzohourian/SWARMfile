@@ -679,7 +679,9 @@ struct FormFillingStampView: View {
         let textRequest = VNRecognizeTextRequest()
         textRequest.recognitionLevel = .accurate
         textRequest.usesLanguageCorrection = true
-        
+        // Support multiple languages for international documents
+        textRequest.recognitionLanguages = ["en-US", "fr-FR", "de-DE", "es-ES", "it-IT", "pt-BR", "zh-Hans", "zh-Hant", "ja-JP", "ko-KR", "ar-SA", "fa-IR"]
+
         // Perform rectangle detection for form fields
         let rectangleRequest = VNDetectRectanglesRequest()
         rectangleRequest.minimumAspectRatio = 0.1

@@ -735,7 +735,9 @@ struct SmartSplitView: View {
             
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true
-            
+            // Support multiple languages for international documents
+            request.recognitionLanguages = ["en-US", "fr-FR", "de-DE", "es-ES", "it-IT", "pt-BR", "zh-Hans", "zh-Hant", "ja-JP", "ko-KR", "ar-SA", "fa-IR"]
+
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
             try? handler.perform([request])
         }

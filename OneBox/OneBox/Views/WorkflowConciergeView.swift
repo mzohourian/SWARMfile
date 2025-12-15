@@ -799,26 +799,41 @@ struct WorkflowConciergeView: View {
 
     /// Called when an interactive view (PageOrganizer or InteractiveSign) completes
     private func handleInteractiveStepCompleted() {
-        // The interactive view submitted a job - get the output
-        // Look for the most recent completed job's output
-        if let lastJob = jobManager.completedJobs.last,
-           !lastJob.outputURLs.isEmpty {
-            workflowInputURLs = lastJob.outputURLs
-        }
+        // Small delay to ensure the job is fully submitted before we look for it
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            // The interactive view submitted a job - get the output
+            // Look for the most recent completed job that matches our input URL
+            let inputFileName = self.interactiveCurrentURL?.lastPathComponent ?? ""
 
-        // Remove the completed interactive step
-        if !workflowRemainingSteps.isEmpty {
-            workflowRemainingSteps.removeFirst()
-        }
+            // Find the job that was just submitted for our input file
+            // Check in reverse order (most recent first)
+            if let matchingJob = self.jobManager.completedJobs.reversed().first(where: { job in
+                // Match by input file name
+                job.inputs.contains { $0.lastPathComponent == inputFileName }
+            }), !matchingJob.outputURLs.isEmpty {
+                print("🔵 Workflow: Found matching job with outputs: \(matchingJob.outputURLs)")
+                self.workflowInputURLs = matchingJob.outputURLs
+            } else if let lastJob = self.jobManager.completedJobs.last,
+                      !lastJob.outputURLs.isEmpty {
+                // Fallback to last completed job
+                print("⚠️ Workflow: Using fallback - last completed job outputs: \(lastJob.outputURLs)")
+                self.workflowInputURLs = lastJob.outputURLs
+            } else {
+                print("⚠️ Workflow: No completed job found, keeping current inputs")
+            }
 
-        // Clear interactive state
-        interactiveCurrentURL = nil
-        showingPageOrganizer = false
-        showingInteractiveSign = false
-        showingRedactionView = false
+            // Remove the completed interactive step
+            if !self.workflowRemainingSteps.isEmpty {
+                self.workflowRemainingSteps.removeFirst()
+            }
 
-        // Small delay to ensure UI updates, then continue
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            // Clear interactive state
+            self.interactiveCurrentURL = nil
+            self.showingPageOrganizer = false
+            self.showingInteractiveSign = false
+            self.showingRedactionView = false
+
+            // Continue workflow
             self.continueWorkflow()
         }
     }

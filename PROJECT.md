@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-08
+**Last Updated:** 2025-12-11
 
 ## What This Is
 **OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -26,25 +26,31 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 ### Working
 - Images to PDF conversion
 - PDF merge, split, compress
-- PDF signing (interactive, touch-to-place)
+- PDF signing (interactive, touch-to-place, multi-page support)
 - Image resize and compress
 - Job queue with progress tracking
 - Free tier (3 exports/day)
 - Pro subscriptions (StoreKit 2)
 - On-device search
 - Workflow automation
-- Page organizer with undo/redo and swipe-to-select
-- Redaction with presets
+- Page organizer with undo/redo and tap-to-select
+- Redaction - visual-first editing (tap to remove, draw to add)
+- Multi-language OCR (12 languages including Arabic, Persian, CJK)
+- File preview (QuickLook) - fixed stale path issue
 
 ### Broken / Blocked
-- None currently
+- None currently (rebuild app to get latest Info.plist)
 
 ### Needs Testing
-- **Redact PDF** - Completely rebuilt with precise character-level redaction:
-  - Fixed file not saving (2 bugs: PDF context timing + ShareSheet deletion)
-  - Redaction now actually works on scanned/image-based PDFs
-  - **NEW**: Uses Vision's character-level bounding boxes (`VNRecognizedText.boundingBox(for:)`) to redact ONLY the exact matched text, not entire lines
-  - Simplified UI - removed Automatic/Manual/Combined modes, single unified flow
+- **Redact PDF** - Completely redesigned with visual-first approach:
+  - Shows document preview with black boxes overlaid on detected sensitive data
+  - Tap any box to REMOVE it (becomes gray/dashed outline)
+  - Draw/drag on page to ADD new redaction boxes
+  - Pinch-to-zoom or use +/- buttons for better visibility (up to 500%)
+  - **NEW:** Full-screen mode button for maximum visibility and precise editing
+  - Bottom bar shows count and "Apply X Redactions" button
+  - Works on both text-based and scanned/image PDFs via OCR
+  - **FIXED:** Pattern matching now uses OCR text to ensure bounding boxes are found
 - **Watermark PDF** - Multiple fixes applied, needs user verification:
   - Size slider now has dramatic effect (5%-50% for images, 2%-15% for text)
   - Density slider now has dramatic effect (0.6x to 5x spacing)
@@ -62,57 +68,91 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **Workflow hybrid interactive/automated redesign** - Major workflow fix:
-  - Interactive steps (Organize, Sign) now use existing app views (PageOrganizerView, InteractiveSignPDFView)
-  - Automated steps (Compress, Watermark, etc.) run with pre-configured settings
-  - Workflow pauses for interactive steps, continues after user completes them
-  - Fixed page numbers showing literal `{page}` - now properly replaced per-page
-  - Fixed date stamp showing "Processed:" prefix and ugly formatting
-  - Made compression more aggressive for visible file size reduction
-- All previous workflow fixes remain in place
+- **PDF "Invalid PDF" error** - Fixed security-scoped resource access:
+  - PDFs from document picker/iCloud require `startAccessingSecurityScopedResource()` before loading
+  - Added proper resource access to: merge, split, compress, redact, fillFormFields
+  - Also fixed in JobEngine.processPDFSplit for page count detection
+  - Ensures cleanup with `defer` and proper error handling
+- **Signature placement** - Fixed Y-coordinate inversion and normalization
+- **PNG rejection** - Fixed broken format validation logic (was checking characters, not extension)
+- **Face ID** - Added @MainActor for LocalAuthentication on main thread
+- **Crash on proceed** - Added missing environment objects to IntegrityDashboardView/HomeView
+- **PDF password protection** - Implemented native PDF encryption with user password input
+- **Merge PDF UI** - Moved "Add More" button to bottom, increased list height, added file count
+- **Split PDF UI** - Fixed page count display (security-scoped access), added real-time validation
+- **Export flow** - Fixed result view not showing after progress completes (removed premature dismiss)
 
 ---
 
 ## Last Session Summary
 
-**Date:** 2025-12-08 (continued session)
+**Date:** 2025-12-11
 
 **What Was Done:**
-- **Added swipe-to-select in Page Organizer (iOS Photos-like):**
-  - Swipe across pages to select/deselect multiple at once
-  - First page touched determines mode (select or deselect)
-  - Haptic feedback on each page touched
-  - Only activates when starting on a cell (preserves scrolling)
-  - Uses PreferenceKey system for cell frame tracking
 
-- **Fixed RedactionView failing to load PDF in workflow:**
-  - Added retry logic (3 attempts, 0.5s delay each)
-  - Fixed security-scoped resource management in WorkflowConciergeView
-  - Keep security access open for fallback URLs if temp copy fails
-  - Release access only when workflow finishes
+**1. Fixed PDF loading "Invalid PDF" errors:**
+- Root cause: `PDFDocument(url:)` returns nil for files from document picker/iCloud without security-scoped access
+- Added `startAccessingSecurityScopedResource()` to: merge, split, compress, redact, fillFormFields
+- Proper cleanup with `defer` and error handling for cleanup before throwing
 
-- **Fixed redaction analysis not triggering:**
-  - Removed broken `onChange(of: pdfDocument)` - PDFDocument doesn't conform to Equatable
-  - Now calls `performSensitiveDataAnalysis()` directly when PDF loads successfully
+**2. Fixed signature placement issues:**
+- Removed Y-coordinate flip (UIKit coordinates, not PDF coordinates)
+- Fixed coordinate normalization to account for scaled/centered PDF pages
 
-**What's Unfinished:**
-- Build not verified (no Xcode in environment) - user should build and test
-- Swipe-to-select needs user testing for feel/responsiveness
+**3. Fixed PNG image rejection:**
+- Bug: format validation checked if any CHARACTER was in array, not the whole extension
+- Fixed to check if extension string is in supported formats array
+
+**4. Fixed Face ID not triggering:**
+- LocalAuthentication must run on main thread
+- Added @MainActor to `authenticateForProcessing()` and protocol
+
+**5. Fixed app crash on "Proceed":**
+- Missing `@EnvironmentObject` for `paymentsManager` and `jobManager`
+- Added to IntegrityDashboardView and LegacyHomeView
+
+**6. Implemented PDF password protection:**
+- Added password input field in ToolFlowView
+- Native PDFKit encryption using `PDFDocumentWriteOption.userPasswordOption`
+
+**7. Fixed Merge PDF UI:**
+- Moved "Add More" button to bottom using Spacer
+- Increased list height from 300px to 400px for more visibility
+- Added file count to header ("3 files • Drag to reorder")
+
+**8. Fixed Split PDF UI:**
+- Fixed page count not showing (security-scoped access in loadPDFInfo)
+- Made page count display more prominent with gold background
+- Added real-time validation to prevent pages beyond PDF length
+- Auto-fills end page to total pages on load
+
+**9. Fixed Export flow:**
+- Result view wasn't showing after progress reached 100%
+- Root cause: ExportPreviewView called dismiss() after onConfirm()
+- Removed premature dismiss() - now shows JobResultView with "Share & Save"
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/PageOrganizerView.swift` - Swipe-to-select gesture
-- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Fixed security-scoped resource management
-- `OneBox/OneBox/Views/RedactionView.swift` - Fixed PDF loading retry + analysis trigger
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Security-scoped access, signature fix, format fix, password protection
+- `OneBox/OneBox/Services/Privacy.swift` - @MainActor for biometric auth
+- `OneBox/Modules/JobEngine/JobEngine.swift` - PDF-native encryption, split PDF security access
+- `OneBox/OneBox/Views/ToolFlowView.swift` - Password input, split PDF validation
+- `OneBox/OneBox/Views/WorkflowAutomationView.swift` - Password capture
+- `OneBox/OneBox/Views/IntegrityDashboardView.swift` - Environment objects
+- `OneBox/OneBox/Views/HomeView.swift` - Environment objects
+- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift` - Coordinate normalization
+- `OneBox/Modules/UIComponents/UIComponents.swift` - Merge PDF button position
+- `OneBox/OneBox/Views/ExportPreviewView.swift` - Export flow fix
 
 ---
 
 ## Next Steps (Priority Order)
 
-1. **Build and test in Xcode** - Verify all changes compile
-2. **Test workflow with interactive steps** - Create a workflow with Organize/Sign and verify they open existing views
-3. **Verify workflow chaining** - Test that automated steps run correctly after interactive steps complete
-4. **Test Redact PDF** - Verify file saving/sharing works correctly
-5. Address Swift 6 warnings (optional, non-blocking)
+1. **REBUILD APP IN XCODE** - Critical: get all fixes from this session
+2. **Test Split PDF** - Page count should display, validation should work
+3. **Test Merge PDF** - "Add More" button at bottom, files visible
+4. **Test Export flow** - Should show result view with "Share & Save" after progress
+5. **Test PDF merge** - Should work with files from document picker/iCloud
+6. Address Swift 6 warnings (optional, non-blocking)
 
 ---
 

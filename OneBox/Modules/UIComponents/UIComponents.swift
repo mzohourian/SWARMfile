@@ -673,18 +673,20 @@ public struct ReorderableFileListView: View {
                         Text("Files to Merge")
                             .font(.subheadline)
                             .fontWeight(.medium)
-                        
+
                         Spacer()
-                        
-                        Text("Drag to reorder")
+
+                        Text("\(urls.count) file\(urls.count == 1 ? "" : "s") • Drag to reorder")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    
+
                     reorderableList
                 }
             }
-            
+
+            Spacer(minLength: 0)
+
             if showAddButton {
                 addButton
             }
@@ -708,7 +710,7 @@ public struct ReorderableFileListView: View {
             .onMove(perform: moveFiles)
         }
         .listStyle(.plain)
-        .frame(height: CGFloat(min(urls.count * 50, 300)))
+        .frame(minHeight: CGFloat(min(urls.count * 56, 400)))
     }
     
     private var addButton: some View {

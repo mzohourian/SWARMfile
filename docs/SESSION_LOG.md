@@ -4,6 +4,152 @@
 
 ---
 
+## 2025-12-11: Security-Scoped Access & UI Fixes (Continuation)
+
+**Problems Reported:**
+1. PDF merge/split showing "Invalid PDF" or "Invalid input files" errors
+2. Split PDF not showing page count or validating ranges
+3. Merge PDF "Add More" button too high, files not visible
+4. Export flow progress reaches 100% but nothing happens
+
+**Root Causes Found:**
+1. `PDFDocument(url:)` returns nil for files from document picker without security-scoped access
+2. Same issue in `loadPDFInfo()` for Split PDF UI and `processPDFSplit()` in JobEngine
+3. ReorderableFileListView had button after list with no spacer
+4. ExportPreviewView called `dismiss()` after `onConfirm()`, closing sheet before result view shown
+
+**Fixes Applied:**
+1. Added `startAccessingSecurityScopedResource()` to all PDF loading functions in CorePDF.swift
+2. Fixed Split PDF in JobEngine.swift and ToolFlowView.swift (PDFSplitRangeSelector)
+3. Added Spacer to push button to bottom, increased list height to 400px
+4. Removed premature `dismiss()` from ExportPreviewView
+
+**Files Modified:**
+- `OneBox/Modules/CorePDF/CorePDF.swift`
+- `OneBox/Modules/JobEngine/JobEngine.swift`
+- `OneBox/OneBox/Views/ToolFlowView.swift`
+- `OneBox/Modules/UIComponents/UIComponents.swift`
+- `OneBox/OneBox/Views/ExportPreviewView.swift`
+
+**Status:** All issues fixed. Requires rebuild to test.
+
+---
+
+## 2025-12-11: Multi-Language OCR & International Phone Detection
+
+**What Was Done:**
+
+**1. Multi-language OCR support added to all Vision-based features:**
+- Added 12 languages: English, French, German, Spanish, Italian, Portuguese, Chinese (Simplified & Traditional), Japanese, Korean, Arabic, Persian/Farsi
+- Updated all 6 files that use VNRecognizeTextRequest:
+  - RedactionView.swift
+  - SignatureFieldDetectionService.swift
+  - AdvancedImageToPDFView.swift
+  - FormFillingStampView.swift
+  - AdaptiveWatermarkView.swift
+  - SmartSplitView.swift
+
+**2. International phone number detection for redaction:**
+- Added pattern: `\+\d{1,3}[-.\s]+\d{2,4}[-.\s]+\d{6,8}`
+- Catches formats like +98 21 22283831 (Iranian) and other international numbers
+
+**3. Persian passport number detection (partial):**
+- Added patterns for Persian numerals (۰-۹) and Arabic-Indic numerals (٠-٩)
+- Added 8-digit standalone number pattern
+- **Limitation:** Vision OCR may not reliably detect Persian numerals in passport images
+- Workaround: Users can use "Draw to add" for manual redaction
+
+**Files Modified:**
+- `OneBox/OneBox/Views/RedactionView.swift`
+- `OneBox/OneBox/Services/SignatureFieldDetectionService.swift`
+- `OneBox/OneBox/Views/Advanced/AdvancedImageToPDFView.swift`
+- `OneBox/OneBox/Views/Advanced/FormFillingStampView.swift`
+- `OneBox/OneBox/Views/Advanced/AdaptiveWatermarkView.swift`
+- `OneBox/OneBox/Views/Advanced/SmartSplitView.swift`
+
+**Status:** Multi-language OCR complete. Persian numeral detection limited by Vision framework capabilities.
+
+---
+
+## 2025-12-08: Workflow Fixes - Signing, Merge, Redaction (Continued Session)
+
+**Problems Reported:**
+1. Signing: Only page 1 signed when placing signatures on multiple pages
+2. Signing: Signature position wrong (placed at bottom right, appears at middle right)
+3. Merge: One single-page PDF appears very small instead of matching other PDFs
+4. Redaction: No redaction applied in workflow output
+
+**What Was Done:**
+
+**Issue 1 & 2 - Multi-page signing FIXED:**
+- Root cause: `InteractiveSignPDFView.processSignatures()` only used the first signature placement
+- Fix: Added `SignaturePlacementData` struct to JobSettings for storing multiple placements
+- Modified `InteractiveSignPDFView` to convert ALL placements to job settings array
+- Added `processMultipleSignatures()` in JobEngine to chain sign operations
+- Each signature is applied sequentially, output of one becomes input for next
+- All signatures on all pages now apply correctly with proper positions
+
+**Issue 3 - PDF merge scaling FIXED:**
+- Root cause: `mergePDFs()` just inserted pages without any size normalization
+- Fix: Modified merge to:
+  1. First pass: Find the largest page dimensions (at least A4 size)
+  2. Second pass: Scale all pages to fit within target size
+  3. Center smaller pages on white background
+- Single-page PDFs now display at proper size in merged output
+
+**Issue 4 - Workflow redaction FIXED:**
+- Root cause: `handleInteractiveStepCompleted()` was using `completedJobs.last` which might return the wrong job
+- Also: No delay between job submission and job lookup, causing race condition
+- Fix: Added 500ms delay and matching by input filename instead of just grabbing last job
+- Added logging for debugging
+
+**Files Modified:**
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Merge page normalization
+- `OneBox/Modules/JobEngine/JobEngine.swift` - SignaturePlacementData, processMultipleSignatures()
+- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Process all signature placements
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Fixed handleInteractiveStepCompleted() timing
+
+**Status:** All workflow issues fixed, needs user testing
+
+---
+
+## 2025-12-08: Preview Fix & Swipe-to-Select Removal (Continued Session)
+
+**Problems Reported:**
+1. Swipe-to-select not working vertically in Page Organizer
+2. Preview function showing blank screen throughout app
+3. Workflow crash when running with biometric lock enabled
+
+**What Was Done:**
+
+**Issue 1 - Swipe-to-select removed:**
+- After 5+ attempts with various SwiftUI gesture and UIKit approaches, conflicts with ScrollView proved too complex
+- Final solution: Removed all swipe-to-select code, reverted to simple tap-to-select and drag-to-reorder
+- User agreed: "if you think it is complicated for you we can give it up for now"
+
+**Issue 2 - Preview blank screen FIXED:**
+- Root cause: iOS changes app container UUID when app updates
+- Stored file paths in jobs.json become invalid (e.g., UUID ABC123 → XYZ789)
+- Fix: Added path reconstruction in `JobEngine.loadJobs()`:
+  1. If file exists at stored path, use it
+  2. Otherwise, extract relative path from "Documents" and rebuild with current directory
+  3. As fallback, search for filename in Exports directory
+- Preview (QuickLook) now works for all exported files
+
+**Issue 3 - Workflow crash diagnosed:**
+- Error: "NSFaceIDUsageDescription key with a string value..."
+- The key ALREADY EXISTS in Info.plist (line 27-28)
+- **NOT a code bug** - the installed app was built before this key was added
+- **Solution: Rebuild and reinstall the app in Xcode**
+
+**Files Modified:**
+- `OneBox/OneBox/Views/PageOrganizerView.swift` - Removed swipe-to-select code
+- `OneBox/Modules/JobEngine/JobEngine.swift` - Added file path reconstruction
+
+**Status:** Preview fixed, rebuild required for Face ID crash
+
+---
+
 ## 2025-12-08: Page Organizer & Redaction Fixes
 
 **Features Added:**

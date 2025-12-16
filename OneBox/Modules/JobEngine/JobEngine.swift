@@ -15,6 +15,44 @@ import UIKit
 import PDFKit
 import Privacy
 
+// MARK: - Signature Config Data (Codable version for JobSettings)
+public struct SignatureConfigData: Codable {
+    public let pageIndex: Int
+    public let positionX: Double
+    public let positionY: Double
+    public let size: Double
+    public let text: String?
+    public let imageData: Data?
+    public let opacity: Double
+
+    public init(pageIndex: Int, position: CGPoint, size: Double, text: String? = nil, imageData: Data? = nil, opacity: Double = 1.0) {
+        self.pageIndex = pageIndex
+        self.positionX = position.x
+        self.positionY = position.y
+        self.size = size
+        self.text = text
+        self.imageData = imageData
+        self.opacity = opacity
+    }
+
+    public var position: CGPoint {
+        CGPoint(x: positionX, y: positionY)
+    }
+
+    // Convert to CorePDF SignatureConfig
+    public func toSignatureConfig() -> SignatureConfig {
+        let image: UIImage? = imageData != nil ? UIImage(data: imageData!) : nil
+        return SignatureConfig(
+            pageIndex: pageIndex,
+            position: position,
+            size: size,
+            text: text,
+            image: image,
+            opacity: opacity
+        )
+    }
+}
+
 // MARK: - Job Model
 public struct Job: Identifiable, Codable {
     public let id: UUID
@@ -143,7 +181,10 @@ public struct JobSettings {
     public var signaturePageIndex: Int = -1 // -1 means last page, 0+ means specific page
     public var signatureOpacity: Double = 1.0
     public var signatureSize: Double = 0.15
-    
+
+    // Multiple Signatures Support
+    public var signatureConfigs: [SignatureConfigData] = []
+
     // PDF Redaction Settings
     public var redactionItems: [String] = [] // Text patterns to redact
     public var redactionMode: String = "automatic" // automatic, manual, combined
@@ -184,6 +225,7 @@ extension JobSettings: Codable {
         case watermarkText, watermarkPosition, watermarkOpacity, watermarkSize, watermarkTileDensity
         case splitRanges, selectAllPages
         case signatureText, signatureImageData, signaturePosition, signatureCustomPosition, signaturePageIndex, signatureOpacity, signatureSize
+        case signatureConfigs
         case redactionItems, redactionMode, redactionColor, redactionPreset
         case isPageNumbering, batesPrefix, batesStartNumber
         case isDateStamp
@@ -236,7 +278,8 @@ extension JobSettings: Codable {
         signaturePageIndex = try container.decodeIfPresent(Int.self, forKey: .signaturePageIndex) ?? -1
         signatureOpacity = try container.decodeIfPresent(Double.self, forKey: .signatureOpacity) ?? 1.0
         signatureSize = try container.decodeIfPresent(Double.self, forKey: .signatureSize) ?? 0.15
-        
+        signatureConfigs = try container.decodeIfPresent([SignatureConfigData].self, forKey: .signatureConfigs) ?? []
+
         redactionItems = try container.decodeIfPresent([String].self, forKey: .redactionItems) ?? []
         redactionMode = try container.decodeIfPresent(String.self, forKey: .redactionMode) ?? "automatic"
         redactionColor = try container.decodeIfPresent(String.self, forKey: .redactionColor) ?? "#000000"
@@ -302,7 +345,8 @@ extension JobSettings: Codable {
         try container.encode(signaturePageIndex, forKey: .signaturePageIndex)
         try container.encode(signatureOpacity, forKey: .signatureOpacity)
         try container.encode(signatureSize, forKey: .signatureSize)
-        
+        try container.encode(signatureConfigs, forKey: .signatureConfigs)
+
         try container.encode(redactionItems, forKey: .redactionItems)
         try container.encode(redactionMode, forKey: .redactionMode)
         try container.encode(redactionColor, forKey: .redactionColor)
@@ -802,16 +846,34 @@ actor JobProcessor {
         guard let pdfURL = job.inputs.first else {
             throw JobError.invalidInput
         }
-        
+
+        // Use multi-signature method if signatureConfigs are provided
+        if !job.settings.signatureConfigs.isEmpty {
+            do {
+                let signatures = job.settings.signatureConfigs.map { $0.toSignatureConfig() }
+                let outputURL = try await processor.signPDFWithMultipleSignatures(
+                    pdfURL,
+                    signatures: signatures,
+                    progressHandler: progressHandler
+                )
+                return try await applyPostProcessing(job: job, urls: [outputURL])
+            } catch let error as PDFError {
+                throw JobError.processingFailed(error.localizedDescription)
+            } catch {
+                throw JobError.processingFailed("Failed to sign PDF: \(error.localizedDescription)")
+            }
+        }
+
+        // Fallback to single signature method for backwards compatibility
         // Validate that we have a signature before processing
-        guard (job.settings.signatureText != nil && !job.settings.signatureText!.isEmpty) || 
+        guard (job.settings.signatureText != nil && !job.settings.signatureText!.isEmpty) ||
               job.settings.signatureImageData != nil else {
             throw JobError.processingFailed("Please provide a signature. Either enter text or draw a signature.")
         }
-        
+
         // Use signature position directly from CommonTypes
         let signaturePos = job.settings.signaturePosition
-        
+
         // Convert image data to UIImage if present
         let signatureImage: UIImage? = {
             if let imageData = job.settings.signatureImageData {
@@ -823,7 +885,7 @@ actor JobProcessor {
             }
             return nil
         }()
-        
+
         do {
             let outputURL = try await processor.signPDF(
                 pdfURL,

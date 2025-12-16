@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-15
+**Last Updated:** 2025-12-16
 
 ## What This Is
 **OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -75,38 +75,37 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2025-12-15
+**Date:** 2025-12-16
 
 **What Was Done:**
-- **Complete signature coordinate system fix:**
-  - **Root cause found:** Signature position was relative to VIEW, not PDF PAGE
-  - The PDF page is centered within the view with margins
-  - Tapping at "center" of view was not "center" of PDF page!
+- **Fixed signature position bug (Y coordinate flip removed):**
+  - Root cause: CorePDF was incorrectly flipping Y coordinate with `(1.0 - clampedY)`
+  - In UIGraphics PDF context, Y=0 is at TOP (same as screen), so no flip needed
+  - Fixed in both `drawSignatureText` and `drawSignatureImage` with customPosition
 
-  1. **Position Fix - PDF-relative coordinates:**
-     - Added `pdfDisplayRect()` function to calculate PDF page rectangle within view
-     - All tap positions now normalized relative to PDF page, not view
-     - Signature overlay also positions relative to PDF page
-     - Drag updates use PDF-relative coordinates
+- **Multi-page signature support:**
+  - Previously only the first signature was processed!
+  - Added `SignatureConfig` struct in CorePDF for multiple signatures
+  - Added `signPDFWithMultipleSignatures()` method that processes all signatures in one pass
+  - Added `SignatureConfigData` (Codable) in JobEngine to transfer multiple signatures
+  - Updated `processSignatures()` to convert ALL placements to configs
+  - Now all signatures on all pages appear in the final PDF
 
-  2. **Size Fix - Use PDF display width:**
-     - Pass actual PDF display width (not view width) for size calculation
-     - Size ratio now matches visual proportion on PDF page
-
-  3. **Zoom out limit increased:**
-     - Changed minimum zoom from 0.1 (10%) to 0.02 (2%)
-     - User can now zoom out much more
-
-  4. **Added Unselect button:**
-     - New "Unselect" button appears when signature is selected
-     - Allows easy deselection without tapping elsewhere
+- **Drag-anywhere for selected signature:**
+  - Previously had to drag directly on the signature
+  - Now like zoom: when signature is selected, dragging anywhere moves it
+  - Added `signatureDragOffset` state at page level
+  - Modified page-level drag gesture to move signature when selected
+  - Removed local drag gesture from SignaturePlacementOverlay
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift` - PDF-relative coordinates
-- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Added unselect button
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed Y flip, added multi-signature support
+- `OneBox/Modules/JobEngine/JobEngine.swift` - Added SignatureConfigData, multi-sig processing
+- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift` - Drag-anywhere gesture
+- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Multi-signature job submission
 
 ---
 
@@ -116,8 +115,8 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 2. **Test Sign PDF feature:**
    - Place signature and verify it appears at exact tap location in final PDF
    - Verify size matches what you see on screen
-   - Test zoom out (should go very small now)
-   - Test unselect button
+   - Test drag-anywhere (drag anywhere on screen while signature selected)
+   - Test multi-page signatures (place signatures on different pages, verify all appear in final)
 3. **Test other features** - Button styling, preview, state persistence
 
 ---

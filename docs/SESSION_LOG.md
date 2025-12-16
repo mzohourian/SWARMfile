@@ -4,6 +4,31 @@
 
 ---
 
+## 2025-12-16: Signature Size Fix (Bounding Box vs Actual Display)
+
+**Issue Reported:**
+- Signature size not reflecting correctly - "I sign smaller but it is shown much bigger"
+
+**Root Cause:**
+- Signature image is displayed with `.aspectRatio(contentMode: .fit)` inside a bounding box (default 300x120)
+- For a square signature image (1:1 aspect ratio) in a 300x120 box:
+  - Actual displayed width = 120px (height-limited, fits within 120px height)
+  - But code was using box width = 300px for ratio calculation
+- This caused signatures to appear ~2.5x larger in final PDF than on screen
+
+**Fix:**
+- Modified `processSignatures()` in InteractiveSignPDFView.swift
+- Now calculates ACTUAL displayed width based on image aspect ratio vs box aspect ratio
+- If image aspect (width/height) < box aspect, height is limiting → actualWidth = boxHeight × imageAspect
+- Uses actual displayed width for size ratio calculation
+
+**Files Modified:**
+- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Fixed size calculation
+
+**Status:** Needs user testing to verify signature size now matches screen appearance
+
+---
+
 ## 2025-12-15: Complete Signature System Overhaul
 
 **Issues Reported:**

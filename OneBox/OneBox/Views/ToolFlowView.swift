@@ -25,6 +25,7 @@ struct ToolFlowView: View {
     let tool: ToolType
 
     @Environment(\.dismiss) var dismiss
+    @Environment(\.scenePhase) var scenePhase
     @EnvironmentObject var jobManager: JobManager
     @EnvironmentObject var paymentsManager: PaymentsManager
 
@@ -40,6 +41,7 @@ struct ToolFlowView: View {
     @State private var showComplimentaryExportModal = false
     @State private var showViewOnlyModeAlert = false
     @State private var showInteractiveSigning = false
+    @State private var showRestorationAlert = false
 
     enum FlowStep {
         case selectInput
@@ -160,6 +162,92 @@ struct ToolFlowView: View {
         } message: {
             Text("You've reached your daily free export limit. Upgrade to Pro for unlimited exports, or wait until tomorrow. You can still view and manage your existing files.")
         }
+        .alert("Continue Where You Left Off?", isPresented: $showRestorationAlert) {
+            Button("Continue", role: .none) {
+                restoreState()
+            }
+            Button("Start Fresh", role: .cancel) {
+                WorkflowStateManager.shared.clearState()
+            }
+        } message: {
+            Text("You have unsaved work from a previous session. Would you like to continue?")
+        }
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .background || newPhase == .inactive {
+                // Save state when going to background
+                saveCurrentState()
+            }
+        }
+        .onAppear {
+            // Check for restored state on appear
+            checkForRestoredState()
+            // Mark session as active
+            WorkflowStateManager.shared.markSessionActive()
+        }
+        .onDisappear {
+            // Clear state when view is dismissed normally (task complete)
+            if step == .result {
+                WorkflowStateManager.shared.markSessionComplete()
+            }
+        }
+    }
+
+    // MARK: - State Persistence
+
+    private func saveCurrentState() {
+        // Only save if we have meaningful state to restore
+        guard !selectedURLs.isEmpty || step != .selectInput else { return }
+
+        let stepName: String
+        switch step {
+        case .selectInput: stepName = "selectInput"
+        case .configure: stepName = "configure"
+        case .processing: stepName = "processing"
+        case .exportPreview: stepName = "exportPreview"
+        case .result: stepName = "result"
+        }
+
+        WorkflowStateManager.shared.saveToolFlowState(
+            tool: tool.rawValue,
+            selectedURLs: selectedURLs,
+            step: stepName
+        )
+    }
+
+    private func checkForRestoredState() {
+        guard let state = WorkflowStateManager.shared.restoreToolFlowState(),
+              state.toolType == tool.rawValue else {
+            return
+        }
+
+        // Only offer restoration if there's meaningful state
+        let urls = state.selectedURLPaths.compactMap { URL(fileURLWithPath: $0) }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+
+        if !urls.isEmpty {
+            showRestorationAlert = true
+        }
+    }
+
+    private func restoreState() {
+        guard let state = WorkflowStateManager.shared.restoreToolFlowState() else { return }
+
+        // Restore selected URLs
+        selectedURLs = state.selectedURLPaths.compactMap { URL(fileURLWithPath: $0) }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+
+        // Restore step (only restore to selectInput or configure, not processing states)
+        switch state.currentStep {
+        case "configure":
+            if !selectedURLs.isEmpty {
+                step = .configure
+            }
+        default:
+            // Stay on selectInput for other states
+            break
+        }
+
+        print("♻️ ToolFlowView: Restored state with \(selectedURLs.count) files")
     }
     
     private var mainContent: some View {

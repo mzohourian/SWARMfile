@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-11
+**Last Updated:** 2025-12-16
 
 ## What This Is
 **OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -26,31 +26,25 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 ### Working
 - Images to PDF conversion
 - PDF merge, split, compress
-- PDF signing (interactive, touch-to-place, multi-page support)
+- PDF signing (interactive, touch-to-place)
 - Image resize and compress
 - Job queue with progress tracking
 - Free tier (3 exports/day)
 - Pro subscriptions (StoreKit 2)
 - On-device search
 - Workflow automation
-- Page organizer with undo/redo and tap-to-select
-- Redaction - visual-first editing (tap to remove, draw to add)
-- Multi-language OCR (12 languages including Arabic, Persian, CJK)
-- File preview (QuickLook) - fixed stale path issue
+- Page organizer with undo/redo and swipe-to-select
+- Redaction with presets
 
 ### Broken / Blocked
-- None currently (rebuild app to get latest Info.plist)
+- None currently
 
 ### Needs Testing
-- **Redact PDF** - Completely redesigned with visual-first approach:
-  - Shows document preview with black boxes overlaid on detected sensitive data
-  - Tap any box to REMOVE it (becomes gray/dashed outline)
-  - Draw/drag on page to ADD new redaction boxes
-  - Pinch-to-zoom or use +/- buttons for better visibility (up to 500%)
-  - **NEW:** Full-screen mode button for maximum visibility and precise editing
-  - Bottom bar shows count and "Apply X Redactions" button
-  - Works on both text-based and scanned/image PDFs via OCR
-  - **FIXED:** Pattern matching now uses OCR text to ensure bounding boxes are found
+- **Redact PDF** - Completely rebuilt with precise character-level redaction:
+  - Fixed file not saving (2 bugs: PDF context timing + ShareSheet deletion)
+  - Redaction now actually works on scanned/image-based PDFs
+  - **NEW**: Uses Vision's character-level bounding boxes (`VNRecognizedText.boundingBox(for:)`) to redact ONLY the exact matched text, not entire lines
+  - Simplified UI - removed Automatic/Manual/Combined modes, single unified flow
 - **Watermark PDF** - Multiple fixes applied, needs user verification:
   - Size slider now has dramatic effect (5%-50% for images, 2%-15% for text)
   - Density slider now has dramatic effect (0.6x to 5x spacing)
@@ -68,91 +62,53 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **PDF "Invalid PDF" error** - Fixed security-scoped resource access:
-  - PDFs from document picker/iCloud require `startAccessingSecurityScopedResource()` before loading
-  - Added proper resource access to: merge, split, compress, redact, fillFormFields
-  - Also fixed in JobEngine.processPDFSplit for page count detection
-  - Ensures cleanup with `defer` and proper error handling
-- **Signature placement** - Fixed Y-coordinate inversion and normalization
-- **PNG rejection** - Fixed broken format validation logic (was checking characters, not extension)
-- **Face ID** - Added @MainActor for LocalAuthentication on main thread
-- **Crash on proceed** - Added missing environment objects to IntegrityDashboardView/HomeView
-- **PDF password protection** - Implemented native PDF encryption with user password input
-- **Merge PDF UI** - Moved "Add More" button to bottom, increased list height, added file count
-- **Split PDF UI** - Fixed page count display (security-scoped access), added real-time validation
-- **Export flow** - Fixed result view not showing after progress completes (removed premature dismiss)
+- **Workflow hybrid interactive/automated redesign** - Major workflow fix:
+  - Interactive steps (Organize, Sign) now use existing app views (PageOrganizerView, InteractiveSignPDFView)
+  - Automated steps (Compress, Watermark, etc.) run with pre-configured settings
+  - Workflow pauses for interactive steps, continues after user completes them
+  - Fixed page numbers showing literal `{page}` - now properly replaced per-page
+  - Fixed date stamp showing "Processed:" prefix and ugly formatting
+  - Made compression more aggressive for visible file size reduction
+- All previous workflow fixes remain in place
 
 ---
 
 ## Last Session Summary
 
-**Date:** 2025-12-11
+**Date:** 2025-12-16
 
 **What Was Done:**
+- **Fixed signature SIZE calculation (bounding box vs actual displayed size):**
+  - Root cause: Signature uses `.aspectRatio(contentMode: .fit)` inside a bounding box
+  - For a square signature in a 300x120 box, actual displayed width is 120px (height-limited)
+  - Previous code used box width (300) for ratio calculation → signatures appeared ~2.5x larger
+  - Fixed `processSignatures()` to calculate actual displayed width based on image aspect ratio
+  - Now signatures appear at the exact size shown on screen
 
-**1. Fixed PDF loading "Invalid PDF" errors:**
-- Root cause: `PDFDocument(url:)` returns nil for files from document picker/iCloud without security-scoped access
-- Added `startAccessingSecurityScopedResource()` to: merge, split, compress, redact, fillFormFields
-- Proper cleanup with `defer` and error handling for cleanup before throwing
+- **Previous session fixes (all still working):**
+  - Position bug fixed (Y coordinate flip removed)
+  - Multi-page signature support added
+  - Drag-anywhere for selected signature
+  - Tap to toggle selection (removed Unselect button)
+  - ViewWidthAtPlacement updated when resizing
 
-**2. Fixed signature placement issues:**
-- Removed Y-coordinate flip (UIKit coordinates, not PDF coordinates)
-- Fixed coordinate normalization to account for scaled/centered PDF pages
-
-**3. Fixed PNG image rejection:**
-- Bug: format validation checked if any CHARACTER was in array, not the whole extension
-- Fixed to check if extension string is in supported formats array
-
-**4. Fixed Face ID not triggering:**
-- LocalAuthentication must run on main thread
-- Added @MainActor to `authenticateForProcessing()` and protocol
-
-**5. Fixed app crash on "Proceed":**
-- Missing `@EnvironmentObject` for `paymentsManager` and `jobManager`
-- Added to IntegrityDashboardView and LegacyHomeView
-
-**6. Implemented PDF password protection:**
-- Added password input field in ToolFlowView
-- Native PDFKit encryption using `PDFDocumentWriteOption.userPasswordOption`
-
-**7. Fixed Merge PDF UI:**
-- Moved "Add More" button to bottom using Spacer
-- Increased list height from 300px to 400px for more visibility
-- Added file count to header ("3 files • Drag to reorder")
-
-**8. Fixed Split PDF UI:**
-- Fixed page count not showing (security-scoped access in loadPDFInfo)
-- Made page count display more prominent with gold background
-- Added real-time validation to prevent pages beyond PDF length
-- Auto-fills end page to total pages on load
-
-**9. Fixed Export flow:**
-- Result view wasn't showing after progress reached 100%
-- Root cause: ExportPreviewView called dismiss() after onConfirm()
-- Removed premature dismiss() - now shows JobResultView with "Share & Save"
+**What's Unfinished:**
+- Build not verified (no Xcode in environment) - user should build and test
 
 **Files Modified This Session:**
-- `OneBox/Modules/CorePDF/CorePDF.swift` - Security-scoped access, signature fix, format fix, password protection
-- `OneBox/OneBox/Services/Privacy.swift` - @MainActor for biometric auth
-- `OneBox/Modules/JobEngine/JobEngine.swift` - PDF-native encryption, split PDF security access
-- `OneBox/OneBox/Views/ToolFlowView.swift` - Password input, split PDF validation
-- `OneBox/OneBox/Views/WorkflowAutomationView.swift` - Password capture
-- `OneBox/OneBox/Views/IntegrityDashboardView.swift` - Environment objects
-- `OneBox/OneBox/Views/HomeView.swift` - Environment objects
-- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift` - Coordinate normalization
-- `OneBox/Modules/UIComponents/UIComponents.swift` - Merge PDF button position
-- `OneBox/OneBox/Views/ExportPreviewView.swift` - Export flow fix
+- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Fixed size calculation to use actual displayed width
 
 ---
 
 ## Next Steps (Priority Order)
 
-1. **REBUILD APP IN XCODE** - Critical: get all fixes from this session
-2. **Test Split PDF** - Page count should display, validation should work
-3. **Test Merge PDF** - "Add More" button at bottom, files visible
-4. **Test Export flow** - Should show result view with "Share & Save" after progress
-5. **Test PDF merge** - Should work with files from document picker/iCloud
-6. Address Swift 6 warnings (optional, non-blocking)
+1. **Build and test in Xcode** - Verify all changes compile
+2. **Test Sign PDF feature:**
+   - Place signature and verify it appears at exact tap location in final PDF
+   - Verify size matches what you see on screen
+   - Test drag-anywhere (drag anywhere on screen while signature selected)
+   - Test multi-page signatures (place signatures on different pages, verify all appear in final)
+3. **Test other features** - Button styling, preview, state persistence
 
 ---
 

@@ -34,17 +34,19 @@ struct SignaturePlacement: Identifiable, Codable {
     let id: UUID
     var pageIndex: Int
     var position: CGPoint // Normalized coordinates (0.0-1.0)
-    var size: CGSize // In PDF points
+    var size: CGSize // In screen pixels at placement time
     var signatureData: SignatureData
     var rotation: CGFloat = 0
-    
+    var viewWidthAtPlacement: CGFloat // Store actual view width for accurate size calculation
+
     init(
         id: UUID = UUID(),
         pageIndex: Int,
         position: CGPoint,
         size: CGSize,
         signatureData: SignatureData,
-        rotation: CGFloat = 0
+        rotation: CGFloat = 0,
+        viewWidthAtPlacement: CGFloat = 400.0
     ) {
         self.id = id
         self.pageIndex = pageIndex
@@ -52,6 +54,7 @@ struct SignaturePlacement: Identifiable, Codable {
         self.size = size
         self.signatureData = signatureData
         self.rotation = rotation
+        self.viewWidthAtPlacement = viewWidthAtPlacement
     }
     
     // Convert normalized position to PDF coordinates

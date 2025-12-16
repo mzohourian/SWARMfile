@@ -15,17 +15,31 @@ struct InteractivePDFPageView: View {
     let pageBounds: CGRect
     let detectedFields: [DetectedSignatureField]
     let placements: [SignaturePlacement]
-    let onTap: (CGPoint) -> Void
+    let onTap: (CGPoint, CGFloat) -> Void  // (normalizedPoint relative to PDF page, pdfDisplayWidth)
     let onPlacementTap: (SignaturePlacement) -> Void
     let onPlacementUpdate: ((SignaturePlacement) -> Void)?
     let selectedPlacement: SignaturePlacement? // Pass from parent
-    
+
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
     @State private var lastScale: CGFloat = 1.0
     @State private var lastOffset: CGSize = .zero
     @State private var viewSize: CGSize = .zero
     @State private var initialFitScale: CGFloat = 1.0 // Store the initial fit scale
+    @State private var signatureResizeScale: CGFloat = 1.0 // Track signature resize during gesture
+    @State private var signatureDragOffset: CGSize = .zero // Track signature drag offset during gesture
+
+    // Calculate the PDF page's display rectangle within the view
+    private func pdfDisplayRect(in viewSize: CGSize) -> CGRect {
+        let scaledWidth = pageBounds.width * scale
+        let scaledHeight = pageBounds.height * scale
+        return CGRect(
+            x: offset.width + (viewSize.width - scaledWidth) / 2,
+            y: offset.height + (viewSize.height - scaledHeight) / 2,
+            width: scaledWidth,
+            height: scaledHeight
+        )
+    }
     
     var body: some View {
         GeometryReader { geometry in
@@ -84,6 +98,8 @@ struct InteractivePDFPageView: View {
                         pdfScale: scale,
                         pdfOffset: offset,
                         isSelected: selectedPlacement?.id == placement.id,
+                        activeResizeScale: selectedPlacement?.id == placement.id ? signatureResizeScale : 1.0,
+                        activeDragOffset: selectedPlacement?.id == placement.id ? signatureDragOffset : .zero,
                         onTap: {
                             onPlacementTap(placement)
                         },
@@ -94,37 +110,69 @@ struct InteractivePDFPageView: View {
                 }
             }
             .gesture(
-                // Pan gesture for page navigation (only when zoomed in and no signature selected)
+                // Universal drag gesture - works anywhere on screen
+                // When signature is selected: moves the signature
+                // When no signature selected and zoomed in: pans the page
                 DragGesture(minimumDistance: 10)
                     .onChanged { value in
-                        // Only pan if zoomed in (scale > initial fit scale) and no signature is selected
-                        if scale > initialFitScale * 1.1 && selectedPlacement == nil {
+                        if let selected = selectedPlacement {
+                            // Move the selected signature
+                            signatureDragOffset = value.translation
+                        } else if scale > initialFitScale * 1.1 {
+                            // Pan the page only when zoomed in
                             offset = CGSize(
                                 width: lastOffset.width + value.translation.width,
                                 height: lastOffset.height + value.translation.height
                             )
                         }
                     }
-                    .onEnded { _ in
-                        if scale > initialFitScale * 1.1 && selectedPlacement == nil {
+                    .onEnded { value in
+                        if let selected = selectedPlacement {
+                            // Apply final position to signature
+                            let pdfRect = pdfDisplayRect(in: geometry.size)
+
+                            // Calculate base position in PDF rect
+                            let basePdfX = pdfRect.minX + (selected.position.x * pdfRect.width)
+                            let basePdfY = pdfRect.minY + (selected.position.y * pdfRect.height)
+
+                            // Calculate final screen position
+                            let finalScreenX = basePdfX + value.translation.width
+                            let finalScreenY = basePdfY + value.translation.height
+
+                            // Convert back to normalized coordinates relative to PDF page
+                            let newPosition = CGPoint(
+                                x: max(0.0, min(1.0, (finalScreenX - pdfRect.minX) / pdfRect.width)),
+                                y: max(0.0, min(1.0, (finalScreenY - pdfRect.minY) / pdfRect.height))
+                            )
+
+                            var updated = selected
+                            updated.position = newPosition
+                            onPlacementUpdate?(updated)
+
+                            signatureDragOffset = .zero
+                            HapticManager.shared.impact(.light)
+                        } else if scale > initialFitScale * 1.1 {
                             lastOffset = offset
                         }
                     }
             )
             .gesture(
-                // Tap gesture for signature placement (only when at fit scale or close to it)
+                // Tap gesture for signature placement
                 DragGesture(minimumDistance: 0)
                     .onEnded { value in
-                        // Check if tap is on a signature (if so, let signature handle it via onTapGesture)
+                        let pdfRect = pdfDisplayRect(in: geometry.size)
+
+                        // Check if tap is on an existing signature
                         let tapPoint = value.location
                         var tappedOnSignature = false
                         for placement in placements {
+                            // Calculate signature screen position relative to PDF page
                             let screenPos = CGPoint(
-                                x: placement.position.x * geometry.size.width,
-                                y: placement.position.y * geometry.size.height
+                                x: pdfRect.minX + (placement.position.x * pdfRect.width),
+                                y: pdfRect.minY + (placement.position.y * pdfRect.height)
                             )
-                            let scaledWidth = max(150, placement.size.width * scale)
-                            let scaledHeight = max(80, placement.size.height * scale)
+                            let scaledWidth = max(100, placement.size.width)
+                            let scaledHeight = max(50, placement.size.height)
                             let sigRect = CGRect(
                                 x: screenPos.x - scaledWidth / 2,
                                 y: screenPos.y - scaledHeight / 2,
@@ -136,53 +184,77 @@ struct InteractivePDFPageView: View {
                                 break
                             }
                         }
-                        
+
                         if !tappedOnSignature {
-                            // If a signature is selected, deselect it first, then allow placement
-                            // This allows users to easily place multiple signatures
-                            if selectedPlacement != nil {
-                                // Deselect by tapping the same placement (parent handles toggle)
-                                // We'll create a dummy placement to trigger deselection
-                                // Actually, we should just allow placement even with selection
-                                // The new placement will become the selected one
-                            }
-                            
-                            // Allow tap-to-place when scale is reasonable (within 50% threshold)
-                            // This makes it easier to place signatures even when slightly zoomed
-                            let scaleThreshold = abs(scale - initialFitScale) / initialFitScale
-                            if scaleThreshold < 0.5 {
-                                let normalizedPoint = normalizePoint(value.location, in: geometry.size)
-                                onTap(normalizedPoint)
+                            // Check if tap is within the PDF page area
+                            if pdfRect.contains(value.location) {
+                                // Normalize tap position relative to PDF page (not view)
+                                let normalizedX = (value.location.x - pdfRect.minX) / pdfRect.width
+                                let normalizedY = (value.location.y - pdfRect.minY) / pdfRect.height
+                                let normalizedPoint = CGPoint(
+                                    x: max(0.0, min(1.0, normalizedX)),
+                                    y: max(0.0, min(1.0, normalizedY))
+                                )
+                                // Pass PDF display width for accurate size calculation
+                                onTap(normalizedPoint, pdfRect.width)
                                 HapticManager.shared.impact(.light)
                             }
                         }
                     }
             )
-            .simultaneousGesture(
-                // Page zoom gesture (only when no signature is selected)
-                // Use simultaneousGesture so it doesn't block other gestures
-                MagnificationGesture()
-                    .onChanged { value in
-                        // Only zoom page if no signature is selected
-                        if selectedPlacement == nil {
-                            let newScale = lastScale * value
-                            scale = min(max(newScale, 0.1), 5.0) // Clamp immediately for responsive feedback
-                        }
-                    }
-                    .onEnded { value in
-                        // Only zoom page if no signature is selected
-                        if selectedPlacement == nil {
-                            let finalScale = lastScale * value
-                            // Allow zooming out below initial scale, but clamp to reasonable limits
-                            scale = min(max(finalScale, 0.1), 5.0) // Allow zoom out to 0.1x, zoom in to 5x
-                            lastScale = scale
-                            lastOffset = offset // Update last offset when zoom ends
-                        }
-                    }
-            )
+            .gesture(pageZoomGesture)
         }
     }
     
+    // Universal pinch gesture - works anywhere on screen
+    // When signature is selected: resizes the signature
+    // When no signature selected: zooms the page
+    private var pageZoomGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                if let selected = selectedPlacement {
+                    // Resize the selected signature
+                    signatureResizeScale = value
+                    // Provide haptic feedback at certain thresholds
+                    if abs(value - 1.0) > 0.1 {
+                        HapticManager.shared.impact(.light)
+                    }
+                } else {
+                    // Zoom the page
+                    let newScale = lastScale * value
+                    scale = min(max(newScale, 0.02), 5.0)
+                }
+            }
+            .onEnded { value in
+                if let selected = selectedPlacement {
+                    // Apply final size to signature
+                    let minSize: CGFloat = 40
+                    let maxSize: CGFloat = 600
+                    let newWidth = max(minSize, min(maxSize, selected.size.width * value))
+                    let newHeight = max(minSize, min(maxSize, selected.size.height * value))
+
+                    // Get current PDF display width for accurate size ratio calculation
+                    let currentPdfRect = pdfDisplayRect(in: viewSize)
+
+                    var updated = selected
+                    updated.size = CGSize(width: newWidth, height: newHeight)
+                    // Update viewWidthAtPlacement to current PDF display width
+                    // This ensures the size ratio is calculated correctly even after zooming
+                    updated.viewWidthAtPlacement = currentPdfRect.width
+                    onPlacementUpdate?(updated)
+
+                    signatureResizeScale = 1.0
+                    HapticManager.shared.impact(.medium)
+                } else {
+                    // Finalize page zoom
+                    let finalScale = lastScale * value
+                    scale = min(max(finalScale, 0.02), 5.0)
+                    lastScale = scale
+                    lastOffset = offset
+                }
+            }
+    }
+
     private func calculateInitialScale(viewSize: CGSize) {
         guard viewSize.width > 0 && viewSize.height > 0 else { return }
         guard pageBounds.width > 0 && pageBounds.height > 0 else { return }
@@ -214,25 +286,13 @@ struct InteractivePDFPageView: View {
     }
     
     private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
-        // Convert screen tap point to PDF page coordinates
-        // The PDF page is scaled and centered within the view
-
-        // Calculate the scaled PDF page dimensions
-        let scaledWidth = pageBounds.width * scale
-        let scaledHeight = pageBounds.height * scale
-
-        // Calculate where the PDF page is positioned (centered in view)
-        let pageOriginX = offset.width + (size.width - scaledWidth) / 2
-        let pageOriginY = offset.height + (size.height - scaledHeight) / 2
-
-        // Convert tap point to be relative to the PDF page
-        let relativeX = point.x - pageOriginX
-        let relativeY = point.y - pageOriginY
-
-        // Normalize to 0.0-1.0 relative to the PDF page size
-        let normalizedX = max(0.0, min(1.0, relativeX / scaledWidth))
-        let normalizedY = max(0.0, min(1.0, relativeY / scaledHeight))
-
+        // Simplified: Convert screen tap point directly to normalized coordinates (0.0-1.0)
+        // This matches the simplified coordinate system used in SignaturePlacementOverlay
+        // No need to account for PDF scale/offset since we're using screen-relative coordinates
+        
+        let normalizedX = max(0.0, min(1.0, point.x / size.width))
+        let normalizedY = max(0.0, min(1.0, point.y / size.height))
+        
         return CGPoint(x: normalizedX, y: normalizedY)
     }
 }
@@ -401,58 +461,57 @@ struct SignaturePlacementOverlay: View {
     let pdfScale: CGFloat
     let pdfOffset: CGSize
     let isSelected: Bool
+    let activeResizeScale: CGFloat  // Scale from parent's pinch gesture for visual feedback
+    let activeDragOffset: CGSize  // Drag offset from parent's drag gesture for visual feedback
     let onTap: () -> Void
     let onUpdate: (SignaturePlacement) -> Void
-    
-    @State private var currentSize: CGSize
+
     @State private var currentPosition: CGPoint
-    @State private var lastMagnification: CGFloat = 1.0
-    @State private var dragOffset: CGSize = .zero
-    @State private var lastScale: CGFloat = 1.0
-    
-    init(placement: SignaturePlacement, pageBounds: CGRect, geometry: GeometryProxy, pdfScale: CGFloat, pdfOffset: CGSize, isSelected: Bool, onTap: @escaping () -> Void, onUpdate: @escaping (SignaturePlacement) -> Void) {
+
+    init(placement: SignaturePlacement, pageBounds: CGRect, geometry: GeometryProxy, pdfScale: CGFloat, pdfOffset: CGSize, isSelected: Bool, activeResizeScale: CGFloat = 1.0, activeDragOffset: CGSize = .zero, onTap: @escaping () -> Void, onUpdate: @escaping (SignaturePlacement) -> Void) {
         self.placement = placement
         self.pageBounds = pageBounds
         self.geometry = geometry
         self.pdfScale = pdfScale
         self.pdfOffset = pdfOffset
         self.isSelected = isSelected
+        self.activeResizeScale = activeResizeScale
+        self.activeDragOffset = activeDragOffset
         self.onTap = onTap
         self.onUpdate = onUpdate
-        _currentSize = State(initialValue: placement.size)
         _currentPosition = State(initialValue: placement.position)
-        _lastScale = State(initialValue: 1.0)
     }
     
-    var body: some View {
-        // Convert normalized PDF position (0.0-1.0) to screen position
-        // The PDF page is scaled and centered within the view
-        let pdfPageScaledWidth = pageBounds.width * pdfScale
-        let pdfPageScaledHeight = pageBounds.height * pdfScale
-        let pageOriginX = pdfOffset.width + (geometry.size.width - pdfPageScaledWidth) / 2
-        let pageOriginY = pdfOffset.height + (geometry.size.height - pdfPageScaledHeight) / 2
+    // Calculate the PDF page's display rectangle within the view
+    private var pdfDisplayRect: CGRect {
+        let scaledWidth = pageBounds.width * pdfScale
+        let scaledHeight = pageBounds.height * pdfScale
+        return CGRect(
+            x: pdfOffset.width + (geometry.size.width - scaledWidth) / 2,
+            y: pdfOffset.height + (geometry.size.height - scaledHeight) / 2,
+            width: scaledWidth,
+            height: scaledHeight
+        )
+    }
 
+    var body: some View {
+        // Calculate position relative to PDF page (not the entire view)
+        let pdfRect = pdfDisplayRect
         let baseScreenPos = CGPoint(
-            x: pageOriginX + (placement.position.x * pdfPageScaledWidth),
-            y: pageOriginY + (placement.position.y * pdfPageScaledHeight)
+            x: pdfRect.minX + (placement.position.x * pdfRect.width),
+            y: pdfRect.minY + (placement.position.y * pdfRect.height)
         )
+        // Use activeDragOffset from parent for drag-anywhere visual feedback
         let screenPos = CGPoint(
-            x: baseScreenPos.x + dragOffset.width,
-            y: baseScreenPos.y + dragOffset.height
+            x: baseScreenPos.x + activeDragOffset.width,
+            y: baseScreenPos.y + activeDragOffset.height
         )
-        
-        // Signature size - use placement size directly (it's already in screen pixels)
-        // Scale it with PDF scale so it matches the PDF zoom level
-        // Use larger minimum sizes for better visibility (especially when PDF is scaled down)
-        // Don't scale down too much - keep signature visible even when PDF is small
-        let baseWidth = currentSize.width
-        let baseHeight = currentSize.height
-        // Use a minimum scale factor to keep signatures visible even when PDF is zoomed out
-        let effectiveScale = max(pdfScale, 0.5) // Don't scale below 50% of original
-        let scaledWidth = baseWidth * effectiveScale
-        let scaledHeight = baseHeight * effectiveScale
-        let scaledSignatureWidth = max(120, scaledWidth) // Minimum 120px width
-        let scaledSignatureHeight = max(80, scaledHeight) // Minimum 80px height
+
+        // Signature size - apply activeResizeScale for live visual feedback during pinch
+        let baseWidth = placement.size.width * activeResizeScale
+        let baseHeight = placement.size.height * activeResizeScale
+        let scaledSignatureWidth = max(40, baseWidth)
+        let scaledSignatureHeight = max(20, baseHeight)
         
         ZStack {
             if case .image(let data) = placement.signatureData {
@@ -495,112 +554,37 @@ struct SignaturePlacementOverlay: View {
                 RoundedRectangle(cornerRadius: 4)
                     .stroke(OneBoxColors.primaryGold, lineWidth: 2)
                     .frame(width: scaledSignatureWidth + 10, height: scaledSignatureHeight + 10)
-                
-                // Resize handles (corners)
+
+                // Resize handles (corners) - use offset instead of position
+                // so handles appear relative to the signature center, not absolute on page
                 ForEach(0..<4) { index in
                     Circle()
                         .fill(OneBoxColors.primaryGold)
-                        .frame(width: 12, height: 12)
-                        .position(resizeHandlePosition(for: index))
+                        .frame(width: 16, height: 16)
+                        .offset(x: resizeHandleOffset(for: index, width: scaledSignatureWidth, height: scaledSignatureHeight).x,
+                                y: resizeHandleOffset(for: index, width: scaledSignatureWidth, height: scaledSignatureHeight).y)
                 }
             }
         }
         .position(x: screenPos.x, y: screenPos.y)
         .onTapGesture {
-            if !isSelected {
-                onTap()
-            }
+            // Always call onTap - parent handles toggle logic (select/deselect)
+            onTap()
         }
-        .gesture(
-            DragGesture()
-                .onChanged { value in
-                    if isSelected {
-                        // Update drag offset for visual feedback
-                        dragOffset = value.translation
-                    }
-                }
-                .onEnded { value in
-                    if isSelected {
-                        // Calculate final screen position: base position + final translation
-                        let finalScreenX = baseScreenPos.x + value.translation.width
-                        let finalScreenY = baseScreenPos.y + value.translation.height
-
-                        // Convert back to normalized PDF coordinates (0.0-1.0)
-                        // Must account for PDF page being centered and scaled
-                        let relativeX = finalScreenX - pageOriginX
-                        let relativeY = finalScreenY - pageOriginY
-                        let newPosition = CGPoint(
-                            x: max(0.0, min(1.0, relativeX / pdfPageScaledWidth)),
-                            y: max(0.0, min(1.0, relativeY / pdfPageScaledHeight))
-                        )
-
-                        var updated = placement
-                        updated.position = newPosition
-                        onUpdate(updated)
-
-                        // Update current position to match
-                        currentPosition = newPosition
-                        dragOffset = .zero
-                    }
-                }
-        )
-        .simultaneousGesture(
-            // Signature resize gesture (works when signature is selected)
-            // Use simultaneousGesture so it doesn't block page zoom when signature is not selected
-            MagnificationGesture()
-                .onChanged { value in
-                    if isSelected {
-                        // Calculate scale relative to original placement size
-                        let scale = value
-                        let newWidth = placement.size.width * scale
-                        let newHeight = placement.size.height * scale
-                        
-                        // Clamp size - larger range for better usability
-                        let minSize: CGFloat = 80
-                        let maxSize: CGFloat = 800
-                        currentSize = CGSize(
-                            width: max(minSize, min(maxSize, newWidth)),
-                            height: max(minSize, min(maxSize, newHeight))
-                        )
-                    }
-                }
-                .onEnded { finalValue in
-                    if isSelected {
-                        // Calculate final size based on original placement size
-                        let finalWidth = placement.size.width * finalValue
-                        let finalHeight = placement.size.height * finalValue
-                        
-                        // Clamp and update - larger range for better usability
-                        let minSize: CGFloat = 80
-                        let maxSize: CGFloat = 800
-                        let finalSize = CGSize(
-                            width: max(minSize, min(maxSize, finalWidth)),
-                            height: max(minSize, min(maxSize, finalHeight))
-                        )
-                        
-                        var updated = placement
-                        updated.size = finalSize
-                        onUpdate(updated)
-                        
-                        // Update tracking variables
-                        currentSize = finalSize
-                        lastScale = finalValue
-                    }
-                }
-        )
+        // Note: Drag and magnification gestures are handled at the page level
+        // This allows drag-anywhere and pinch-to-resize to work anywhere on screen when signature is selected
     }
     
-    private func resizeHandlePosition(for index: Int) -> CGPoint {
-        let scaledWidth = currentSize.width * pdfScale
-        let scaledHeight = currentSize.height * pdfScale
-        let halfWidth = scaledWidth / 2 + 5
-        let halfHeight = scaledHeight / 2 + 5
-        
+    // Calculate offset for resize handles relative to signature center
+    private func resizeHandleOffset(for index: Int, width: CGFloat, height: CGFloat) -> CGPoint {
+        let halfWidth = width / 2 + 5
+        let halfHeight = height / 2 + 5
+
         switch index {
         case 0: return CGPoint(x: -halfWidth, y: -halfHeight) // Top-left
         case 1: return CGPoint(x: halfWidth, y: -halfHeight)  // Top-right
-        case 2: return CGPoint(x: -halfWidth, y: halfHeight) // Bottom-left
-        case 3: return CGPoint(x: halfWidth, y: halfHeight)  // Bottom-right
+        case 2: return CGPoint(x: -halfWidth, y: halfHeight)  // Bottom-left
+        case 3: return CGPoint(x: halfWidth, y: halfHeight)   // Bottom-right
         default: return .zero
         }
     }

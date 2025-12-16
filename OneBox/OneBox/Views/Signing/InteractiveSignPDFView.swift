@@ -56,8 +56,8 @@ struct InteractiveSignPDFView: View {
                             pageBounds: pageBounds,
                             detectedFields: pageFields,
                             placements: pagePlacements,
-                            onTap: { point in
-                                handlePageTap(at: point, in: pageBounds)
+                            onTap: { point, viewWidth in
+                                handlePageTap(at: point, in: pageBounds, viewWidth: viewWidth)
                             },
                             onPlacementTap: { placement in
                                 // Toggle selection - if same placement, deselect
@@ -225,7 +225,7 @@ struct InteractiveSignPDFView: View {
                     Image(systemName: "hand.draw")
                         .font(.caption)
                         .foregroundColor(OneBoxColors.primaryGold)
-                    Text("Signature selected - Drag to move, pinch to resize")
+                    Text("Selected - Drag to move, pinch to resize, tap to unselect")
                         .font(OneBoxTypography.caption)
                         .foregroundColor(OneBoxColors.secondaryText)
                 }
@@ -418,7 +418,7 @@ struct InteractiveSignPDFView: View {
         }
     }
     
-    private func handlePageTap(at point: CGPoint, in pageBounds: CGRect) {
+    private func handlePageTap(at point: CGPoint, in pageBounds: CGRect, viewWidth: CGFloat) {
         // Use current signature or load saved one
         let signatureToUse: SignatureData
         if let current = currentSignatureData {
@@ -430,13 +430,14 @@ struct InteractiveSignPDFView: View {
             // No signature ready - show alert or create one
             return
         }
-        
-        // Create placement at tap location
+
+        // Create placement at tap location with actual view width for accurate size calculation
         let placement = SignaturePlacement(
             pageIndex: currentPageIndex,
             position: point,
             size: placementSize,
-            signatureData: signatureToUse
+            signatureData: signatureToUse,
+            viewWidthAtPlacement: viewWidth
         )
         
         signaturePlacements.append(placement)
@@ -470,90 +471,101 @@ struct InteractiveSignPDFView: View {
     private func processSignatures() {
         guard !signaturePlacements.isEmpty else { return }
         guard let document = pdfDocument else {
-            print("❌ InteractiveSignPDF: No PDF document")
+            print("❌ InteractiveSignPDF: No PDF document available")
             return
         }
 
-        print("🔵 InteractiveSignPDF: Processing \(signaturePlacements.count) signature placements")
+        // Convert ALL placements to SignatureConfigData for multi-page support
+        var signatureConfigs: [SignatureConfigData] = []
 
-        var settings = JobSettings()
-
-        // Convert all placements to SignaturePlacementData for the job
-        var placementDataArray: [SignaturePlacementData] = []
-
-        for (index, placement) in signaturePlacements.enumerated() {
-            // Get page bounds for size calculation
-            guard let page = document.page(at: placement.pageIndex) else {
-                print("⚠️ InteractiveSignPDF: Cannot get page \(placement.pageIndex) for placement \(index + 1)")
+        for placement in signaturePlacements {
+            // Validate page index
+            guard placement.pageIndex >= 0 && placement.pageIndex < document.pageCount else {
+                print("⚠️ InteractiveSignPDF: Skipping invalid page index: \(placement.pageIndex)")
                 continue
             }
 
-            let pageBounds = page.bounds(for: .mediaBox)
-            let pageWidth = pageBounds.width
+            // Calculate ACTUAL displayed width based on image aspect ratio and .fit behavior
+            // The signature view uses .aspectRatio(contentMode: .fit) which means:
+            // - If image is taller relative to its width than the box, height is limiting
+            // - If image is wider relative to its height than the box, width is limiting
+            let boxWidth = placement.size.width
+            let boxHeight = placement.size.height
+            var actualDisplayedWidth = boxWidth  // Default: width fills box (or for text signatures)
 
-            // Calculate signature size as a ratio of page width
-            let signatureWidthInPoints = placement.size.width
-            let calculatedSize: Double
-            if pageWidth > 0 && signatureWidthInPoints > 0 {
-                let sizeRatio = Double(signatureWidthInPoints) / Double(max(pageWidth, 612.0))
-                calculatedSize = sizeRatio
-            } else {
-                calculatedSize = 0.15
+            if case .image(let data) = placement.signatureData,
+               let image = UIImage(data: data),
+               image.size.height > 0 && boxHeight > 0 {
+                let imageAspect = image.size.width / image.size.height  // e.g., 1.0 for square
+                let boxAspect = boxWidth / boxHeight  // e.g., 2.5 for 300x120 box
+
+                if imageAspect < boxAspect {
+                    // Image is taller (relative to width) than the box
+                    // Height fills the box, width is scaled proportionally
+                    // actualWidth = boxHeight * imageAspect
+                    actualDisplayedWidth = boxHeight * imageAspect
+                    print("🔵 InteractiveSignPDF: Image fits by height. imageAspect=\(imageAspect), boxAspect=\(boxAspect), actualWidth=\(actualDisplayedWidth)")
+                }
+                // else: image is wider than box, width fills and actualDisplayedWidth stays as boxWidth
             }
-            let signatureSize = max(0.05, min(0.5, calculatedSize))
 
-            // Validate and clamp position
+            // Calculate signature size as ratio of view width using ACTUAL displayed width
+            let actualViewWidth = placement.viewWidthAtPlacement
+            let calculatedSize: Double
+
+            if actualDisplayedWidth > 0 && actualViewWidth > 0 {
+                let sizeRatio = Double(actualDisplayedWidth) / Double(actualViewWidth)
+                calculatedSize = sizeRatio
+                print("🔵 InteractiveSignPDF: Size calculation - actualDisplayedWidth=\(actualDisplayedWidth), viewWidth=\(actualViewWidth), ratio=\(sizeRatio)")
+            } else {
+                calculatedSize = 0.25 // Safe default
+            }
+
+            // Clamp size to reasonable range
+            let signatureSize = max(0.1, min(0.8, calculatedSize))
+
+            // Clamp position to valid range
             let clampedPosition = CGPoint(
                 x: max(0.0, min(1.0, placement.position.x)),
                 y: max(0.0, min(1.0, placement.position.y))
             )
 
-            // Validate page index
-            guard placement.pageIndex >= 0 && placement.pageIndex < document.pageCount else {
-                print("⚠️ InteractiveSignPDF: Invalid page index \(placement.pageIndex) for placement \(index + 1)")
-                continue
-            }
-
             // Extract signature data
-            var signatureText: String? = nil
-            var signatureImageData: Data? = nil
+            var text: String? = nil
+            var imageData: Data? = nil
 
             switch placement.signatureData {
-            case .text(let text):
-                guard !text.isEmpty else {
-                    print("⚠️ InteractiveSignPDF: Empty signature text for placement \(index + 1)")
-                    continue
-                }
-                signatureText = text
+            case .text(let t):
+                guard !t.isEmpty else { continue }
+                text = t
             case .image(let data):
-                guard !data.isEmpty, UIImage(data: data) != nil else {
-                    print("⚠️ InteractiveSignPDF: Invalid signature image for placement \(index + 1)")
-                    continue
-                }
-                signatureImageData = data
+                guard !data.isEmpty, UIImage(data: data) != nil else { continue }
+                imageData = data
             }
 
-            let placementData = SignaturePlacementData(
+            let config = SignatureConfigData(
                 pageIndex: placement.pageIndex,
                 position: clampedPosition,
                 size: signatureSize,
-                signatureText: signatureText,
-                signatureImageData: signatureImageData
+                text: text,
+                imageData: imageData,
+                opacity: 1.0
             )
-            placementDataArray.append(placementData)
+            signatureConfigs.append(config)
 
-            print("🔵 InteractiveSignPDF: Added placement \(index + 1): page \(placement.pageIndex + 1), position: \(clampedPosition), size: \(signatureSize)")
+            print("🔵 InteractiveSignPDF: Added signature config - page: \(placement.pageIndex), position: \(clampedPosition), size: \(signatureSize)")
         }
 
-        guard !placementDataArray.isEmpty else {
-            loadError = "No valid signature placements. Please place at least one signature."
+        guard !signatureConfigs.isEmpty else {
+            print("❌ InteractiveSignPDF: No valid signatures to process")
+            loadError = "No valid signatures to process. Please try again."
             return
         }
 
-        settings.signaturePlacements = placementDataArray
-        settings.signatureOpacity = 1.0
+        var settings = JobSettings()
+        settings.signatureConfigs = signatureConfigs
 
-        print("🔵 InteractiveSignPDF: Submitting job with \(placementDataArray.count) placements")
+        print("🔵 InteractiveSignPDF: Processing \(signatureConfigs.count) signature(s)")
 
         let job = Job(
             type: .pdfSign,

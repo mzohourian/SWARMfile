@@ -98,14 +98,23 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
   - Modified page-level drag gesture to move signature when selected
   - Removed local drag gesture from SignaturePlacementOverlay
 
+- **Tap to toggle selection:**
+  - Removed Unselect button - cleaner UI
+  - Tap on signature toggles selection (tap to select, tap again to unselect)
+
+- **Fixed signature size after zoom:**
+  - Bug: Resizing after zooming caused wrong size in final PDF
+  - Root cause: viewWidthAtPlacement was not updated when resizing
+  - Fix: Update viewWidthAtPlacement to current PDF display width when resizing
+
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
 
 **Files Modified This Session:**
 - `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed Y flip, added multi-signature support
 - `OneBox/Modules/JobEngine/JobEngine.swift` - Added SignatureConfigData, multi-sig processing
-- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift` - Drag-anywhere gesture
-- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Multi-signature job submission
+- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift` - Drag-anywhere, tap-to-toggle, size fix
+- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Multi-signature, removed Unselect button
 
 ---
 

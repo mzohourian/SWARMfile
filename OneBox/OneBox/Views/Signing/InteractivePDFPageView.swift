@@ -233,8 +233,14 @@ struct InteractivePDFPageView: View {
                     let newWidth = max(minSize, min(maxSize, selected.size.width * value))
                     let newHeight = max(minSize, min(maxSize, selected.size.height * value))
 
+                    // Get current PDF display width for accurate size ratio calculation
+                    let currentPdfRect = pdfDisplayRect(in: viewSize)
+
                     var updated = selected
                     updated.size = CGSize(width: newWidth, height: newHeight)
+                    // Update viewWidthAtPlacement to current PDF display width
+                    // This ensures the size ratio is calculated correctly even after zooming
+                    updated.viewWidthAtPlacement = currentPdfRect.width
                     onPlacementUpdate?(updated)
 
                     signatureResizeScale = 1.0
@@ -562,9 +568,8 @@ struct SignaturePlacementOverlay: View {
         }
         .position(x: screenPos.x, y: screenPos.y)
         .onTapGesture {
-            if !isSelected {
-                onTap()
-            }
+            // Always call onTap - parent handles toggle logic (select/deselect)
+            onTap()
         }
         // Note: Drag and magnification gestures are handled at the page level
         // This allows drag-anywhere and pinch-to-resize to work anywhere on screen when signature is selected

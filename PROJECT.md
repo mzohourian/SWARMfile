@@ -78,43 +78,25 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-16
 
 **What Was Done:**
-- **Fixed signature position bug (Y coordinate flip removed):**
-  - Root cause: CorePDF was incorrectly flipping Y coordinate with `(1.0 - clampedY)`
-  - In UIGraphics PDF context, Y=0 is at TOP (same as screen), so no flip needed
-  - Fixed in both `drawSignatureText` and `drawSignatureImage` with customPosition
+- **Fixed signature SIZE calculation (bounding box vs actual displayed size):**
+  - Root cause: Signature uses `.aspectRatio(contentMode: .fit)` inside a bounding box
+  - For a square signature in a 300x120 box, actual displayed width is 120px (height-limited)
+  - Previous code used box width (300) for ratio calculation → signatures appeared ~2.5x larger
+  - Fixed `processSignatures()` to calculate actual displayed width based on image aspect ratio
+  - Now signatures appear at the exact size shown on screen
 
-- **Multi-page signature support:**
-  - Previously only the first signature was processed!
-  - Added `SignatureConfig` struct in CorePDF for multiple signatures
-  - Added `signPDFWithMultipleSignatures()` method that processes all signatures in one pass
-  - Added `SignatureConfigData` (Codable) in JobEngine to transfer multiple signatures
-  - Updated `processSignatures()` to convert ALL placements to configs
-  - Now all signatures on all pages appear in the final PDF
-
-- **Drag-anywhere for selected signature:**
-  - Previously had to drag directly on the signature
-  - Now like zoom: when signature is selected, dragging anywhere moves it
-  - Added `signatureDragOffset` state at page level
-  - Modified page-level drag gesture to move signature when selected
-  - Removed local drag gesture from SignaturePlacementOverlay
-
-- **Tap to toggle selection:**
-  - Removed Unselect button - cleaner UI
-  - Tap on signature toggles selection (tap to select, tap again to unselect)
-
-- **Fixed signature size after zoom:**
-  - Bug: Resizing after zooming caused wrong size in final PDF
-  - Root cause: viewWidthAtPlacement was not updated when resizing
-  - Fix: Update viewWidthAtPlacement to current PDF display width when resizing
+- **Previous session fixes (all still working):**
+  - Position bug fixed (Y coordinate flip removed)
+  - Multi-page signature support added
+  - Drag-anywhere for selected signature
+  - Tap to toggle selection (removed Unselect button)
+  - ViewWidthAtPlacement updated when resizing
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
 
 **Files Modified This Session:**
-- `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed Y flip, added multi-signature support
-- `OneBox/Modules/JobEngine/JobEngine.swift` - Added SignatureConfigData, multi-sig processing
-- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift` - Drag-anywhere, tap-to-toggle, size fix
-- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Multi-signature, removed Unselect button
+- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Fixed size calculation to use actual displayed width
 
 ---
 

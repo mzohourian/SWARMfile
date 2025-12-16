@@ -485,14 +485,38 @@ struct InteractiveSignPDFView: View {
                 continue
             }
 
-            // Calculate signature size as ratio of view width
-            let signatureWidthInPixels = placement.size.width
+            // Calculate ACTUAL displayed width based on image aspect ratio and .fit behavior
+            // The signature view uses .aspectRatio(contentMode: .fit) which means:
+            // - If image is taller relative to its width than the box, height is limiting
+            // - If image is wider relative to its height than the box, width is limiting
+            let boxWidth = placement.size.width
+            let boxHeight = placement.size.height
+            var actualDisplayedWidth = boxWidth  // Default: width fills box (or for text signatures)
+
+            if case .image(let data) = placement.signatureData,
+               let image = UIImage(data: data),
+               image.size.height > 0 && boxHeight > 0 {
+                let imageAspect = image.size.width / image.size.height  // e.g., 1.0 for square
+                let boxAspect = boxWidth / boxHeight  // e.g., 2.5 for 300x120 box
+
+                if imageAspect < boxAspect {
+                    // Image is taller (relative to width) than the box
+                    // Height fills the box, width is scaled proportionally
+                    // actualWidth = boxHeight * imageAspect
+                    actualDisplayedWidth = boxHeight * imageAspect
+                    print("🔵 InteractiveSignPDF: Image fits by height. imageAspect=\(imageAspect), boxAspect=\(boxAspect), actualWidth=\(actualDisplayedWidth)")
+                }
+                // else: image is wider than box, width fills and actualDisplayedWidth stays as boxWidth
+            }
+
+            // Calculate signature size as ratio of view width using ACTUAL displayed width
             let actualViewWidth = placement.viewWidthAtPlacement
             let calculatedSize: Double
 
-            if signatureWidthInPixels > 0 && actualViewWidth > 0 {
-                let sizeRatio = Double(signatureWidthInPixels) / Double(actualViewWidth)
+            if actualDisplayedWidth > 0 && actualViewWidth > 0 {
+                let sizeRatio = Double(actualDisplayedWidth) / Double(actualViewWidth)
                 calculatedSize = sizeRatio
+                print("🔵 InteractiveSignPDF: Size calculation - actualDisplayedWidth=\(actualDisplayedWidth), viewWidth=\(actualViewWidth), ratio=\(sizeRatio)")
             } else {
                 calculatedSize = 0.25 // Safe default
             }

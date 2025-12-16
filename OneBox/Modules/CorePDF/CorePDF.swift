@@ -13,25 +13,6 @@ import UniformTypeIdentifiers
 import CommonTypes
 import Photos
 
-// MARK: - Signature Configuration
-public struct SignatureConfig {
-    public let pageIndex: Int
-    public let position: CGPoint  // Normalized 0.0-1.0
-    public let size: Double  // As ratio of page width
-    public let text: String?
-    public let image: UIImage?
-    public let opacity: Double
-
-    public init(pageIndex: Int, position: CGPoint, size: Double, text: String? = nil, image: UIImage? = nil, opacity: Double = 1.0) {
-        self.pageIndex = pageIndex
-        self.position = position
-        self.size = size
-        self.text = text
-        self.image = image
-        self.opacity = opacity
-    }
-}
-
 // MARK: - PDF Processor
 public actor PDFProcessor {
 
@@ -90,7 +71,8 @@ public actor PDFProcessor {
                 }
                 
                 // Validate image file and format
-                guard imageURL.pathExtension.lowercased().contains(where: { ["jpg", "jpeg", "png", "heic", "heif"].contains(String($0)) }) else {
+                let supportedFormats = ["jpg", "jpeg", "png", "heic", "heif", "gif", "bmp", "tiff", "tif", "webp"]
+                guard supportedFormats.contains(imageURL.pathExtension.lowercased()) else {
                     UIGraphicsEndPDFContext()
                     throw PDFError.invalidImage("Unsupported format: \(imageURL.lastPathComponent)")
                 }
@@ -173,35 +155,109 @@ public actor PDFProcessor {
         }
 
         let outputURL = temporaryOutputURL(prefix: "merged")
-        let outputDocument = PDFDocument()
 
         var totalPages = 0
-        var processedPages = 0
+        var allPages: [(page: PDFPage, url: URL)] = []
 
-        // Calculate total pages
+        // Track security-scoped resource access for cleanup
+        var accessedURLs: [URL] = []
+
+        // First pass: Collect all pages and find target size (largest dimensions)
+        var maxWidth: CGFloat = 0
+        var maxHeight: CGFloat = 0
+
         for url in pdfURLs {
+            // Start security-scoped resource access (required for files from document picker/iCloud)
+            if url.startAccessingSecurityScopedResource() {
+                accessedURLs.append(url)
+            }
+
             guard let pdf = PDFDocument(url: url) else {
+                // Stop accessing resources before throwing
+                for accessedURL in accessedURLs {
+                    accessedURL.stopAccessingSecurityScopedResource()
+                }
                 throw PDFError.invalidPDF(url.lastPathComponent)
             }
             totalPages += pdf.pageCount
-        }
-
-        // Merge PDFs
-        for url in pdfURLs {
-            guard let pdf = PDFDocument(url: url) else { continue }
 
             for pageIndex in 0..<pdf.pageCount {
                 guard let page = pdf.page(at: pageIndex) else { continue }
-                outputDocument.insert(page, at: outputDocument.pageCount)
-                processedPages += 1
-                progressHandler(Double(processedPages) / Double(totalPages))
+                allPages.append((page: page, url: url))
+
+                let bounds = page.bounds(for: .mediaBox)
+                maxWidth = max(maxWidth, bounds.width)
+                maxHeight = max(maxHeight, bounds.height)
             }
         }
 
-        guard outputDocument.write(to: outputURL) else {
+        // Standard page sizes for reference
+        let standardA4Width: CGFloat = 612  // 8.5" x 72 DPI
+        let standardA4Height: CGFloat = 792 // 11" x 72 DPI
+
+        // Use the larger of: max found size or standard A4
+        let targetWidth = max(maxWidth, standardA4Width)
+        let targetHeight = max(maxHeight, standardA4Height)
+        let targetSize = CGSize(width: targetWidth, height: targetHeight)
+
+        print("🔵 CorePDF.mergePDFs: Target page size: \(targetWidth) x \(targetHeight)")
+
+        // Create output PDF with normalized page sizes
+        UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
+
+        for (index, pageInfo) in allPages.enumerated() {
+            let page = pageInfo.page
+            let originalBounds = page.bounds(for: .mediaBox)
+
+            // Calculate scale to fit page within target size while maintaining aspect ratio
+            let scaleX = targetWidth / originalBounds.width
+            let scaleY = targetHeight / originalBounds.height
+            let scale = min(scaleX, scaleY)
+
+            // Calculate centered position
+            let scaledWidth = originalBounds.width * scale
+            let scaledHeight = originalBounds.height * scale
+            let offsetX = (targetWidth - scaledWidth) / 2
+            let offsetY = (targetHeight - scaledHeight) / 2
+
+            // Create page with target size
+            let pageRect = CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight)
+            UIGraphicsBeginPDFPageWithInfo(pageRect, nil)
+
+            guard let context = UIGraphicsGetCurrentContext() else { continue }
+
+            // Fill background with white
+            context.setFillColor(UIColor.white.cgColor)
+            context.fill(pageRect)
+
+            // Draw the original page scaled and centered
+            context.saveGState()
+
+            // Move to center position and apply scale
+            context.translateBy(x: offsetX, y: targetHeight - offsetY)
+            context.scaleBy(x: scale, y: -scale)
+
+            // Draw page content
+            page.draw(with: .mediaBox, to: context)
+
+            context.restoreGState()
+
+            progressHandler(Double(index + 1) / Double(totalPages))
+        }
+
+        UIGraphicsEndPDFContext()
+
+        // Stop accessing security-scoped resources
+        for accessedURL in accessedURLs {
+            accessedURL.stopAccessingSecurityScopedResource()
+        }
+
+        // Verify output file was created
+        guard FileManager.default.fileExists(atPath: outputURL.path) else {
             throw PDFError.writeFailed
         }
 
+        print("✅ CorePDF.mergePDFs: Successfully merged \(allPages.count) pages")
         return outputURL
     }
 
@@ -211,6 +267,14 @@ public actor PDFProcessor {
         ranges: [ClosedRange<Int>],
         progressHandler: @escaping (Double) -> Void
     ) async throws -> [URL] {
+
+        // Start security-scoped resource access (required for files from document picker/iCloud)
+        let startedAccessing = pdfURL.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
 
         guard let sourcePDF = PDFDocument(url: pdfURL) else {
             throw PDFError.invalidPDF(pdfURL.lastPathComponent)
@@ -248,7 +312,15 @@ public actor PDFProcessor {
         targetSizeMB: Double? = nil,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
-        
+
+        // Start security-scoped resource access (required for files from document picker/iCloud)
+        let startedAccessing = pdfURL.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
         // Validate file size and memory before processing
         if let fileSize = getFileSize(url: pdfURL) {
             let validation = await MainActor.run {
@@ -1091,118 +1163,6 @@ public actor PDFProcessor {
         return outputURL
     }
 
-    // MARK: - Sign PDF with Multiple Signatures
-    public func signPDFWithMultipleSignatures(
-        _ pdfURL: URL,
-        signatures: [SignatureConfig],
-        progressHandler: @escaping (Double) -> Void
-    ) async throws -> URL {
-
-        // Input validation
-        guard !signatures.isEmpty else {
-            throw PDFError.invalidParameters("No signatures provided")
-        }
-
-        // Validate PDF before processing
-        try validatePDF(url: pdfURL)
-
-        // Handle security-scoped resources
-        var startedAccessing = false
-        if pdfURL.startAccessingSecurityScopedResource() {
-            startedAccessing = true
-        }
-        defer {
-            if startedAccessing {
-                pdfURL.stopAccessingSecurityScopedResource()
-            }
-        }
-
-        guard let sourcePDF = PDFDocument(url: pdfURL) else {
-            throw PDFError.invalidPDF(pdfURL.lastPathComponent)
-        }
-
-        let pageCount = sourcePDF.pageCount
-
-        // Validate all signature page indices
-        for sig in signatures {
-            if sig.pageIndex >= pageCount || sig.pageIndex < 0 {
-                throw PDFError.invalidParameters("Signature page index \(sig.pageIndex + 1) is out of range. This PDF has \(pageCount) pages.")
-            }
-        }
-
-        let outputURL = temporaryOutputURL(prefix: "signed_multi")
-
-        guard UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil) else {
-            throw PDFError.contextCreationFailed
-        }
-
-        // Group signatures by page for efficient drawing
-        var signaturesByPage: [Int: [SignatureConfig]] = [:]
-        for sig in signatures {
-            if signaturesByPage[sig.pageIndex] == nil {
-                signaturesByPage[sig.pageIndex] = []
-            }
-            signaturesByPage[sig.pageIndex]?.append(sig)
-        }
-
-        // Process each page
-        for pageIndex in 0..<pageCount {
-            autoreleasepool {
-                guard let page = sourcePDF.page(at: pageIndex) else {
-                    progressHandler(Double(pageIndex + 1) / Double(pageCount))
-                    return
-                }
-
-                let pageBounds = page.bounds(for: .mediaBox)
-                UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
-
-                guard let context = UIGraphicsGetCurrentContext() else {
-                    progressHandler(Double(pageIndex + 1) / Double(pageCount))
-                    return
-                }
-
-                // Draw original page
-                context.saveGState()
-                context.translateBy(x: 0, y: pageBounds.size.height)
-                context.scaleBy(x: 1.0, y: -1.0)
-                page.draw(with: .mediaBox, to: context)
-                context.restoreGState()
-
-                // Draw all signatures for this page
-                if let pageSignatures = signaturesByPage[pageIndex] {
-                    for sig in pageSignatures {
-                        context.saveGState()
-                        context.setAlpha(CGFloat(sig.opacity))
-
-                        if let text = sig.text, !text.isEmpty {
-                            drawSignatureText(text, in: pageBounds, customPosition: sig.position)
-                        } else if let image = sig.image {
-                            drawSignatureImage(image, in: pageBounds, customPosition: sig.position, size: sig.size)
-                        }
-
-                        context.restoreGState()
-                    }
-                }
-
-                progressHandler(Double(pageIndex + 1) / Double(pageCount))
-            }
-        }
-
-        UIGraphicsEndPDFContext()
-
-        // Verify output
-        try? await Task.sleep(nanoseconds: 200_000_000)
-
-        guard FileManager.default.fileExists(atPath: outputURL.path),
-              let createdPDF = PDFDocument(url: outputURL),
-              createdPDF.pageCount > 0 else {
-            throw PDFError.writeFailed
-        }
-
-        print("✅ CorePDF: Successfully created multi-signed PDF with \(signatures.count) signatures at: \(outputURL.path)")
-        return outputURL
-    }
-
     private func drawSignatureText(_ text: String, in bounds: CGRect, position: WatermarkPosition) {
         let fontSize: CGFloat = bounds.height * 0.04
         let attributes: [NSAttributedString.Key: Any] = [
@@ -1252,23 +1212,22 @@ public actor PDFProcessor {
             print("Warning: Invalid bounds for signature text placement")
             return
         }
-
+        
         // Validate and clamp custom position to valid range (0.0 to 1.0)
         let clampedX = max(0.0, min(1.0, customPosition.x))
         let clampedY = max(0.0, min(1.0, customPosition.y))
-
+        
         let fontSize: CGFloat = max(8.0, min(bounds.height * 0.04, 72.0)) // Clamp font size
         let attributes: [NSAttributedString.Key: Any] = [
             .font: UIFont(name: "Snell Roundhand", size: fontSize) ?? UIFont.italicSystemFont(ofSize: fontSize),
             .foregroundColor: UIColor.black
         ]
-
+        
         // Custom position is in normalized coordinates (0.0 to 1.0)
         // The position represents the CENTER of where user tapped, so offset by half text size
-        // In UIGraphics PDF context, Y=0 is at TOP (same as screen), so no Y flip needed
         let textSize = (text as NSString).size(withAttributes: attributes)
         let centerX = bounds.minX + (bounds.width * clampedX)
-        let centerY = bounds.minY + (bounds.height * clampedY)
+        let centerY = bounds.minY + (bounds.height * clampedY) // UIKit coordinates (Y=0 at top)
 
         // Calculate origin by offsetting from center
         let point = CGPoint(
@@ -1284,34 +1243,33 @@ public actor PDFProcessor {
             print("Warning: Invalid image dimensions for signature")
             return
         }
-
+        
         // Validate bounds
         guard bounds.width > 0 && bounds.height > 0 else {
             print("Warning: Invalid bounds for signature placement")
             return
         }
-
+        
         // Validate and clamp custom position to valid range (0.0 to 1.0)
         let clampedX = max(0.0, min(1.0, customPosition.x))
         let clampedY = max(0.0, min(1.0, customPosition.y))
-
+        
         let aspectRatio = image.size.height / image.size.width
         let signatureSize = CGSize(
             width: bounds.width * CGFloat(size),
             height: bounds.width * CGFloat(size) * aspectRatio
         )
-
+        
         // Ensure signature doesn't exceed page bounds
         let clampedSize = CGSize(
             width: min(signatureSize.width, bounds.width * 0.9),
             height: min(signatureSize.height, bounds.height * 0.9)
         )
-
+        
         // Custom position is in normalized coordinates (0.0 to 1.0)
         // The position represents the CENTER of where user tapped, so offset by half signature size
-        // In UIGraphics PDF context, Y=0 is at TOP (same as screen), so no Y flip needed
         let centerX = bounds.minX + (bounds.width * clampedX)
-        let centerY = bounds.minY + (bounds.height * clampedY)
+        let centerY = bounds.minY + (bounds.height * clampedY) // UIKit coordinates (Y=0 at top)
 
         // Calculate origin by offsetting from center
         let origin = CGPoint(
@@ -1487,6 +1445,14 @@ public actor PDFProcessor {
         print("🔵 CorePDF.redactPDF: Input PDF: \(pdfURL.path)")
         print("🔵 CorePDF.redactPDF: Redaction items: \(redactionItems)")
 
+        // Start security-scoped resource access (required for files from document picker/iCloud)
+        let startedAccessing = pdfURL.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
         guard let sourcePDF = PDFDocument(url: pdfURL) else {
             print("❌ CorePDF.redactPDF: Failed to load source PDF")
             throw PDFError.invalidPDF(pdfURL.lastPathComponent)
@@ -1640,11 +1606,19 @@ public actor PDFProcessor {
         stamps: [String], // Simplified stamp array
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
-        
+
+        // Start security-scoped resource access (required for files from document picker/iCloud)
+        let startedAccessing = pdfURL.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
         guard let sourcePDF = PDFDocument(url: pdfURL) else {
             throw PDFError.invalidPDF(pdfURL.lastPathComponent)
         }
-        
+
         let outputURL = temporaryOutputURL(prefix: "form_filled")
         let pageCount = sourcePDF.pageCount
 
@@ -1848,6 +1822,69 @@ public actor PDFProcessor {
             return nil
         }
         return size
+    }
+
+    // MARK: - PDF Password Protection
+
+    /// Adds password protection to a PDF file
+    /// - Parameters:
+    ///   - pdfURL: URL of the PDF to protect
+    ///   - password: Password to set for opening the PDF
+    ///   - progressHandler: Progress callback
+    /// - Returns: URL of the password-protected PDF
+    public func passwordProtectPDF(
+        _ pdfURL: URL,
+        password: String,
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> URL {
+        // Validate password
+        guard !password.isEmpty else {
+            throw PDFError.invalidParameters("Password cannot be empty")
+        }
+
+        // Validate PDF
+        try validatePDF(url: pdfURL)
+
+        // Handle security-scoped resources
+        var startedAccessing = false
+        if pdfURL.startAccessingSecurityScopedResource() {
+            startedAccessing = true
+        }
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        guard let document = PDFDocument(url: pdfURL) else {
+            throw PDFError.invalidPDF(pdfURL.lastPathComponent)
+        }
+
+        progressHandler(0.3)
+
+        let outputURL = temporaryOutputURL(prefix: "protected_pdf")
+
+        // Create write options with password protection
+        let writeOptions: [PDFDocumentWriteOption: Any] = [
+            .userPasswordOption: password,
+            .ownerPasswordOption: password
+        ]
+
+        progressHandler(0.6)
+
+        // Write password-protected PDF
+        guard document.write(to: outputURL, withOptions: writeOptions) else {
+            throw PDFError.writeFailed
+        }
+
+        progressHandler(1.0)
+
+        // Verify output
+        guard FileManager.default.fileExists(atPath: outputURL.path) else {
+            throw PDFError.writeFailed
+        }
+
+        return outputURL
     }
 
     // MARK: - Helper Methods

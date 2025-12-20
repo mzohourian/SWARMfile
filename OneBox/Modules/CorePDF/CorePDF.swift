@@ -13,6 +13,25 @@ import UniformTypeIdentifiers
 import CommonTypes
 import Photos
 
+// MARK: - Signature Config (for multi-signature support)
+public struct SignatureConfig {
+    public let pageIndex: Int
+    public let position: CGPoint
+    public let size: Double
+    public let text: String?
+    public let image: UIImage?
+    public let opacity: Double
+
+    public init(pageIndex: Int, position: CGPoint, size: Double, text: String? = nil, image: UIImage? = nil, opacity: Double = 1.0) {
+        self.pageIndex = pageIndex
+        self.position = position
+        self.size = size
+        self.text = text
+        self.image = image
+        self.opacity = opacity
+    }
+}
+
 // MARK: - PDF Processor
 public actor PDFProcessor {
 
@@ -1161,6 +1180,148 @@ public actor PDFProcessor {
         
         print("✅ CorePDF: Successfully created signed PDF at: \(outputURL.path), size: \(getFileSize(url: outputURL) ?? 0) bytes, pages: \(createdPDF.pageCount)")
         return outputURL
+    }
+
+    // MARK: - Sign PDF with Multiple Signatures
+    public func signPDFWithMultipleSignatures(
+        _ pdfURL: URL,
+        signatures: [SignatureConfig],
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> URL {
+
+        // Input validation
+        guard !signatures.isEmpty else {
+            throw PDFError.invalidParameters("No signatures provided")
+        }
+
+        // Validate at least one signature has content
+        let hasValidSignature = signatures.contains { sig in
+            (sig.text != nil && !sig.text!.isEmpty) || sig.image != nil
+        }
+        guard hasValidSignature else {
+            throw PDFError.invalidParameters("Please provide a signature. Either enter text or draw a signature.")
+        }
+
+        // Validate PDF before processing
+        try validatePDF(url: pdfURL)
+
+        // Handle security-scoped resources
+        var startedAccessing = false
+        if pdfURL.startAccessingSecurityScopedResource() {
+            startedAccessing = true
+        }
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        guard let sourcePDF = PDFDocument(url: pdfURL) else {
+            throw PDFError.invalidPDF(pdfURL.lastPathComponent)
+        }
+
+        let pageCount = sourcePDF.pageCount
+
+        // Validate all page indices
+        for sig in signatures {
+            if sig.pageIndex >= pageCount || sig.pageIndex < 0 {
+                throw PDFError.invalidParameters("Signature page index \(sig.pageIndex + 1) is out of range. This PDF has \(pageCount) page\(pageCount == 1 ? "" : "s").")
+            }
+        }
+
+        let outputURL = temporaryOutputURL(prefix: "signed_multi")
+
+        // Ensure output directory exists
+        let outputDir = outputURL.deletingLastPathComponent()
+        if !FileManager.default.fileExists(atPath: outputDir.path) {
+            try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true, attributes: nil)
+        }
+
+        guard UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil) else {
+            throw PDFError.contextCreationFailed
+        }
+
+        // Group signatures by page index for efficient drawing
+        var signaturesByPage: [Int: [SignatureConfig]] = [:]
+        for sig in signatures {
+            signaturesByPage[sig.pageIndex, default: []].append(sig)
+        }
+
+        // Process each page
+        for pageIndex in 0..<pageCount {
+            autoreleasepool {
+                guard let page = sourcePDF.page(at: pageIndex) else { return }
+
+                let pageBounds = page.bounds(for: .mediaBox)
+                UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
+
+                guard let context = UIGraphicsGetCurrentContext() else { return }
+
+                // Draw original page
+                context.saveGState()
+                context.translateBy(x: 0, y: pageBounds.height)
+                context.scaleBy(x: 1, y: -1)
+                page.draw(with: .mediaBox, to: context)
+                context.restoreGState()
+
+                // Draw all signatures for this page
+                if let pageSignatures = signaturesByPage[pageIndex] {
+                    for sig in pageSignatures {
+                        context.saveGState()
+                        context.setAlpha(CGFloat(sig.opacity))
+
+                        if let text = sig.text, !text.isEmpty {
+                            drawSignatureText(text, in: pageBounds, customPosition: sig.position)
+                        } else if let image = sig.image {
+                            drawSignatureImageAtPosition(image, in: pageBounds, position: sig.position, size: sig.size)
+                        }
+
+                        context.restoreGState()
+                    }
+                }
+
+                progressHandler(Double(pageIndex + 1) / Double(pageCount))
+            }
+        }
+
+        UIGraphicsEndPDFContext()
+
+        // Give file system time to flush
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        // Verify output file
+        guard FileManager.default.fileExists(atPath: outputURL.path) else {
+            throw PDFError.writeFailed
+        }
+
+        guard let createdPDF = PDFDocument(url: outputURL), createdPDF.pageCount > 0 else {
+            try? FileManager.default.removeItem(at: outputURL)
+            throw PDFError.writeFailed
+        }
+
+        print("✅ CorePDF: Successfully created multi-signed PDF at: \(outputURL.path), signatures: \(signatures.count)")
+        return outputURL
+    }
+
+    // Helper for drawing signature image at exact position
+    private func drawSignatureImageAtPosition(_ image: UIImage, in bounds: CGRect, position: CGPoint, size: Double) {
+        guard image.size.width > 0 && image.size.height > 0 else { return }
+        guard bounds.width > 0 && bounds.height > 0 else { return }
+
+        let aspectRatio = image.size.height / image.size.width
+        let signatureWidth = bounds.width * CGFloat(size)
+        let signatureHeight = signatureWidth * aspectRatio
+
+        let signatureSize = CGSize(width: signatureWidth, height: signatureHeight)
+
+        // Position is the center point, convert to origin (top-left)
+        let origin = CGPoint(
+            x: position.x - signatureSize.width / 2,
+            y: position.y - signatureSize.height / 2
+        )
+
+        let rect = CGRect(origin: origin, size: signatureSize)
+        image.draw(in: rect)
     }
 
     private func drawSignatureText(_ text: String, in bounds: CGRect, position: WatermarkPosition) {

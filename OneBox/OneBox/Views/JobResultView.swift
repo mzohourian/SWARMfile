@@ -20,6 +20,7 @@ struct JobResultView: View {
     @State private var isSavingToPhotos = false
     @State private var saveToPhotosError: String?
     @State private var showSaveError = false
+    @State private var showPreviewError = false
 
     var body: some View {
         NavigationStack {
@@ -59,9 +60,27 @@ struct JobResultView: View {
             .sheet(isPresented: $showShareSheet) {
                 ShareSheet(items: job.outputURLs)
             }
-            .sheet(isPresented: $showPreview) {
+            .fullScreenCover(isPresented: $showPreview) {
                 if let url = previewURL {
-                    QuickLookPreview(url: url)
+                    QuickLookPreviewWrapper(url: url, isPresented: $showPreview)
+                } else {
+                    // Fallback if URL is nil - show error
+                    VStack(spacing: 16) {
+                        Image(systemName: "doc.questionmark")
+                            .font(.system(size: 60))
+                            .foregroundColor(.secondary)
+                        Text("Unable to preview file")
+                            .font(.headline)
+                        Text("The file may have been moved or deleted.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Button("Close") {
+                            showPreview = false
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
                 }
             }
         }
@@ -99,6 +118,7 @@ struct JobResultView: View {
                         showPreview = true
                     } else {
                         print("❌ Could not make file accessible for preview: \(url)")
+                        showPreviewError = true
                     }
                 } label: {
                     HStack(spacing: 12) {
@@ -199,7 +219,10 @@ struct JobResultView: View {
                         showPreview = true
                     } else {
                         print("❌ Could not make file accessible for preview: \(url)")
+                        showPreviewError = true
                     }
+                } else {
+                    showPreviewError = true
                 }
             }
 
@@ -216,6 +239,11 @@ struct JobResultView: View {
             if let error = saveToPhotosError {
                 Text(error)
             }
+        }
+        .alert("Unable to Preview", isPresented: $showPreviewError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The file may have been moved or deleted. Try processing again.")
         }
     }
     
@@ -511,6 +539,27 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - QuickLook Preview Wrapper (with dismiss button)
+struct QuickLookPreviewWrapper: View {
+    let url: URL
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        NavigationStack {
+            QuickLookPreview(url: url)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Done") {
+                            isPresented = false
+                        }
+                    }
+                }
+                .ignoresSafeArea()
+        }
+    }
 }
 
 // MARK: - QuickLook Preview

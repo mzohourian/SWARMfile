@@ -1671,7 +1671,7 @@ struct ConfigurationView: View {
                 imageSettings
             default:
                 Text("Ready to process")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(OneBoxColors.secondaryText)
             }
         }
     }
@@ -1747,7 +1747,7 @@ struct ConfigurationView: View {
                 if settings.imageFormat == .png {
                     Text("Quality setting not available for PNG")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                 }
             }
 
@@ -1757,28 +1757,29 @@ struct ConfigurationView: View {
                     Text("Resolution: \(Int(settings.imageResolution)) DPI")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    
+                        .foregroundColor(OneBoxColors.primaryText)
+
                     Spacer()
-                    
+
                     Text(estimatedSizeText)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                 }
-                
+
                 Slider(value: $settings.imageResolution, in: 72...150, step: 12)
-                
+
                 HStack {
                     Text("72 DPI")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                     Spacer()
                     Text("Web Quality")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                     Spacer()
                     Text("150 DPI")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                 }
             }
 
@@ -1800,7 +1801,7 @@ struct ConfigurationView: View {
                 if !settings.selectAllPages {
                     Text("Convert specific pages only")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                 }
             }
 
@@ -2237,20 +2238,20 @@ struct PDFSplitRangeSelector: View {
                         .scaleEffect(0.8)
                     Text("Loading PDF info...")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                 }
             }
 
             Text("Add page ranges to split (e.g., 1-3, 5, 7-10)")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(OneBoxColors.secondaryText)
 
             // Add range controls
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("From")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                     TextField("1", text: $startPage)
                         .textFieldStyle(.roundedBorder)
                         .keyboardType(.numberPad)
@@ -2263,7 +2264,7 @@ struct PDFSplitRangeSelector: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("To")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                     TextField("1", text: $endPage)
                         .textFieldStyle(.roundedBorder)
                         .keyboardType(.numberPad)
@@ -2276,7 +2277,7 @@ struct PDFSplitRangeSelector: View {
                 Button(action: addRange) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title2)
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(OneBoxColors.primaryGold)
                 }
                 .disabled(totalPages == 0)
             }
@@ -2297,12 +2298,14 @@ struct PDFSplitRangeSelector: View {
                     Text("Ranges:")
                         .font(.subheadline)
                         .fontWeight(.medium)
+                        .foregroundColor(OneBoxColors.primaryText)
 
                     ForEach(Array(pageRanges.enumerated()), id: \.offset) { index, range in
                         HStack {
                             if let first = range.first, let last = range.last {
                                 Text("Pages \(first)-\(last)")
                                     .font(.subheadline)
+                                    .foregroundColor(OneBoxColors.primaryText)
                             }
                             Spacer()
                             Button(action: { removeRange(at: index) }) {
@@ -2311,7 +2314,7 @@ struct PDFSplitRangeSelector: View {
                             }
                         }
                         .padding(8)
-                        .background(Color(.secondarySystemGroupedBackground))
+                        .background(OneBoxColors.surfaceGraphite)
                         .cornerRadius(8)
                     }
                 }
@@ -2427,15 +2430,15 @@ struct PDFCompressionSettings: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Original Size: \(String(format: "%.1f", originalSizeMB)) MB")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
 
                     Text("Achievable range: \(String(format: "%.1f", minAchievableMB)) - \(String(format: "%.1f", maxAchievableMB)) MB")
                         .font(.caption)
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(OneBoxColors.primaryGold)
                 }
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.secondarySystemGroupedBackground))
+                .background(OneBoxColors.surfaceGraphite)
                 .cornerRadius(8)
             }
 
@@ -2465,11 +2468,11 @@ struct PDFCompressionSettings: View {
                     HStack {
                         Text("\(String(format: "%.1f", minAchievableMB)) MB")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(OneBoxColors.secondaryText)
                         Spacer()
                         Text("\(String(format: "%.1f", maxAchievableMB)) MB")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(OneBoxColors.secondaryText)
                     }
                 }
 

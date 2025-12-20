@@ -1785,11 +1785,14 @@ struct ConfigurationView: View {
 
             // Select All Pages Toggle
             VStack(alignment: .leading, spacing: 8) {
-                Toggle("Select All Pages", isOn: $settings.selectAllPages)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
-                    .onChange(of: settings.selectAllPages) { isOn in
+                Toggle(isOn: $settings.selectAllPages) {
+                    Text("Select All Pages")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(OneBoxColors.primaryText)
+                }
+                .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
+                .onChange(of: settings.selectAllPages) { isOn in
                         if isOn {
                             // Clear page ranges when selecting all pages
                             settings.splitRanges = []
@@ -2059,7 +2062,10 @@ struct ConfigurationView: View {
 
     private var advancedSettings: some View {
         VStack(spacing: 16) {
-            Toggle("Strip Metadata", isOn: $settings.stripMetadata)
+            Toggle(isOn: $settings.stripMetadata) {
+                Text("Strip Metadata")
+                    .foregroundColor(OneBoxColors.primaryText)
+            }
 
             if tool == .imagesToPDF || tool.rawValue.contains("pdf") {
                 TextField("PDF Title", text: Binding(

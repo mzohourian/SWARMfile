@@ -32,7 +32,10 @@ struct WorkflowHooksView: View {
                         
                         // Suggested workflow steps
                         suggestedStepsSection
-                        
+
+                        // All available features
+                        allFeaturesSection
+
                         // Workflow builder
                         workflowBuilderSection
                     }
@@ -100,16 +103,70 @@ struct WorkflowHooksView: View {
             Text("Suggested Steps")
                 .font(OneBoxTypography.cardTitle)
                 .foregroundColor(OneBoxColors.primaryText)
-            
+
             // Auto-suggest workflow based on tool and file types
             let suggestedSteps = suggestWorkflowSteps()
-            
+
             ForEach(suggestedSteps, id: \.id) { step in
                 suggestedStepCard(step)
             }
         }
     }
-    
+
+    private var allFeaturesSection: some View {
+        VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
+            Text("All Features")
+                .font(OneBoxTypography.cardTitle)
+                .foregroundColor(OneBoxColors.primaryText)
+
+            Text("Tap any feature to add it to your workflow")
+                .font(OneBoxTypography.caption)
+                .foregroundColor(OneBoxColors.secondaryText)
+
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: OneBoxSpacing.small) {
+                ForEach(WorkflowStep.allCases, id: \.id) { step in
+                    featureCard(step)
+                }
+            }
+        }
+    }
+
+    private func featureCard(_ step: WorkflowStep) -> some View {
+        Button(action: {
+            if !workflowSteps.contains(step) {
+                workflowSteps.append(step)
+            }
+        }) {
+            VStack(spacing: OneBoxSpacing.small) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: step.icon)
+                        .font(.title2)
+                        .foregroundColor(OneBoxColors.primaryGold)
+                        .frame(maxWidth: .infinity)
+
+                    if workflowSteps.contains(step) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(OneBoxColors.secureGreen)
+                            .font(.caption)
+                    }
+                }
+
+                Text(step.title)
+                    .font(OneBoxTypography.caption)
+                    .foregroundColor(OneBoxColors.primaryText)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+            .padding(OneBoxSpacing.small)
+            .frame(maxWidth: .infinity)
+            .background(OneBoxColors.surfaceGraphite.opacity(0.3))
+            .cornerRadius(OneBoxRadius.small)
+        }
+    }
+
     private func suggestedStepCard(_ step: WorkflowStep) -> some View {
         Button(action: {
             if !workflowSteps.contains(step) {

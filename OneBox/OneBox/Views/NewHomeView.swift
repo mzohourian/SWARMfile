@@ -21,6 +21,7 @@ struct HomeView: View {
     @State private var showingToolFlow = false
     @State private var showingIntegrityDashboard = false
     @State private var showingWorkflowConcierge = false
+    @State private var showingRecentFiles = false
     @StateObject private var searchService = OnDeviceSearchService.shared
 
     var body: some View {
@@ -81,6 +82,10 @@ struct HomeView: View {
             WorkflowConciergeView()
                 .environmentObject(jobManager)
                 .environmentObject(paymentsManager)
+        }
+        .sheet(isPresented: $showingRecentFiles) {
+            RecentsView()
+                .environmentObject(jobManager)
         }
     }
 
@@ -392,7 +397,7 @@ struct HomeView: View {
 
                 HStack(spacing: OneBoxSpacing.small) {
                     quickActionButton("Recent Files", "clock.fill") {
-                        // TODO: Show recent files view
+                        showingRecentFiles = true
                     }
 
                     quickActionButton("Workflows", "gear.badge.checkmark") {

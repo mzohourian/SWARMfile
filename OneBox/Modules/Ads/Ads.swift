@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIComponents
 
 // MARK: - Ad Banner View
 @available(iOS 14.0, macOS 11.0, *)
@@ -20,16 +21,17 @@ public struct AdBannerView: View {
                 HStack(spacing: 12) {
                     // Placeholder ad content
                     Image(systemName: "sparkles")
-                        .foregroundColor(.orange)
+                        .foregroundColor(OneBoxColors.primaryGold)
                         .font(.title3)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Upgrade to Pro")
                             .font(.subheadline)
                             .fontWeight(.semibold)
+                            .foregroundColor(OneBoxColors.primaryText)
                         Text("Remove ads and unlock unlimited exports")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(OneBoxColors.secondaryText)
                     }
 
                     Spacer()
@@ -42,17 +44,17 @@ public struct AdBannerView: View {
                             .fontWeight(.semibold)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.orange)
-                            .foregroundColor(.white)
+                            .background(OneBoxColors.primaryGold)
+                            .foregroundColor(OneBoxColors.primaryGraphite)
                             .cornerRadius(6)
                     }
                 }
                 .padding()
-                .background(Color.gray.opacity(0.1))
+                .background(OneBoxColors.secondaryGraphite)
                 .cornerRadius(12)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                        .stroke(OneBoxColors.primaryGold.opacity(0.3), lineWidth: 1)
                 )
             }
         }

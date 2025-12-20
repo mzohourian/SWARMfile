@@ -1273,7 +1273,8 @@ public actor PDFProcessor {
                         if let text = sig.text, !text.isEmpty {
                             drawSignatureText(text, in: pageBounds, customPosition: sig.position)
                         } else if let image = sig.image {
-                            drawSignatureImageAtPosition(image, in: pageBounds, position: sig.position, size: sig.size)
+                            // Use existing method that handles normalized coordinates (0.0 to 1.0)
+                            drawSignatureImage(image, in: pageBounds, customPosition: sig.position, size: sig.size)
                         }
 
                         context.restoreGState()
@@ -1301,27 +1302,6 @@ public actor PDFProcessor {
 
         print("✅ CorePDF: Successfully created multi-signed PDF at: \(outputURL.path), signatures: \(signatures.count)")
         return outputURL
-    }
-
-    // Helper for drawing signature image at exact position
-    private func drawSignatureImageAtPosition(_ image: UIImage, in bounds: CGRect, position: CGPoint, size: Double) {
-        guard image.size.width > 0 && image.size.height > 0 else { return }
-        guard bounds.width > 0 && bounds.height > 0 else { return }
-
-        let aspectRatio = image.size.height / image.size.width
-        let signatureWidth = bounds.width * CGFloat(size)
-        let signatureHeight = signatureWidth * aspectRatio
-
-        let signatureSize = CGSize(width: signatureWidth, height: signatureHeight)
-
-        // Position is the center point, convert to origin (top-left)
-        let origin = CGPoint(
-            x: position.x - signatureSize.width / 2,
-            y: position.y - signatureSize.height / 2
-        )
-
-        let rect = CGRect(origin: origin, size: signatureSize)
-        image.draw(in: rect)
     }
 
     private func drawSignatureText(_ text: String, in bounds: CGRect, position: WatermarkPosition) {

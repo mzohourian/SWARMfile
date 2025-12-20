@@ -1384,47 +1384,35 @@ public actor PDFProcessor {
             print("Warning: Invalid image dimensions for signature")
             return
         }
-        
+
         // Validate bounds
         guard bounds.width > 0 && bounds.height > 0 else {
             print("Warning: Invalid bounds for signature placement")
             return
         }
-        
+
         // Validate and clamp custom position to valid range (0.0 to 1.0)
         let clampedX = max(0.0, min(1.0, customPosition.x))
         let clampedY = max(0.0, min(1.0, customPosition.y))
-        
+
         let aspectRatio = image.size.height / image.size.width
         let signatureSize = CGSize(
             width: bounds.width * CGFloat(size),
             height: bounds.width * CGFloat(size) * aspectRatio
         )
-        
-        // Ensure signature doesn't exceed page bounds
-        let clampedSize = CGSize(
-            width: min(signatureSize.width, bounds.width * 0.9),
-            height: min(signatureSize.height, bounds.height * 0.9)
-        )
-        
+
         // Custom position is in normalized coordinates (0.0 to 1.0)
         // The position represents the CENTER of where user tapped, so offset by half signature size
         let centerX = bounds.minX + (bounds.width * clampedX)
-        let centerY = bounds.minY + (bounds.height * clampedY) // UIKit coordinates (Y=0 at top)
+        let centerY = bounds.minY + (bounds.height * clampedY)
 
-        // Calculate origin by offsetting from center
+        // Calculate origin by offsetting from center - place exactly where user tapped
         let origin = CGPoint(
-            x: centerX - (clampedSize.width / 2),
-            y: centerY - (clampedSize.height / 2)
+            x: centerX - (signatureSize.width / 2),
+            y: centerY - (signatureSize.height / 2)
         )
 
-        // Ensure signature stays within page bounds
-        let finalOrigin = CGPoint(
-            x: max(bounds.minX, min(origin.x, bounds.maxX - clampedSize.width)),
-            y: max(bounds.minY, min(origin.y, bounds.maxY - clampedSize.height))
-        )
-
-        let rect = CGRect(origin: finalOrigin, size: clampedSize)
+        let rect = CGRect(origin: origin, size: signatureSize)
         image.draw(in: rect)
     }
 

@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-16
+**Last Updated:** 2025-12-20
 
 ## What This Is
 **OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -62,41 +62,42 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **Workflow hybrid interactive/automated redesign** - Major workflow fix:
-  - Interactive steps (Organize, Sign) now use existing app views (PageOrganizerView, InteractiveSignPDFView)
-  - Automated steps (Compress, Watermark, etc.) run with pre-configured settings
-  - Workflow pauses for interactive steps, continues after user completes them
-  - Fixed page numbers showing literal `{page}` - now properly replaced per-page
-  - Fixed date stamp showing "Processed:" prefix and ugly formatting
-  - Made compression more aggressive for visible file size reduction
-- All previous workflow fixes remain in place
+- **Fixed black text on dark backgrounds (success/result page):**
+  - JobResultView.swift: Changed system colors (.secondary, .primary) to OneBoxColors
+  - Added dark background (OneBoxColors.primaryGraphite) to the success page
+  - Fixed InfoRow component in UIComponents.swift to use proper colors
+- **Fixed Split PDF only showing 1 file in preview:**
+  - Root cause: saveOutputFilesToDocuments() used same filename for all files
+  - All files were overwriting each other with same timestamp-based name
+  - Fixed by adding unique index suffix to filenames (e.g., split_pdf_date_1.pdf, split_pdf_date_2.pdf)
+- **Fixed "files removed or deleted" error on success page:**
+  - Same root cause as above - files now persist with unique names
+- **Fixed black text in Merge PDF configuration:**
+  - Fixed ReorderableFilePickerRow and ReorderableFileListView in UIComponents.swift
+  - Changed .secondary/.primary colors to OneBoxColors equivalents
+- All previous fixes remain in place
 
 ---
 
 ## Last Session Summary
 
-**Date:** 2025-12-16
+**Date:** 2025-12-20
 
 **What Was Done:**
-- **Fixed signature SIZE calculation (bounding box vs actual displayed size):**
-  - Root cause: Signature uses `.aspectRatio(contentMode: .fit)` inside a bounding box
-  - For a square signature in a 300x120 box, actual displayed width is 120px (height-limited)
-  - Previous code used box width (300) for ratio calculation → signatures appeared ~2.5x larger
-  - Fixed `processSignatures()` to calculate actual displayed width based on image aspect ratio
-  - Now signatures appear at the exact size shown on screen
-
-- **Previous session fixes (all still working):**
-  - Position bug fixed (Y coordinate flip removed)
-  - Multi-page signature support added
-  - Drag-anywhere for selected signature
-  - Tap to toggle selection (removed Unselect button)
-  - ViewWidthAtPlacement updated when resizing
+- **Fixed black text on dark backgrounds (4 issues):**
+  1. Success/result page: Added proper colors to JobResultView.swift, added dark background
+  2. Split PDF preview: Fixed saveOutputFilesToDocuments() to use unique filenames with index
+  3. Files deleted error: Same fix - unique filenames prevent overwriting
+  4. Merge PDF config: Fixed ReorderableFilePickerRow and ReorderableFileListView colors
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
+- Other views (PaywallView, HomeView, PrivacyDashboardView, etc.) still have system colors
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Fixed size calculation to use actual displayed width
+- `OneBox/OneBox/Views/JobResultView.swift` - Fixed success page colors and background
+- `OneBox/Modules/JobEngine/JobEngine.swift` - Fixed unique filenames for multi-file outputs
+- `OneBox/Modules/UIComponents/UIComponents.swift` - Fixed InfoRow and ReorderableFileList colors
 
 ---
 

@@ -606,7 +606,16 @@ public class JobManager: ObservableObject {
 
         var persistedURLs: [URL] = []
 
-        for tempURL in tempURLs {
+        // Create timestamp once for all files in this batch
+        let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .short)
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+            .replacingOccurrences(of: " ", with: "_")
+            .replacingOccurrences(of: ",", with: "")
+        let jobPrefix = jobType.displayName.lowercased().replacingOccurrences(of: " ", with: "_")
+        let hasMultipleFiles = tempURLs.count > 1
+
+        for (index, tempURL) in tempURLs.enumerated() {
             // Check if file exists
             guard fileManager.fileExists(atPath: tempURL.path) else {
                 print("⚠️ JobEngine: Temp file doesn't exist: \(tempURL.path)")
@@ -620,16 +629,15 @@ public class JobManager: ObservableObject {
                 continue
             }
 
-            // Create clean filename with job type and timestamp
-            let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .short)
-                .replacingOccurrences(of: "/", with: "-")
-                .replacingOccurrences(of: ":", with: "-")
-                .replacingOccurrences(of: " ", with: "_")
-                .replacingOccurrences(of: ",", with: "")
-
-            let jobPrefix = jobType.displayName.lowercased().replacingOccurrences(of: " ", with: "_")
+            // Create clean filename with job type, timestamp, and index (for multiple files)
             let ext = tempURL.pathExtension
-            let newFilename = "\(jobPrefix)_\(timestamp).\(ext)"
+            let newFilename: String
+            if hasMultipleFiles {
+                // Include 1-based index for multiple files (e.g., split_pdf_12-20-2024_1.pdf)
+                newFilename = "\(jobPrefix)_\(timestamp)_\(index + 1).\(ext)"
+            } else {
+                newFilename = "\(jobPrefix)_\(timestamp).\(ext)"
+            }
             let destinationURL = exportsURL.appendingPathComponent(newFilename)
 
             do {

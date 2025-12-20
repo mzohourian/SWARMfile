@@ -145,14 +145,15 @@ public struct InfoRow: View {
         HStack {
             if let icon = icon {
                 Image(systemName: icon)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(OneBoxColors.secondaryText)
                     .frame(width: 24)
             }
             Text(label)
-                .foregroundColor(.secondary)
+                .foregroundColor(OneBoxColors.secondaryText)
             Spacer()
             Text(value)
                 .fontWeight(.medium)
+                .foregroundColor(OneBoxColors.primaryText)
         }
         .font(.subheadline)
     }
@@ -617,28 +618,29 @@ public struct ReorderableFilePickerRow: View {
         HStack(spacing: 12) {
             if showDragHandle {
                 Image(systemName: "line.3.horizontal")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(OneBoxColors.secondaryText)
                     .frame(width: 20)
             }
-            
+
             Image(systemName: icon)
-                .foregroundColor(.accentColor)
+                .foregroundColor(OneBoxColors.primaryGold)
                 .frame(width: 32)
             VStack(alignment: .leading, spacing: 2) {
                 Text(fileName)
                     .font(.subheadline)
+                    .foregroundColor(OneBoxColors.primaryText)
                     .lineLimit(1)
                 if let fileSize = fileSize {
                     Text(fileSize)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                 }
             }
             Spacer()
             if let onRemove = onRemove {
                 Button(action: onRemove) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                 }
             }
         }
@@ -673,12 +675,13 @@ public struct ReorderableFileListView: View {
                         Text("Files to Merge")
                             .font(.subheadline)
                             .fontWeight(.medium)
+                            .foregroundColor(OneBoxColors.primaryText)
 
                         Spacer()
 
                         Text("\(urls.count) file\(urls.count == 1 ? "" : "s") • Drag to reorder")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(OneBoxColors.secondaryText)
                     }
 
                     reorderableList
@@ -722,8 +725,8 @@ public struct ReorderableFileListView: View {
             }
             .frame(maxWidth: .infinity)
             .padding()
-            .background(Color.accentColor.opacity(0.1))
-            .foregroundColor(.accentColor)
+            .background(OneBoxColors.primaryGold.opacity(0.1))
+            .foregroundColor(OneBoxColors.primaryGold)
             .cornerRadius(12)
         }
     }

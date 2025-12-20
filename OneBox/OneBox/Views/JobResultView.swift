@@ -24,8 +24,11 @@ struct JobResultView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
+            ZStack {
+                OneBoxColors.primaryGraphite.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 24) {
                     // Success Header
                     successHeader
 
@@ -45,9 +48,10 @@ struct JobResultView: View {
                     actionsSection
 
                     Spacer()
+                    }
+                    .padding()
                 }
-                .padding()
-            }
+            } // End ZStack
             .navigationTitle("Complete")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -68,19 +72,20 @@ struct JobResultView: View {
                     VStack(spacing: 16) {
                         Image(systemName: "doc.questionmark")
                             .font(.system(size: 60))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(OneBoxColors.secondaryText)
                         Text("Unable to preview file")
                             .font(.headline)
+                            .foregroundColor(OneBoxColors.primaryText)
                         Text("The file may have been moved or deleted.")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(OneBoxColors.secondaryText)
                         Button("Close") {
                             showPreview = false
                         }
                         .buttonStyle(.borderedProminent)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(.systemBackground))
+                    .background(OneBoxColors.primaryGraphite)
                 }
             }
         }
@@ -90,16 +95,17 @@ struct JobResultView: View {
         VStack(spacing: 16) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 64))
-                .foregroundColor(.green)
+                .foregroundColor(OneBoxColors.secureGreen)
 
             VStack(spacing: 4) {
                 Text("Success!")
                     .font(.title2)
                     .fontWeight(.bold)
+                    .foregroundColor(OneBoxColors.primaryText)
 
                 Text("Your files are ready")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(OneBoxColors.secondaryText)
             }
         }
         .padding(.top)
@@ -109,6 +115,7 @@ struct JobResultView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Output Files")
                 .font(.headline)
+                .foregroundColor(OneBoxColors.primaryText)
 
             ForEach(Array(job.outputURLs.enumerated()), id: \.offset) { index, url in
                 Button {
@@ -123,19 +130,19 @@ struct JobResultView: View {
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: fileIcon(url))
-                            .foregroundColor(.accentColor)
+                            .foregroundColor(OneBoxColors.primaryGold)
                             .frame(width: 32)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(url.lastPathComponent)
                                 .font(.subheadline)
-                                .foregroundColor(.primary)
+                                .foregroundColor(OneBoxColors.primaryText)
                                 .lineLimit(1)
 
                             if let size = fileSize(url) {
                                 Text(size)
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(OneBoxColors.secondaryText)
                             }
                         }
 
@@ -143,10 +150,10 @@ struct JobResultView: View {
 
                         Image(systemName: "chevron.right")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(OneBoxColors.secondaryText)
                     }
                     .padding()
-                    .background(Color(.secondarySystemGroupedBackground))
+                    .background(OneBoxColors.secondaryGraphite)
                     .cornerRadius(12)
                 }
                 .buttonStyle(.plain)
@@ -158,6 +165,7 @@ struct JobResultView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Details")
                 .font(.headline)
+                .foregroundColor(OneBoxColors.primaryText)
 
             VStack(spacing: 8) {
                 InfoRow(
@@ -189,7 +197,7 @@ struct JobResultView: View {
                 }
             }
             .padding()
-            .background(Color(.secondarySystemGroupedBackground))
+            .background(OneBoxColors.secondaryGraphite)
             .cornerRadius(12)
         }
     }

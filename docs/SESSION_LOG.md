@@ -4,6 +4,56 @@
 
 ---
 
+## 2025-12-20: Black Text on Dark Background Fixes + Split PDF Multi-file Fix
+
+**Issues Reported:**
+1. Success page has black fonts on dark background (Split PDF and others)
+2. Split PDF preview shows only one file instead of 4
+3. Success page clicking files shows "files removed or deleted"
+4. Merge PDF black text on dark background still present
+
+**Root Causes:**
+
+**1. Black Text Issues:**
+- Multiple views using system colors (.secondary, .primary) instead of OneBoxColors
+- System colors appear black on the app's dark graphite background
+
+**2. Split PDF Only Showing 1 File:**
+- `saveOutputFilesToDocuments()` in JobEngine.swift created filename from job type + timestamp
+- All split files processed in same second got identical filenames
+- Each file overwrote the previous one, leaving only the last file
+
+**3. Files Deleted Error:**
+- Same root cause as #2 - files were being overwritten, not persisted
+
+**Fixes Applied:**
+
+**JobResultView.swift:**
+- Added ZStack with `OneBoxColors.primaryGraphite.ignoresSafeArea()` as background
+- Changed all `.foregroundColor(.secondary)` to `OneBoxColors.secondaryText`
+- Changed all `.foregroundColor(.primary)` to `OneBoxColors.primaryText`
+- Changed `.foregroundColor(.green)` to `OneBoxColors.secureGreen`
+- Fixed fallback error view colors
+
+**JobEngine.swift:**
+- Modified `saveOutputFilesToDocuments()` to add index suffix for multiple files
+- Example: `split_pdf_12-20-2024_1.pdf`, `split_pdf_12-20-2024_2.pdf`, etc.
+- Moved timestamp generation outside loop (same timestamp for all files in batch)
+
+**UIComponents.swift:**
+- Fixed `InfoRow`: Changed `.foregroundColor(.secondary)` to `OneBoxColors.secondaryText`
+- Fixed `ReorderableFilePickerRow`: Changed all system colors to OneBoxColors
+- Fixed `ReorderableFileListView`: Changed header and button colors
+
+**Files Modified:**
+- `OneBox/OneBox/Views/JobResultView.swift`
+- `OneBox/Modules/JobEngine/JobEngine.swift`
+- `OneBox/Modules/UIComponents/UIComponents.swift`
+
+**Status:** Needs user testing to verify all four issues are resolved
+
+---
+
 ## 2025-12-16: Signature Size Fix (Bounding Box vs Actual Display)
 
 **Issue Reported:**

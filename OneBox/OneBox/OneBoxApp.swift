@@ -49,10 +49,22 @@ struct OneBoxApp: App {
     }
 
     private func configureAppearance() {
-        // Configure global app appearance
-        UINavigationBar.appearance().largeTitleTextAttributes = [
-            .foregroundColor: UIColor.label
+        // Configure global app appearance for dark backgrounds
+
+        // Standard (inline) navigation bar appearance
+        let standardAppearance = UINavigationBarAppearance()
+        standardAppearance.configureWithTransparentBackground()
+        standardAppearance.titleTextAttributes = [
+            .foregroundColor: UIColor.white
         ]
+        standardAppearance.largeTitleTextAttributes = [
+            .foregroundColor: UIColor.white
+        ]
+
+        // Apply to all navigation bar styles
+        UINavigationBar.appearance().standardAppearance = standardAppearance
+        UINavigationBar.appearance().compactAppearance = standardAppearance
+        UINavigationBar.appearance().scrollEdgeAppearance = standardAppearance
     }
     
     private func handleQuickAction(url: URL) {

@@ -401,7 +401,7 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
         let keyLength: Int = 32 // 256-bit key
 
         var derivedKey = Data(count: keyLength)
-        var result: Int32 = kCCParamError
+        var result: Int32 = Int32(kCCParamError)
 
         derivedKey.withUnsafeMutableBytes { derivedKeyBytes in
             passwordData.withUnsafeBytes { passwordBytes in

@@ -578,7 +578,6 @@ struct InputSelectionView: View {
     @State private var showFilePicker = false
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var preflightInsights: [PreflightInsight] = []
-    @State private var showingWorkflowHooks = false
     @State private var isEditingOrder = false
     @State private var errorMessage: String?
     @State private var showError = false
@@ -617,9 +616,6 @@ struct InputSelectionView: View {
         }
         .onAppear {
             analyzeSelectedFiles() // Initial analysis
-        }
-        .sheet(isPresented: $showingWorkflowHooks) {
-            WorkflowHooksView(selectedURLs: selectedURLs, tool: tool)
         }
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) {}
@@ -666,32 +662,17 @@ struct InputSelectionView: View {
         }
     }
     
-    private var workflowHooksBanner: some View {
-        OneBoxCard(style: .interactive) {
-            HStack {
-                Image(systemName: "gear.badge.checkmark")
+    private var workflowHintBanner: some View {
+        OneBoxCard(style: .standard) {
+            HStack(spacing: OneBoxSpacing.small) {
+                Image(systemName: "lightbulb.fill")
                     .foregroundColor(OneBoxColors.primaryGold)
-                
-                VStack(alignment: .leading, spacing: OneBoxSpacing.tiny) {
-                    Text("Create Workflow")
-                        .font(OneBoxTypography.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(OneBoxColors.primaryText)
-                    
-                    Text("Bundle these files into a multi-step workflow")
-                        .font(OneBoxTypography.micro)
-                        .foregroundColor(OneBoxColors.secondaryText)
-                }
-                
-                Spacer()
-                
-                Button(action: {
-                    showingWorkflowHooks = true
-                }) {
-                    Text("Open")
-                        .font(OneBoxTypography.micro)
-                        .foregroundColor(OneBoxColors.primaryGold)
-                }
+                    .font(.system(size: 14))
+
+                Text("Tip: Use Workflows from the home screen to batch multiple operations on your files")
+                    .font(OneBoxTypography.micro)
+                    .foregroundColor(OneBoxColors.secondaryText)
+                    .lineLimit(2)
             }
         }
     }
@@ -747,13 +728,11 @@ struct InputSelectionView: View {
             insights.append(PreflightInsight(
                 id: "multiple-files",
                 title: "Multiple Files Selected",
-                message: "You've selected \(selectedURLs.count) files. Consider using a workflow for batch processing.",
+                message: "You've selected \(selectedURLs.count) files. For complex batch processing, use Workflows from the home screen.",
                 icon: "doc.on.doc.fill",
                 severity: .low,
-                actionTitle: "Create Workflow",
-                action: {
-                    showingWorkflowHooks = true
-                }
+                actionTitle: nil,
+                action: nil
             ))
         }
         
@@ -891,11 +870,9 @@ struct InputSelectionView: View {
                             .padding(.horizontal, OneBoxSpacing.medium)
                     }
                     
-                    // Workflow hooks banner (only show if no preflight insights already show workflow option)
-                    if !preflightInsights.contains(where: { $0.actionTitle == "Create Workflow" }) {
-                        workflowHooksBanner
-                            .padding(.horizontal, OneBoxSpacing.medium)
-                    }
+                    // Workflow hint banner
+                    workflowHintBanner
+                        .padding(.horizontal, OneBoxSpacing.medium)
                     
                     // Header with edit button for Images to PDF
                     if tool == .imagesToPDF && !selectedURLs.isEmpty {
@@ -1671,7 +1648,7 @@ struct ConfigurationView: View {
                 imageSettings
             default:
                 Text("Ready to process")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(OneBoxColors.secondaryText)
             }
         }
     }
@@ -1747,7 +1724,7 @@ struct ConfigurationView: View {
                 if settings.imageFormat == .png {
                     Text("Quality setting not available for PNG")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                 }
             }
 
@@ -1757,38 +1734,42 @@ struct ConfigurationView: View {
                     Text("Resolution: \(Int(settings.imageResolution)) DPI")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    
+                        .foregroundColor(OneBoxColors.primaryText)
+
                     Spacer()
-                    
+
                     Text(estimatedSizeText)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                 }
-                
+
                 Slider(value: $settings.imageResolution, in: 72...150, step: 12)
-                
+
                 HStack {
                     Text("72 DPI")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                     Spacer()
                     Text("Web Quality")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                     Spacer()
                     Text("150 DPI")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                 }
             }
 
             // Select All Pages Toggle
             VStack(alignment: .leading, spacing: 8) {
-                Toggle("Select All Pages", isOn: $settings.selectAllPages)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
-                    .onChange(of: settings.selectAllPages) { isOn in
+                Toggle(isOn: $settings.selectAllPages) {
+                    Text("Select All Pages")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(OneBoxColors.primaryText)
+                }
+                .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
+                .onChange(of: settings.selectAllPages) { isOn in
                         if isOn {
                             // Clear page ranges when selecting all pages
                             settings.splitRanges = []
@@ -1800,7 +1781,7 @@ struct ConfigurationView: View {
                 if !settings.selectAllPages {
                     Text("Convert specific pages only")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                 }
             }
 
@@ -2058,7 +2039,10 @@ struct ConfigurationView: View {
 
     private var advancedSettings: some View {
         VStack(spacing: 16) {
-            Toggle("Strip Metadata", isOn: $settings.stripMetadata)
+            Toggle(isOn: $settings.stripMetadata) {
+                Text("Strip Metadata")
+                    .foregroundColor(OneBoxColors.primaryText)
+            }
 
             if tool == .imagesToPDF || tool.rawValue.contains("pdf") {
                 TextField("PDF Title", text: Binding(
@@ -2237,20 +2221,20 @@ struct PDFSplitRangeSelector: View {
                         .scaleEffect(0.8)
                     Text("Loading PDF info...")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                 }
             }
 
             Text("Add page ranges to split (e.g., 1-3, 5, 7-10)")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(OneBoxColors.secondaryText)
 
             // Add range controls
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("From")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                     TextField("1", text: $startPage)
                         .textFieldStyle(.roundedBorder)
                         .keyboardType(.numberPad)
@@ -2263,7 +2247,7 @@ struct PDFSplitRangeSelector: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("To")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
                     TextField("1", text: $endPage)
                         .textFieldStyle(.roundedBorder)
                         .keyboardType(.numberPad)
@@ -2276,7 +2260,7 @@ struct PDFSplitRangeSelector: View {
                 Button(action: addRange) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title2)
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(OneBoxColors.primaryGold)
                 }
                 .disabled(totalPages == 0)
             }
@@ -2297,12 +2281,14 @@ struct PDFSplitRangeSelector: View {
                     Text("Ranges:")
                         .font(.subheadline)
                         .fontWeight(.medium)
+                        .foregroundColor(OneBoxColors.primaryText)
 
                     ForEach(Array(pageRanges.enumerated()), id: \.offset) { index, range in
                         HStack {
                             if let first = range.first, let last = range.last {
                                 Text("Pages \(first)-\(last)")
                                     .font(.subheadline)
+                                    .foregroundColor(OneBoxColors.primaryText)
                             }
                             Spacer()
                             Button(action: { removeRange(at: index) }) {
@@ -2311,7 +2297,7 @@ struct PDFSplitRangeSelector: View {
                             }
                         }
                         .padding(8)
-                        .background(Color(.secondarySystemGroupedBackground))
+                        .background(OneBoxColors.surfaceGraphite)
                         .cornerRadius(8)
                     }
                 }
@@ -2427,15 +2413,15 @@ struct PDFCompressionSettings: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Original Size: \(String(format: "%.1f", originalSizeMB)) MB")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.secondaryText)
 
                     Text("Achievable range: \(String(format: "%.1f", minAchievableMB)) - \(String(format: "%.1f", maxAchievableMB)) MB")
                         .font(.caption)
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(OneBoxColors.primaryGold)
                 }
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.secondarySystemGroupedBackground))
+                .background(OneBoxColors.surfaceGraphite)
                 .cornerRadius(8)
             }
 
@@ -2465,11 +2451,11 @@ struct PDFCompressionSettings: View {
                     HStack {
                         Text("\(String(format: "%.1f", minAchievableMB)) MB")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(OneBoxColors.secondaryText)
                         Spacer()
                         Text("\(String(format: "%.1f", maxAchievableMB)) MB")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(OneBoxColors.secondaryText)
                     }
                 }
 

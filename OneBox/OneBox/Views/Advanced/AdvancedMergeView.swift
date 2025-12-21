@@ -432,8 +432,11 @@ struct AdvancedMergeView: View {
                     VStack(spacing: OneBoxSpacing.medium) {
                         // Page numbering
                         VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
-                            Toggle("Continuous page numbering", isOn: $settings.continuousPageNumbers)
-                                .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
+                            Toggle(isOn: $settings.continuousPageNumbers) {
+                                Text("Continuous page numbering")
+                                    .foregroundColor(OneBoxColors.primaryText)
+                            }
+                            .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
                             
                             if settings.continuousPageNumbers {
                                 HStack {
@@ -456,8 +459,11 @@ struct AdvancedMergeView: View {
                         
                         // Watermark settings
                         VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
-                            Toggle("Add document watermark", isOn: $settings.addDocumentWatermark)
-                                .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
+                            Toggle(isOn: $settings.addDocumentWatermark) {
+                                Text("Add document watermark")
+                                    .foregroundColor(OneBoxColors.primaryText)
+                            }
+                            .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
                             
                             if settings.addDocumentWatermark {
                                 VStack(spacing: OneBoxSpacing.small) {
@@ -537,11 +543,17 @@ struct AdvancedMergeView: View {
                         .accentColor(OneBoxColors.primaryGold)
                     }
                     
-                    Toggle("Auto-resolve metadata conflicts", isOn: $settings.autoResolveMetadata)
-                        .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
-                    
-                    Toggle("Preserve original timestamps", isOn: $settings.preserveTimestamps)
-                        .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
+                    Toggle(isOn: $settings.autoResolveMetadata) {
+                        Text("Auto-resolve metadata conflicts")
+                            .foregroundColor(OneBoxColors.primaryText)
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
+
+                    Toggle(isOn: $settings.preserveTimestamps) {
+                        Text("Preserve original timestamps")
+                            .foregroundColor(OneBoxColors.primaryText)
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
                 }
             }
             .padding(OneBoxSpacing.medium)

@@ -15,16 +15,19 @@ struct JobResultView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var paymentsManager: PaymentsManager
     @State private var showShareSheet = false
-    @State private var showPreview = false
-    @State private var previewURL: URL?
+    @State private var previewItem: PreviewItem?  // Combined URL + presentation state
     @State private var isSavingToPhotos = false
     @State private var saveToPhotosError: String?
     @State private var showSaveError = false
+    @State private var showPreviewError = false
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
+            ZStack {
+                OneBoxColors.primaryGraphite.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 24) {
                     // Success Header
                     successHeader
 
@@ -44,9 +47,10 @@ struct JobResultView: View {
                     actionsSection
 
                     Spacer()
+                    }
+                    .padding()
                 }
-                .padding()
-            }
+            } // End ZStack
             .navigationTitle("Complete")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -59,10 +63,11 @@ struct JobResultView: View {
             .sheet(isPresented: $showShareSheet) {
                 ShareSheet(items: job.outputURLs)
             }
-            .sheet(isPresented: $showPreview) {
-                if let url = previewURL {
-                    QuickLookPreview(url: url)
-                }
+            .fullScreenCover(item: $previewItem) { item in
+                QuickLookPreviewWrapper(url: item.url, isPresented: Binding(
+                    get: { previewItem != nil },
+                    set: { if !$0 { previewItem = nil } }
+                ))
             }
         }
     }
@@ -71,16 +76,17 @@ struct JobResultView: View {
         VStack(spacing: 16) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 64))
-                .foregroundColor(.green)
+                .foregroundColor(OneBoxColors.secureGreen)
 
             VStack(spacing: 4) {
                 Text("Success!")
                     .font(.title2)
                     .fontWeight(.bold)
+                    .foregroundColor(OneBoxColors.primaryText)
 
                 Text("Your files are ready")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(OneBoxColors.secondaryText)
             }
         }
         .padding(.top)
@@ -90,32 +96,33 @@ struct JobResultView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Output Files")
                 .font(.headline)
+                .foregroundColor(OneBoxColors.primaryText)
 
             ForEach(Array(job.outputURLs.enumerated()), id: \.offset) { index, url in
                 Button {
                     // Ensure file is accessible before previewing
                     if let accessibleURL = ensureFileAccessible(url) {
-                        previewURL = accessibleURL
-                        showPreview = true
+                        previewItem = PreviewItem(url: accessibleURL)
                     } else {
                         print("❌ Could not make file accessible for preview: \(url)")
+                        showPreviewError = true
                     }
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: fileIcon(url))
-                            .foregroundColor(.accentColor)
+                            .foregroundColor(OneBoxColors.primaryGold)
                             .frame(width: 32)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(url.lastPathComponent)
                                 .font(.subheadline)
-                                .foregroundColor(.primary)
+                                .foregroundColor(OneBoxColors.primaryText)
                                 .lineLimit(1)
 
                             if let size = fileSize(url) {
                                 Text(size)
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(OneBoxColors.secondaryText)
                             }
                         }
 
@@ -123,10 +130,10 @@ struct JobResultView: View {
 
                         Image(systemName: "chevron.right")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(OneBoxColors.secondaryText)
                     }
                     .padding()
-                    .background(Color(.secondarySystemGroupedBackground))
+                    .background(OneBoxColors.secondaryGraphite)
                     .cornerRadius(12)
                 }
                 .buttonStyle(.plain)
@@ -138,6 +145,7 @@ struct JobResultView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Details")
                 .font(.headline)
+                .foregroundColor(OneBoxColors.primaryText)
 
             VStack(spacing: 8) {
                 InfoRow(
@@ -169,7 +177,7 @@ struct JobResultView: View {
                 }
             }
             .padding()
-            .background(Color(.secondarySystemGroupedBackground))
+            .background(OneBoxColors.secondaryGraphite)
             .cornerRadius(12)
         }
     }
@@ -195,11 +203,13 @@ struct JobResultView: View {
                 if let url = job.outputURLs.first {
                     // Try to ensure file is accessible first
                     if let accessibleURL = ensureFileAccessible(url) {
-                        previewURL = accessibleURL
-                        showPreview = true
+                        previewItem = PreviewItem(url: accessibleURL)
                     } else {
                         print("❌ Could not make file accessible for preview: \(url)")
+                        showPreviewError = true
                     }
+                } else {
+                    showPreviewError = true
                 }
             }
 
@@ -216,6 +226,11 @@ struct JobResultView: View {
             if let error = saveToPhotosError {
                 Text(error)
             }
+        }
+        .alert("Unable to Preview", isPresented: $showPreviewError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The file may have been moved or deleted. Try processing again.")
         }
     }
     
@@ -386,21 +401,37 @@ struct JobResultView: View {
     
     // MARK: - File Access Helper
     private func ensureFileAccessible(_ sourceURL: URL) -> URL? {
-        // Check if file exists at source
-        guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-            print("⚠️ Source file doesn't exist: \(sourceURL.path)")
-            return nil
-        }
-        
-        // If it's already in Documents directory, use it directly
-        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        if sourceURL.path.hasPrefix(documentsURL.path) {
-            print("📁 File already in Documents: \(sourceURL.path)")
+        let fileManager = FileManager.default
+
+        // First, try the URL directly (most common case)
+        if fileManager.fileExists(atPath: sourceURL.path) {
             return sourceURL
         }
-        
-        // Copy to accessible location
-        return copyFileToAccessibleLocation(sourceURL)
+
+        // If that fails, try to find the file in Documents/Exports
+        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let exportsDir = documentsURL.appendingPathComponent("Exports")
+        let filename = sourceURL.lastPathComponent
+        let exportsURL = exportsDir.appendingPathComponent(filename)
+
+        if fileManager.fileExists(atPath: exportsURL.path) {
+            return exportsURL
+        }
+
+        // Try with security-scoped access (for external files)
+        let didStartAccess = sourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccess {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        if fileManager.fileExists(atPath: sourceURL.path) {
+            // Return a copy in accessible location since we need to stop access
+            return copyFileToAccessibleLocation(sourceURL)
+        }
+
+        return nil
     }
     
     private func copyFileToAccessibleLocation(_ sourceURL: URL) -> URL? {
@@ -513,6 +544,27 @@ struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
+// MARK: - QuickLook Preview Wrapper (with dismiss button)
+struct QuickLookPreviewWrapper: View {
+    let url: URL
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        NavigationStack {
+            QuickLookPreview(url: url)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Done") {
+                            isPresented = false
+                        }
+                    }
+                }
+                .ignoresSafeArea()
+        }
+    }
+}
+
 // MARK: - QuickLook Preview
 struct QuickLookPreview: UIViewControllerRepresentable {
     let url: URL
@@ -615,21 +667,36 @@ struct QuickLookPreview: UIViewControllerRepresentable {
         }
         
         private func ensureFileAccessible(_ sourceURL: URL) -> URL? {
-            // Check if file exists at source
-            guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-                print("⚠️ Source file doesn't exist: \(sourceURL.path)")
-                return nil
-            }
-            
-            // If it's already in Documents directory, use it directly
-            let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            if sourceURL.path.hasPrefix(documentsURL.path) {
-                print("📁 File already in Documents: \(sourceURL.path)")
+            let fileManager = FileManager.default
+
+            // First, try the URL directly (most common case)
+            if fileManager.fileExists(atPath: sourceURL.path) {
                 return sourceURL
             }
-            
-            // Copy to accessible location
-            return copyToAccessibleLocation(sourceURL)
+
+            // If that fails, try to find the file in Documents/Exports
+            let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let exportsDir = documentsURL.appendingPathComponent("Exports")
+            let filename = sourceURL.lastPathComponent
+            let exportsURL = exportsDir.appendingPathComponent(filename)
+
+            if fileManager.fileExists(atPath: exportsURL.path) {
+                return exportsURL
+            }
+
+            // Try with security-scoped access (for external files)
+            let didStartAccess = sourceURL.startAccessingSecurityScopedResource()
+            defer {
+                if didStartAccess {
+                    sourceURL.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            if fileManager.fileExists(atPath: sourceURL.path) {
+                return copyToAccessibleLocation(sourceURL)
+            }
+
+            return nil
         }
         
         private func copyToAccessibleLocation(_ sourceURL: URL) -> URL? {
@@ -679,12 +746,18 @@ struct QuickLookPreview: UIViewControllerRepresentable {
 class QuickLookPreviewItem: NSObject, QLPreviewItem {
     let previewItemURL: URL?
     let previewItemTitle: String?
-    
+
     init(url: URL, title: String? = nil) {
         self.previewItemURL = url
         self.previewItemTitle = title
         super.init()
     }
+}
+
+// MARK: - Preview Item (Identifiable URL wrapper for sheet presentation)
+struct PreviewItem: Identifiable {
+    let id = UUID()
+    let url: URL
 }
 
 #Preview {

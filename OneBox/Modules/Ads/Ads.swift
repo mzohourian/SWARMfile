@@ -7,6 +7,15 @@
 
 import SwiftUI
 
+// MARK: - Local Color Definitions (matching OneBoxColors)
+private struct AdColors {
+    static let primaryGold = Color(red: 212/255, green: 175/255, blue: 55/255)
+    static let primaryText = Color.white
+    static let secondaryText = Color(white: 0.7)
+    static let primaryGraphite = Color(red: 28/255, green: 28/255, blue: 30/255)
+    static let secondaryGraphite = Color(red: 44/255, green: 44/255, blue: 46/255)
+}
+
 // MARK: - Ad Banner View
 @available(iOS 14.0, macOS 11.0, *)
 public struct AdBannerView: View {
@@ -20,16 +29,17 @@ public struct AdBannerView: View {
                 HStack(spacing: 12) {
                     // Placeholder ad content
                     Image(systemName: "sparkles")
-                        .foregroundColor(.orange)
+                        .foregroundColor(AdColors.primaryGold)
                         .font(.title3)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Upgrade to Pro")
                             .font(.subheadline)
                             .fontWeight(.semibold)
+                            .foregroundColor(AdColors.primaryText)
                         Text("Remove ads and unlock unlimited exports")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AdColors.secondaryText)
                     }
 
                     Spacer()
@@ -42,17 +52,17 @@ public struct AdBannerView: View {
                             .fontWeight(.semibold)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.orange)
-                            .foregroundColor(.white)
+                            .background(AdColors.primaryGold)
+                            .foregroundColor(AdColors.primaryGraphite)
                             .cornerRadius(6)
                     }
                 }
                 .padding()
-                .background(Color.gray.opacity(0.1))
+                .background(AdColors.secondaryGraphite)
                 .cornerRadius(12)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                        .stroke(AdColors.primaryGold.opacity(0.3), lineWidth: 1)
                 )
             }
         }

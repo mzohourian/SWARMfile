@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-16
+**Last Updated:** 2025-12-21
 
 ## What This Is
 **OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -62,53 +62,50 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **Workflow hybrid interactive/automated redesign** - Major workflow fix:
-  - Interactive steps (Organize, Sign) now use existing app views (PageOrganizerView, InteractiveSignPDFView)
-  - Automated steps (Compress, Watermark, etc.) run with pre-configured settings
-  - Workflow pauses for interactive steps, continues after user completes them
-  - Fixed page numbers showing literal `{page}` - now properly replaced per-page
-  - Fixed date stamp showing "Processed:" prefix and ugly formatting
-  - Made compression more aggressive for visible file size reduction
-- All previous workflow fixes remain in place
+- **MAJOR FIX: "Files removed or deleted" preview error:**
+  - **Root cause identified:** SwiftUI state race condition - `showPreview` was set to `true` before `previewURL` was updated, causing fullScreenCover to render with nil URL
+  - **Solution:** Changed from separate `showPreview` + `previewURL` states to single `PreviewItem` (Identifiable wrapper) with `fullScreenCover(item:)` binding
+  - Also simplified file persistence logic in JobEngine.swift
+  - Also simplified ensureFileAccessible() in JobResultView.swift
+- **Removed misleading "Create Workflow" from feature flow:**
+  - Replaced interactive button with informational tip
+- **Fixed Ads module build error:**
+  - Removed UIComponents dependency, created local AdColors struct
+- All previous fixes remain in place
 
 ---
 
 ## Last Session Summary
 
-**Date:** 2025-12-16
+**Date:** 2025-12-21
 
 **What Was Done:**
-- **Fixed signature SIZE calculation (bounding box vs actual displayed size):**
-  - Root cause: Signature uses `.aspectRatio(contentMode: .fit)` inside a bounding box
-  - For a square signature in a 300x120 box, actual displayed width is 120px (height-limited)
-  - Previous code used box width (300) for ratio calculation → signatures appeared ~2.5x larger
-  - Fixed `processSignatures()` to calculate actual displayed width based on image aspect ratio
-  - Now signatures appear at the exact size shown on screen
-
-- **Previous session fixes (all still working):**
-  - Position bug fixed (Y coordinate flip removed)
-  - Multi-page signature support added
-  - Drag-anywhere for selected signature
-  - Tap to toggle selection (removed Unselect button)
-  - ViewWidthAtPlacement updated when resizing
+- **Fixed "files removed or deleted" preview error (USER VERIFIED WORKING):**
+  - Root cause: SwiftUI state race condition between `showPreview` and `previewURL`
+  - Solution: Combined into single `PreviewItem` with `fullScreenCover(item:)` binding
+  - Simplified file persistence logic in JobEngine.swift
+  - Simplified ensureFileAccessible() in JobResultView.swift
+- **Removed misleading "Create Workflow" option from feature flow:**
+  - Replaced with informational tip about Workflows feature
+- **Fixed Ads module build error:**
+  - Created local AdColors struct to avoid UIComponents dependency
 
 **What's Unfinished:**
-- Build not verified (no Xcode in environment) - user should build and test
+- None - all reported issues resolved and verified by user
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/Signing/InteractiveSignPDFView.swift` - Fixed size calculation to use actual displayed width
+- `OneBox/Modules/JobEngine/JobEngine.swift` - Simplified saveOutputFilesToDocuments() and loadJobs()
+- `OneBox/OneBox/Views/JobResultView.swift` - Fixed state race condition with PreviewItem pattern
+- `OneBox/OneBox/Views/ToolFlowView.swift` - Removed Create Workflow option, added tip banner
+- `OneBox/Modules/Ads/Ads.swift` - Added local AdColors, removed UIComponents dependency
 
 ---
 
 ## Next Steps (Priority Order)
 
-1. **Build and test in Xcode** - Verify all changes compile
-2. **Test Sign PDF feature:**
-   - Place signature and verify it appears at exact tap location in final PDF
-   - Verify size matches what you see on screen
-   - Test drag-anywhere (drag anywhere on screen while signature selected)
-   - Test multi-page signatures (place signatures on different pages, verify all appear in final)
-3. **Test other features** - Button styling, preview, state persistence
+1. **Continue testing other features** - Sign PDF, Watermark, Redact
+2. **Test Recents tab** - Verify old jobs can still preview files
+3. **Prepare for App Store submission** - Review checklist
 
 ---
 

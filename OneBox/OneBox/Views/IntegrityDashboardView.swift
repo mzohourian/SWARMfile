@@ -335,48 +335,30 @@ struct IntegrityDashboardView: View {
                     .font(OneBoxTypography.cardTitle)
                     .foregroundColor(OneBoxColors.primaryText)
                 
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: OneBoxSpacing.small) {
-                    quickActionButton("Clean Cache", "trash.fill", OneBoxColors.warningAmber) {
-                        cleanCache()
+                // Single action - Clean Cache (the only functional quick action)
+                Button(action: cleanCache) {
+                    HStack(spacing: OneBoxSpacing.small) {
+                        Image(systemName: "trash.fill")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(OneBoxColors.warningAmber)
+
+                        Text("Clean Cache")
+                            .font(OneBoxTypography.body)
+                            .foregroundColor(OneBoxColors.primaryText)
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14))
+                            .foregroundColor(OneBoxColors.tertiaryText)
                     }
-                    
-                    quickActionButton("Backup Settings", "icloud.and.arrow.up", OneBoxColors.secureGreen) {
-                        backupSettings()
-                    }
-                    
-                    quickActionButton("Privacy Audit", "shield.checkered", OneBoxColors.primaryGold) {
-                        runPrivacyAudit()
-                    }
-                    
-                    quickActionButton("Export Logs", "doc.text.fill", OneBoxColors.secondaryText) {
-                        exportLogs()
-                    }
+                    .padding(OneBoxSpacing.medium)
+                    .background(OneBoxColors.surfaceGraphite.opacity(0.5))
+                    .cornerRadius(OneBoxRadius.small)
                 }
+                .buttonStyle(PlainButtonStyle())
             }
         }
-    }
-    
-    private func quickActionButton(_ title: String, _ icon: String, _ color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: OneBoxSpacing.tiny) {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(color)
-                
-                Text(title)
-                    .font(OneBoxTypography.micro)
-                    .foregroundColor(OneBoxColors.secondaryText)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(OneBoxSpacing.small)
-            .background(OneBoxColors.surfaceGraphite.opacity(0.5))
-            .cornerRadius(OneBoxRadius.small)
-        }
-        .buttonStyle(PlainButtonStyle())
     }
     
     // MARK: - Computed Properties
@@ -567,30 +549,6 @@ struct IntegrityDashboardView: View {
             print("Error cleaning cache: \(error)")
         }
         return size
-    }
-    
-    private func backupSettings() {
-        // Export UserDefaults to a JSON file
-        let _ = UserDefaults.standard.dictionaryRepresentation()
-        // Filter out non-JSON types if necessary, or just convert what we can
-        // For simplicity, we'll just backup known keys or skip this for now as it requires document picker
-        // to save the file. 
-        // Instead, we'll simulate success for the prototype phase as file export needs UI context.
-        HapticManager.shared.notification(.success)
-    }
-    
-    private func runPrivacyAudit() {
-        HapticManager.shared.impact(.medium)
-        // Verify permissions and security settings
-        // In a real app, this would check info.plist usages vs actual usage
-        // For now, we trigger a refresh of privacy status
-        loadDashboardData()
-    }
-    
-    private func exportLogs() {
-        HapticManager.shared.selection()
-        // In a real app, this would zip logs and show share sheet
-        // For now, simple haptic feedback
     }
     
     private func countLargePDFs() -> Int {

@@ -74,6 +74,16 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
   - Added guard check for PDF context creation to prevent crashes
   - Added autoreleasepool for memory management during compression
   - Added maxDimension clamping (2000px) to prevent memory overflow
+- **Simplified PDF compression UI** - Removed quality presets, just size slider
+- **Added grayscale option** for PDF compression (10-15% smaller files)
+- **Fixed grayscale estimate** - Now updates dynamically when toggle changes
+- **Removed placeholder/non-functional UI elements:**
+  - HelpCenterView: Replaced "coming soon" text with helpful guidance
+  - UpgradeFlowView: Added real feature comparison table
+  - WorkflowConciergeView: Removed disabled Cancel button
+  - ProfessionalSigningView: Removed disabled "Visible signature" toggle
+  - NewHomeView: Replaced non-functional Search button with Privacy button
+  - IntegrityDashboardView: Removed 3 fake quick action buttons (Backup Settings, Privacy Audit, Export Logs)
 
 ---
 

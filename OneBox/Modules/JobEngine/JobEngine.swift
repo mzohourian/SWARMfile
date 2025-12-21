@@ -515,10 +515,13 @@ public class JobManager: ObservableObject {
             // Files in temp directory get cleaned up by iOS automatically
             let persistedURLs = saveOutputFilesToDocuments(outputURLs, jobType: job.type)
 
-            jobs[index].status = .success
-            jobs[index].progress = 1.0
+            // IMPORTANT: Set all data BEFORE setting status to .success
+            // Observers poll for status changes and read outputURLs immediately
+            // Setting status last prevents race condition where URLs are empty
             jobs[index].outputURLs = persistedURLs
+            jobs[index].progress = 1.0
             jobs[index].completedAt = Date()
+            jobs[index].status = .success  // Set LAST so observers see complete data
 
             // Clean up secure files if secure vault was enabled
             if job.settings.enableSecureVault {

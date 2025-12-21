@@ -666,9 +666,8 @@ struct CategoryDetailView: View {
                 Text("Articles in this category")
                     .font(OneBoxTypography.cardTitle)
                     .foregroundColor(OneBoxColors.primaryText)
-                
-                // Articles would be loaded here
-                Text("Articles coming soon...")
+
+                Text("Browse the guides above or contact support for personalized help.")
                     .font(OneBoxTypography.caption)
                     .foregroundColor(OneBoxColors.tertiaryText)
             }
@@ -894,24 +893,26 @@ struct VideoTutorialsView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: OneBoxSpacing.large) {
-                    Image(systemName: "play.rectangle.fill")
+                    Image(systemName: "book.pages.fill")
                         .font(.system(size: 60))
                         .foregroundColor(OneBoxColors.primaryGold)
 
-                    Text("Video Tutorials")
+                    Text("Learn OneBox")
                         .font(OneBoxTypography.heroTitle)
                         .foregroundColor(OneBoxColors.primaryText)
 
-                    Text("Video tutorials are coming soon! In the meantime, explore our written guides in the Help Center.")
+                    Text("Explore our written guides in the Help Center to master all features. Tap the Feature Tour for an interactive walkthrough.")
                         .font(OneBoxTypography.body)
                         .foregroundColor(OneBoxColors.secondaryText)
                         .multilineTextAlignment(.center)
 
-                    VStack(spacing: OneBoxSpacing.medium) {
-                        tutorialPlaceholder("Getting Started", "5 min")
-                        tutorialPlaceholder("PDF Processing Basics", "8 min")
-                        tutorialPlaceholder("Advanced Workflows", "12 min")
-                        tutorialPlaceholder("Privacy Features", "6 min")
+                    Button(action: { dismiss() }) {
+                        HStack {
+                            Image(systemName: "arrow.left.circle.fill")
+                            Text("Back to Help Center")
+                        }
+                        .font(OneBoxTypography.body)
+                        .foregroundColor(OneBoxColors.primaryGold)
                     }
                     .padding(.top, OneBoxSpacing.medium)
                 }

@@ -486,12 +486,6 @@ struct WorkflowConciergeView: View {
                             .foregroundColor(OneBoxColors.secondaryText)
                     }
                     
-                    Button("Cancel") {
-                        // In a real implementation, we'd support cancellation
-                    }
-                    .font(OneBoxTypography.caption)
-                    .foregroundColor(OneBoxColors.criticalRed)
-                    .disabled(true) // Not implemented yet
                 }
                 .padding(OneBoxSpacing.large)
                 .frame(width: 280)

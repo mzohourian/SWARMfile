@@ -506,10 +506,6 @@ struct ProfessionalSigningView: View {
                     
                     Toggle("Require biometric unlock", isOn: $biometricLockEnabled)
                         .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
-                    
-                    Toggle("Visible signature", isOn: .constant(true))
-                        .toggleStyle(SwitchToggleStyle(tint: OneBoxColors.primaryGold))
-                        .disabled(true)
                 }
             }
             .padding(OneBoxSpacing.medium)

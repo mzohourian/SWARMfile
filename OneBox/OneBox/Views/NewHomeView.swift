@@ -414,8 +414,8 @@ struct HomeView: View {
                         showingWorkflowConcierge = true
                     }
 
-                    quickActionButton("Search", "magnifyingglass") {
-                        // TODO: Focus search bar
+                    quickActionButton("Privacy", "lock.shield.fill") {
+                        showingIntegrityDashboard = true
                     }
                 }
             }

@@ -1046,11 +1046,20 @@ struct FeatureComparisonView: View {
                     Text("Feature Comparison")
                         .font(OneBoxTypography.sectionTitle)
                         .foregroundColor(OneBoxColors.primaryText)
-                    
-                    // Comparison table would go here
-                    Text("Detailed feature comparison coming soon...")
-                        .font(OneBoxTypography.body)
-                        .foregroundColor(OneBoxColors.secondaryText)
+
+                    VStack(spacing: 0) {
+                        comparisonRow("Daily Exports", free: "3", pro: "Unlimited")
+                        comparisonRow("PDF Merge & Split", free: "✓", pro: "✓")
+                        comparisonRow("PDF Compress", free: "✓", pro: "✓")
+                        comparisonRow("Image to PDF", free: "✓", pro: "✓")
+                        comparisonRow("Watermark PDF", free: "—", pro: "✓")
+                        comparisonRow("Sign PDF", free: "—", pro: "✓")
+                        comparisonRow("Redact PDF", free: "—", pro: "✓")
+                        comparisonRow("Workflows", free: "—", pro: "✓")
+                        comparisonRow("Priority Support", free: "—", pro: "✓")
+                    }
+                    .background(OneBoxColors.surfaceGraphite)
+                    .cornerRadius(OneBoxRadius.medium)
                 }
                 .padding(OneBoxSpacing.medium)
             }
@@ -1065,6 +1074,28 @@ struct FeatureComparisonView: View {
                 }
             }
         }
+    }
+
+    private func comparisonRow(_ feature: String, free: String, pro: String) -> some View {
+        HStack {
+            Text(feature)
+                .font(OneBoxTypography.body)
+                .foregroundColor(OneBoxColors.primaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(free)
+                .font(OneBoxTypography.body)
+                .foregroundColor(free == "✓" ? OneBoxColors.secureGreen : OneBoxColors.tertiaryText)
+                .frame(width: 60)
+
+            Text(pro)
+                .font(OneBoxTypography.body.bold())
+                .foregroundColor(pro == "✓" || pro == "Unlimited" ? OneBoxColors.primaryGold : OneBoxColors.tertiaryText)
+                .frame(width: 80)
+        }
+        .padding(.horizontal, OneBoxSpacing.medium)
+        .padding(.vertical, OneBoxSpacing.small)
+        .background(OneBoxColors.surfaceGraphite)
     }
 }
 

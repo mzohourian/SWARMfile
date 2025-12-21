@@ -4,6 +4,55 @@
 
 ---
 
+## 2025-12-21: Pre-Launch Audit + Placeholder Cleanup (Continued Session)
+
+**Focus:**
+Pre-launch audit to remove all placeholder/non-functional UI elements.
+
+**Issues Addressed:**
+1. PDF compression UI too complex (quality presets unnecessary)
+2. Grayscale option missing for compression
+3. Grayscale size estimate not updating dynamically
+4. Placeholder/non-functional UI elements throughout app
+
+**Fixes Applied:**
+
+**Phase 1: PDF Compression Improvements**
+- Simplified UI: Removed quality presets (High/Medium/Low), single size slider
+- Added grayscale toggle for 10-15% smaller files
+- Fixed estimate to update when grayscale toggled (separated base vs computed values)
+
+**Phase 2: Pre-Launch Audit**
+- Identified 6 placeholder/non-functional elements
+- Conducted detailed audit of Integrity Dashboard functionality
+
+**Phase 3: Placeholder/Fake UI Removal**
+- HelpCenterView: Replaced "Articles coming soon..." with helpful guidance
+- HelpCenterView: Replaced video tutorials placeholder with redirect message
+- UpgradeFlowView: Added actual feature comparison table (was "coming soon")
+- WorkflowConciergeView: Removed disabled Cancel button
+- ProfessionalSigningView: Removed disabled "Visible signature" toggle
+- NewHomeView: Replaced non-functional Search button with Privacy button
+- IntegrityDashboardView: Removed 3 fake quick action buttons:
+  - Backup Settings (only played haptic)
+  - Privacy Audit (only refreshed page)
+  - Export Logs (only played haptic)
+
+**Files Modified:**
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Grayscale conversion
+- `OneBox/Modules/JobEngine/JobEngine.swift` - convertToGrayscale setting
+- `OneBox/OneBox/Views/ToolFlowView.swift` - Simplified compression UI
+- `OneBox/OneBox/Views/Help/HelpCenterView.swift` - Placeholder text replaced
+- `OneBox/OneBox/Views/Upgrade/UpgradeFlowView.swift` - Feature comparison table
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Disabled button removed
+- `OneBox/OneBox/Views/Advanced/ProfessionalSigningView.swift` - Disabled toggle removed
+- `OneBox/OneBox/Views/NewHomeView.swift` - Search→Privacy button
+- `OneBox/OneBox/Views/IntegrityDashboardView.swift` - 3 fake buttons removed
+
+**Status:** All fixes complete. App is cleaner for launch.
+
+---
+
 ## 2025-12-21: Critical Bug Fixes + Empty Button Implementations
 
 **Issues Addressed:**

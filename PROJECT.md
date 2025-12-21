@@ -106,7 +106,7 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
-- Preview file fix needs testing - this was the 4th-5th attempt at fixing
+- Preview file fix needs testing - SIMPLIFIED the logic after complex version still had issues
 
 **Files Modified This Session:**
 - `OneBox/Modules/JobEngine/JobEngine.swift` - Major rewrite of saveOutputFilesToDocuments() and loadJobs()

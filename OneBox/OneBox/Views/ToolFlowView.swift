@@ -2463,7 +2463,8 @@ struct PDFCompressionSettings: View {
         // Run detailed analysis in background
         isAnalyzing = true
         Task {
-            let analysis = await PDFProcessor.shared.analyzeCompressionPotential(url)
+            let processor = PDFProcessor()
+            let analysis = await processor.analyzeCompressionPotential(url)
 
             await MainActor.run {
                 isAnalyzing = false

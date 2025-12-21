@@ -24,8 +24,6 @@ struct UpgradeFlowView: View {
     @State private var animateFeatures = false
     @State private var paymentError: String?
     @State private var isAuthenticating = false
-    @State private var showingTerms = false
-    @State private var showingPrivacy = false
 
     var body: some View {
         NavigationStack {
@@ -753,8 +751,10 @@ struct PaymentView: View {
     @Binding var paymentError: String?
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var paymentsManager: PaymentsManager
-    
+
     @State private var isAuthenticating = false
+    @State private var showingTerms = false
+    @State private var showingPrivacy = false
     
     var body: some View {
         NavigationStack {

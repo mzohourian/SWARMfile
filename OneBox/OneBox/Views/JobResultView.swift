@@ -15,8 +15,7 @@ struct JobResultView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var paymentsManager: PaymentsManager
     @State private var showShareSheet = false
-    @State private var showPreview = false
-    @State private var previewURL: URL?
+    @State private var previewItem: PreviewItem?  // Combined URL + presentation state
     @State private var isSavingToPhotos = false
     @State private var saveToPhotosError: String?
     @State private var showSaveError = false
@@ -64,29 +63,11 @@ struct JobResultView: View {
             .sheet(isPresented: $showShareSheet) {
                 ShareSheet(items: job.outputURLs)
             }
-            .fullScreenCover(isPresented: $showPreview) {
-                if let url = previewURL {
-                    QuickLookPreviewWrapper(url: url, isPresented: $showPreview)
-                } else {
-                    // Fallback if URL is nil - show error
-                    VStack(spacing: 16) {
-                        Image(systemName: "doc.questionmark")
-                            .font(.system(size: 60))
-                            .foregroundColor(OneBoxColors.secondaryText)
-                        Text("Unable to preview file")
-                            .font(.headline)
-                            .foregroundColor(OneBoxColors.primaryText)
-                        Text("The file may have been moved or deleted.")
-                            .font(.subheadline)
-                            .foregroundColor(OneBoxColors.secondaryText)
-                        Button("Close") {
-                            showPreview = false
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(OneBoxColors.primaryGraphite)
-                }
+            .fullScreenCover(item: $previewItem) { item in
+                QuickLookPreviewWrapper(url: item.url, isPresented: Binding(
+                    get: { previewItem != nil },
+                    set: { if !$0 { previewItem = nil } }
+                ))
             }
         }
     }
@@ -121,8 +102,7 @@ struct JobResultView: View {
                 Button {
                     // Ensure file is accessible before previewing
                     if let accessibleURL = ensureFileAccessible(url) {
-                        previewURL = accessibleURL
-                        showPreview = true
+                        previewItem = PreviewItem(url: accessibleURL)
                     } else {
                         print("❌ Could not make file accessible for preview: \(url)")
                         showPreviewError = true
@@ -223,8 +203,7 @@ struct JobResultView: View {
                 if let url = job.outputURLs.first {
                     // Try to ensure file is accessible first
                     if let accessibleURL = ensureFileAccessible(url) {
-                        previewURL = accessibleURL
-                        showPreview = true
+                        previewItem = PreviewItem(url: accessibleURL)
                     } else {
                         print("❌ Could not make file accessible for preview: \(url)")
                         showPreviewError = true
@@ -767,12 +746,18 @@ struct QuickLookPreview: UIViewControllerRepresentable {
 class QuickLookPreviewItem: NSObject, QLPreviewItem {
     let previewItemURL: URL?
     let previewItemTitle: String?
-    
+
     init(url: URL, title: String? = nil) {
         self.previewItemURL = url
         self.previewItemTitle = title
         super.init()
     }
+}
+
+// MARK: - Preview Item (Identifiable URL wrapper for sheet presentation)
+struct PreviewItem: Identifiable {
+    let id = UUID()
+    let url: URL
 }
 
 #Preview {

@@ -578,7 +578,6 @@ struct InputSelectionView: View {
     @State private var showFilePicker = false
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var preflightInsights: [PreflightInsight] = []
-    @State private var showingWorkflowHooks = false
     @State private var isEditingOrder = false
     @State private var errorMessage: String?
     @State private var showError = false
@@ -617,9 +616,6 @@ struct InputSelectionView: View {
         }
         .onAppear {
             analyzeSelectedFiles() // Initial analysis
-        }
-        .sheet(isPresented: $showingWorkflowHooks) {
-            WorkflowHooksView(selectedURLs: selectedURLs, tool: tool)
         }
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) {}
@@ -666,32 +662,17 @@ struct InputSelectionView: View {
         }
     }
     
-    private var workflowHooksBanner: some View {
-        OneBoxCard(style: .interactive) {
-            HStack {
-                Image(systemName: "gear.badge.checkmark")
+    private var workflowHintBanner: some View {
+        OneBoxCard(style: .standard) {
+            HStack(spacing: OneBoxSpacing.small) {
+                Image(systemName: "lightbulb.fill")
                     .foregroundColor(OneBoxColors.primaryGold)
-                
-                VStack(alignment: .leading, spacing: OneBoxSpacing.tiny) {
-                    Text("Create Workflow")
-                        .font(OneBoxTypography.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(OneBoxColors.primaryText)
-                    
-                    Text("Bundle these files into a multi-step workflow")
-                        .font(OneBoxTypography.micro)
-                        .foregroundColor(OneBoxColors.secondaryText)
-                }
-                
-                Spacer()
-                
-                Button(action: {
-                    showingWorkflowHooks = true
-                }) {
-                    Text("Open")
-                        .font(OneBoxTypography.micro)
-                        .foregroundColor(OneBoxColors.primaryGold)
-                }
+                    .font(.system(size: 14))
+
+                Text("Tip: Use Workflows from the home screen to batch multiple operations on your files")
+                    .font(OneBoxTypography.micro)
+                    .foregroundColor(OneBoxColors.secondaryText)
+                    .lineLimit(2)
             }
         }
     }
@@ -747,13 +728,11 @@ struct InputSelectionView: View {
             insights.append(PreflightInsight(
                 id: "multiple-files",
                 title: "Multiple Files Selected",
-                message: "You've selected \(selectedURLs.count) files. Consider using a workflow for batch processing.",
+                message: "You've selected \(selectedURLs.count) files. For complex batch processing, use Workflows from the home screen.",
                 icon: "doc.on.doc.fill",
                 severity: .low,
-                actionTitle: "Create Workflow",
-                action: {
-                    showingWorkflowHooks = true
-                }
+                actionTitle: nil,
+                action: nil
             ))
         }
         
@@ -891,11 +870,9 @@ struct InputSelectionView: View {
                             .padding(.horizontal, OneBoxSpacing.medium)
                     }
                     
-                    // Workflow hooks banner (only show if no preflight insights already show workflow option)
-                    if !preflightInsights.contains(where: { $0.actionTitle == "Create Workflow" }) {
-                        workflowHooksBanner
-                            .padding(.horizontal, OneBoxSpacing.medium)
-                    }
+                    // Workflow hint banner
+                    workflowHintBanner
+                        .padding(.horizontal, OneBoxSpacing.medium)
                     
                     // Header with edit button for Images to PDF
                     if tool == .imagesToPDF && !selectedURLs.isEmpty {

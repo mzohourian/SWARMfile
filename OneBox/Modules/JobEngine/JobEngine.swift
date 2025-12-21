@@ -537,7 +537,46 @@ public class JobManager: ObservableObject {
               let loadedJobs = try? JSONDecoder().decode([Job].self, from: data) else {
             return
         }
-        jobs = loadedJobs
+
+        // Reconstruct valid URLs for output files
+        // iOS can change the app's sandbox path between launches, invalidating stored absolute URLs
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+
+        jobs = loadedJobs.map { job in
+            var updatedJob = job
+            updatedJob.outputURLs = job.outputURLs.compactMap { storedURL in
+                // Try to extract the relative path from the stored URL
+                // Look for "Documents/" in the path and extract everything after it
+                let storedPath = storedURL.path
+
+                // Check if file exists at stored path first (might still be valid)
+                if FileManager.default.fileExists(atPath: storedPath) {
+                    return storedURL
+                }
+
+                // Try to reconstruct URL using current Documents directory
+                if let range = storedPath.range(of: "Documents/") {
+                    let relativePath = String(storedPath[range.upperBound...])
+                    let reconstructedURL = documentsURL.appendingPathComponent(relativePath)
+                    if FileManager.default.fileExists(atPath: reconstructedURL.path) {
+                        print("✅ JobEngine: Reconstructed valid URL: \(reconstructedURL.lastPathComponent)")
+                        return reconstructedURL
+                    }
+                }
+
+                // Also try with just the filename in Exports directory
+                let filename = storedURL.lastPathComponent
+                let exportsURL = documentsURL.appendingPathComponent("Exports").appendingPathComponent(filename)
+                if FileManager.default.fileExists(atPath: exportsURL.path) {
+                    print("✅ JobEngine: Found file in Exports: \(filename)")
+                    return exportsURL
+                }
+
+                print("⚠️ JobEngine: Could not find file: \(filename)")
+                return nil
+            }
+            return updatedJob
+        }
 
         // Resume any running jobs
         for job in jobs where job.status == .running {

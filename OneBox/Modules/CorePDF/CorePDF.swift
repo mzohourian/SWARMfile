@@ -324,6 +324,96 @@ public actor PDFProcessor {
         return outputURLs
     }
 
+    // MARK: - Analyze Compression Potential
+
+    /// Analyzes a PDF to determine realistic compression limits
+    /// Returns (originalSizeMB, minAchievableMB, maxUsefulMB)
+    public func analyzeCompressionPotential(_ pdfURL: URL) async -> (original: Double, minimum: Double, maximum: Double) {
+        let startedAccessing = pdfURL.startAccessingSecurityScopedResource()
+        defer {
+            if startedAccessing {
+                pdfURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        // Get original size
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: pdfURL.path),
+              let originalBytes = attributes[.size] as? Int64 else {
+            return (0, 0, 0)
+        }
+
+        let originalMB = Double(originalBytes) / 1_000_000.0
+
+        guard let pdf = PDFDocument(url: pdfURL), pdf.pageCount > 0 else {
+            return (originalMB, originalMB * 0.1, originalMB * 0.9)
+        }
+
+        // Quick test: compress first page at maximum compression to estimate minimum
+        let testURL = temporaryOutputURL(prefix: "compress_test")
+        defer { try? FileManager.default.removeItem(at: testURL) }
+
+        // Take sample of pages (first, middle, last for better estimate)
+        let pageCount = pdf.pageCount
+        let samplePages: [Int] = pageCount <= 3
+            ? Array(0..<pageCount)
+            : [0, pageCount / 2, pageCount - 1]
+
+        var totalOriginalPageSize: Double = 0
+        var totalCompressedPageSize: Double = 0
+
+        for pageIndex in samplePages {
+            guard let page = pdf.page(at: pageIndex) else { continue }
+
+            let pageBounds = page.bounds(for: .mediaBox)
+
+            // Estimate original page contribution
+            let pageRatio = 1.0 / Double(pageCount)
+            totalOriginalPageSize += originalMB * pageRatio
+
+            // Test compress this page at maximum compression
+            let scaledSize = CGSize(
+                width: pageBounds.width * 0.5,  // 50% resolution
+                height: pageBounds.height * 0.5
+            )
+
+            let renderer = UIGraphicsImageRenderer(size: scaledSize)
+            let pageImage = renderer.image { ctx in
+                UIColor.white.setFill()
+                ctx.fill(CGRect(origin: .zero, size: scaledSize))
+                ctx.cgContext.scaleBy(x: 0.5, y: 0.5)
+                ctx.cgContext.translateBy(x: 0, y: pageBounds.size.height)
+                ctx.cgContext.scaleBy(x: 1.0, y: -1.0)
+                page.draw(with: .mediaBox, to: ctx.cgContext)
+            }
+
+            // Compress at minimum quality
+            if let compressedData = pageImage.jpegData(compressionQuality: 0.1) {
+                totalCompressedPageSize += Double(compressedData.count) / 1_000_000.0
+            }
+        }
+
+        // Extrapolate to full document
+        let sampleRatio = Double(samplePages.count) / Double(pageCount)
+        let estimatedMinMB: Double
+        if sampleRatio > 0 && totalCompressedPageSize > 0 {
+            estimatedMinMB = (totalCompressedPageSize / sampleRatio) * 1.15 // 15% safety margin for PDF overhead
+        } else {
+            estimatedMinMB = originalMB * 0.15 // Fallback estimate
+        }
+
+        // Minimum should be at least 0.1 MB and capped at 50% of original
+        let minMB = max(0.1, min(estimatedMinMB, originalMB * 0.5))
+
+        // Maximum useful compression is ~90% of original
+        let maxMB = max(minMB + 0.5, originalMB * 0.9)
+
+        return (
+            original: (originalMB * 10).rounded() / 10,
+            minimum: (minMB * 10).rounded() / 10,
+            maximum: (maxMB * 10).rounded() / 10
+        )
+    }
+
     // MARK: - Compress PDF
     public func compressPDF(
         _ pdfURL: URL,

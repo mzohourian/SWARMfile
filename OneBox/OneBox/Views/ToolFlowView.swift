@@ -14,6 +14,7 @@ import UIComponents
 import PDFKit
 import Foundation
 import UIKit
+import CorePDF
 
 // Wrapper for URL to make it Identifiable
 struct IdentifiableURL: Identifiable {
@@ -2338,19 +2339,35 @@ struct PDFCompressionSettings: View {
     @State private var originalSizeMB: Double = 0
     @State private var minAchievableMB: Double = 0.5
     @State private var maxAchievableMB: Double = 50
+    @State private var isAnalyzing: Bool = false
 
     var body: some View {
         VStack(spacing: 16) {
-            // Show original size
+            // Show original size and analysis status
             if originalSizeMB > 0 {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Original Size: \(String(format: "%.1f", originalSizeMB)) MB")
-                        .font(.subheadline)
-                        .foregroundColor(OneBoxColors.secondaryText)
+                    HStack {
+                        Text("Original Size: \(String(format: "%.1f", originalSizeMB)) MB")
+                            .font(.subheadline)
+                            .foregroundColor(OneBoxColors.secondaryText)
 
-                    Text("Achievable range: \(String(format: "%.1f", minAchievableMB)) - \(String(format: "%.1f", maxAchievableMB)) MB")
-                        .font(.caption)
-                        .foregroundColor(OneBoxColors.primaryGold)
+                        Spacer()
+
+                        if isAnalyzing {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        }
+                    }
+
+                    if isAnalyzing {
+                        Text("Analyzing PDF to determine compression limits...")
+                            .font(.caption)
+                            .foregroundColor(OneBoxColors.secondaryText)
+                    } else {
+                        Text("Achievable range: \(String(format: "%.1f", minAchievableMB)) - \(String(format: "%.1f", maxAchievableMB)) MB")
+                            .font(.caption)
+                            .foregroundColor(OneBoxColors.primaryGold)
+                    }
                 }
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -2372,23 +2389,44 @@ struct PDFCompressionSettings: View {
 
             if let targetSize = settings.targetSizeMB {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Target Size: \(String(format: "%.1f", targetSize)) MB")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                    HStack {
+                        Text("Target Size: \(String(format: "%.1f", targetSize)) MB")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+
+                        Spacer()
+
+                        if targetSize <= minAchievableMB {
+                            Text("Maximum compression")
+                                .font(.caption)
+                                .foregroundColor(OneBoxColors.primaryGold)
+                        }
+                    }
 
                     Slider(value: Binding(
                         get: { targetSize },
                         set: { settings.targetSizeMB = $0 }
                     ), in: minAchievableMB...maxAchievableMB, step: 0.5)
+                    .disabled(isAnalyzing)
 
                     HStack {
-                        Text("\(String(format: "%.1f", minAchievableMB)) MB")
-                            .font(.caption)
-                            .foregroundColor(OneBoxColors.secondaryText)
+                        VStack(alignment: .leading) {
+                            Text("\(String(format: "%.1f", minAchievableMB)) MB")
+                                .font(.caption)
+                                .foregroundColor(OneBoxColors.secondaryText)
+                            Text("Min achievable")
+                                .font(.system(size: 9))
+                                .foregroundColor(OneBoxColors.tertiaryText)
+                        }
                         Spacer()
-                        Text("\(String(format: "%.1f", maxAchievableMB)) MB")
-                            .font(.caption)
-                            .foregroundColor(OneBoxColors.secondaryText)
+                        VStack(alignment: .trailing) {
+                            Text("\(String(format: "%.1f", maxAchievableMB)) MB")
+                                .font(.caption)
+                                .foregroundColor(OneBoxColors.secondaryText)
+                            Text("Light compression")
+                                .font(.system(size: 9))
+                                .foregroundColor(OneBoxColors.tertiaryText)
+                        }
                     }
                 }
 
@@ -2401,6 +2439,7 @@ struct PDFCompressionSettings: View {
                 Button("Set Target Size") {
                     settings.targetSizeMB = minAchievableMB + 1.0
                 }
+                .disabled(isAnalyzing)
             }
         }
         .onAppear {
@@ -2411,28 +2450,42 @@ struct PDFCompressionSettings: View {
     private func loadPDFInfo() {
         guard let url = pdfURL else { return }
 
-        // Get original file size
+        // Get original file size first (quick)
         if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
            let fileSize = attributes[.size] as? Int64 {
             originalSizeMB = Double(fileSize) / 1_000_000.0
 
-            // Estimate minimum achievable size with enhanced compression (resolution downsampling + JPEG quality)
-            // With 0.5x resolution scale + aggressive JPEG compression, can achieve ~5-8% of original
-            minAchievableMB = max(0.1, originalSizeMB * 0.07)
-
-            // Estimate maximum useful size (90% of original - not worth compressing beyond this)
+            // Set initial estimates while analyzing
+            minAchievableMB = max(0.1, originalSizeMB * 0.1)
             maxAchievableMB = max(minAchievableMB + 0.5, originalSizeMB * 0.9)
+        }
 
-            // Round values for better UX
-            minAchievableMB = (minAchievableMB * 10).rounded() / 10
-            maxAchievableMB = (maxAchievableMB * 10).rounded() / 10
+        // Run detailed analysis in background
+        isAnalyzing = true
+        Task {
+            let analysis = await PDFProcessor.shared.analyzeCompressionPotential(url)
 
-            // If target size is set but out of range, adjust it
-            if let currentTarget = settings.targetSizeMB {
-                if currentTarget < minAchievableMB {
-                    settings.targetSizeMB = minAchievableMB
-                } else if currentTarget > maxAchievableMB {
-                    settings.targetSizeMB = maxAchievableMB
+            await MainActor.run {
+                isAnalyzing = false
+
+                if analysis.original > 0 {
+                    originalSizeMB = analysis.original
+                    minAchievableMB = analysis.minimum
+                    maxAchievableMB = analysis.maximum
+
+                    // Ensure slider range is valid
+                    if maxAchievableMB <= minAchievableMB {
+                        maxAchievableMB = minAchievableMB + 0.5
+                    }
+
+                    // Adjust target size if out of range
+                    if let currentTarget = settings.targetSizeMB {
+                        if currentTarget < minAchievableMB {
+                            settings.targetSizeMB = minAchievableMB
+                        } else if currentTarget > maxAchievableMB {
+                            settings.targetSizeMB = maxAchievableMB
+                        }
+                    }
                 }
             }
         }

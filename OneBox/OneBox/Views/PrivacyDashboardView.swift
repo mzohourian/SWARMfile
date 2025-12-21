@@ -150,7 +150,7 @@ struct PrivacyDashboardView: View {
                 PrivacyToggleRow(
                     title: "Secure Vault",
                     description: "Encrypted temporary storage",
-                    icon: "vault.fill",
+                    icon: "lock.shield.fill",
                     isOn: $privacyManager.isSecureVaultEnabled,
                     color: .red
                 ) { enabled in
@@ -576,7 +576,7 @@ struct AuditEntryRow: View {
             if entry.secureVaultActive || entry.zeroTraceActive {
                 HStack {
                     if entry.secureVaultActive {
-                        Label("Vault", systemImage: "vault.fill")
+                        Label("Vault", systemImage: "lock.shield.fill")
                             .font(.caption)
                             .foregroundColor(.red)
                     }

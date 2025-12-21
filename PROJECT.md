@@ -64,6 +64,18 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 4 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
+- **Fixed critical Face ID crash** - Added NSFaceIDUsageDescription to project.yml for XcodeGen
+- **Fixed invalid SF Symbol** - Replaced non-existent "vault.fill" with "lock.shield.fill" in PrivacyDashboardView
+- **Fixed MainActor isolation crashes** when all privacy features enabled:
+  - JobEngine.swift: Wrapped privacyDelegate calls in MainActor.run { }
+  - Cached zeroTraceEnabled to avoid synchronous MainActor access from non-isolated context
+  - Fixed deleteJob and processJob secure file cleanup
+- **Fixed PBKDF2 encryption crashes** (Privacy.swift):
+  - Fixed 4 force unwraps in key derivation
+  - Fixed type mismatch: Int32 for CCKeyDerivationPBKDF result
+  - Added password validation (reject empty passwords)
+  - Fixed salt generation with safe guard check
+- **Enforced dark-only aesthetic** - ThemeManager simplified to always return .dark
 - **Fixed 3 potential crash bugs** (`.combined!` force unwraps in encryption code)
 - **Fixed infinite loop hang risk** (added 5-minute timeout to workflow execution)
 - **Implemented Terms/Privacy sheets** in Onboarding and Upgrade flows
@@ -97,34 +109,25 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2025-12-21 (Continued Session)
+**Date:** 2025-12-21 (Continued Session - Privacy Crash Fixes)
 
 **What Was Done:**
-- **Simplified PDF compression UI** - Removed quality presets (High/Medium/Low), single size slider defaulting to minimum
-- **Added grayscale option** for PDF compression - 10-15% smaller file sizes
-- **Fixed grayscale estimate** - Size estimate now updates dynamically when grayscale toggle changes
-- **Pre-launch audit completed** - Found 6 placeholder/non-functional UI elements
-- **Removed placeholders and fake buttons:**
-  - HelpCenterView: Replaced "coming soon" text with helpful guidance
-  - UpgradeFlowView: Added real feature comparison table
-  - WorkflowConciergeView: Removed disabled Cancel button
-  - ProfessionalSigningView: Removed disabled "Visible signature" toggle
-  - NewHomeView: Replaced non-functional Search button with Privacy button
-  - IntegrityDashboardView: Removed 3 fake quick action buttons (Backup Settings, Privacy Audit, Export Logs)
+- **Fixed critical Face ID crash** - NSFaceIDUsageDescription was in Info.plist but missing from project.yml (XcodeGen config)
+- **Fixed invalid SF Symbol** - "vault.fill" doesn't exist, replaced with "lock.shield.fill"
+- **Fixed MainActor isolation crashes** - Privacy delegate calls from JobEngine now properly wrapped in MainActor.run
+- **Fixed PBKDF2 encryption crashes** - Fixed force unwraps and type mismatches in key derivation
+- **Enforced dark-only aesthetic** - ThemeManager, SettingsView, and related views updated
 
 **What's Unfinished:**
-- None - all requested fixes completed
+- None - all crash fixes completed
 
 **Files Modified This Session:**
-- `OneBox/Modules/CorePDF/CorePDF.swift` - Added grayscale conversion to compression
-- `OneBox/Modules/JobEngine/JobEngine.swift` - Added convertToGrayscale to JobSettings
-- `OneBox/OneBox/Views/ToolFlowView.swift` - Simplified compression UI, added grayscale toggle
-- `OneBox/OneBox/Views/Help/HelpCenterView.swift` - Replaced placeholder text
-- `OneBox/OneBox/Views/Upgrade/UpgradeFlowView.swift` - Added feature comparison table
-- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Removed disabled button
-- `OneBox/OneBox/Views/Advanced/ProfessionalSigningView.swift` - Removed disabled toggle
-- `OneBox/OneBox/Views/NewHomeView.swift` - Replaced Search with Privacy button
-- `OneBox/OneBox/Views/IntegrityDashboardView.swift` - Removed 3 fake buttons
+- `OneBox/project.yml` - Added NSFaceIDUsageDescription to XcodeGen config
+- `OneBox/OneBox/Views/PrivacyDashboardView.swift` - Fixed invalid vault.fill SF Symbol
+- `OneBox/Modules/Privacy/Privacy.swift` - Fixed PBKDF2 and encryption crashes
+- `OneBox/Modules/JobEngine/JobEngine.swift` - Fixed MainActor isolation issues
+- `OneBox/OneBox/OneBoxApp.swift` - Simplified ThemeManager for dark-only
+- `OneBox/OneBox/Views/SettingsView.swift` - Dark mode styling consistency
 
 ---
 

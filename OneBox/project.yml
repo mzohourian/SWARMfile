@@ -45,6 +45,7 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         NSPhotoLibraryUsageDescription: "OneBox needs access to your photos to convert them to PDF"
         NSPhotoLibraryAddUsageDescription: "OneBox needs permission to save processed files"
+        NSFaceIDUsageDescription: "OneBox uses Face ID to protect your documents and secure sensitive operations"
         UIBackgroundModes:
           - processing
         BGTaskSchedulerPermittedIdentifiers:

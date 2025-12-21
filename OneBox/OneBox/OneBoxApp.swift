@@ -169,80 +169,112 @@ struct LockScreenView: View {
     @EnvironmentObject var privacyManager: Privacy.PrivacyManager
     @State private var isAuthenticating = false
 
+    // OneBox Design System Colors
+    private let primaryGraphite = Color(red: 0.12, green: 0.12, blue: 0.13)
+    private let secondaryGraphite = Color(red: 0.16, green: 0.16, blue: 0.17)
+    private let primaryGold = Color(red: 0.85, green: 0.65, blue: 0.13)
+    private let secondaryGold = Color(red: 0.78, green: 0.60, blue: 0.15)
+
     var body: some View {
         ZStack {
-            // Dark gradient background
-            LinearGradient(
-                colors: [Color(hex: "1a1a2e"), Color(hex: "16213e")],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            // Solid graphite background
+            primaryGraphite
+                .ignoresSafeArea()
 
-            VStack(spacing: 40) {
+            VStack(spacing: 0) {
                 Spacer()
 
-                // Lock icon
-                Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 80))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.blue, .purple],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                // Minimalist lock icon with gold accent
+                ZStack {
+                    Circle()
+                        .fill(secondaryGraphite)
+                        .frame(width: 120, height: 120)
 
-                VStack(spacing: 12) {
-                    Text("OneBox is Locked")
-                        .font(.title.bold())
-                        .foregroundColor(.white)
+                    Circle()
+                        .stroke(primaryGold.opacity(0.3), lineWidth: 1)
+                        .frame(width: 120, height: 120)
 
-                    Text("Authenticate to access your documents")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 44, weight: .light))
+                        .foregroundColor(primaryGold)
                 }
 
                 Spacer()
+                    .frame(height: 48)
 
-                // Unlock button
+                // Title
+                Text("OneBox")
+                    .font(.system(size: 28, weight: .semibold, design: .default))
+                    .foregroundColor(.white)
+                    .tracking(1)
+
+                Spacer()
+                    .frame(height: 8)
+
+                // Subtitle
+                Text("Authenticate to continue")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(.white.opacity(0.5))
+
+                Spacer()
+
+                // Unlock button - gold accent
                 Button {
                     authenticate()
                 } label: {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 10) {
                         Image(systemName: "faceid")
-                            .font(.title2)
+                            .font(.system(size: 20, weight: .medium))
                         Text("Unlock")
-                            .font(.headline)
+                            .font(.system(size: 17, weight: .medium))
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(primaryGraphite)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(
                         LinearGradient(
-                            colors: [.blue, .purple],
-                            startPoint: .leading,
-                            endPoint: .trailing
+                            colors: [primaryGold, secondaryGold],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
                     )
-                    .cornerRadius(14)
+                    .cornerRadius(12)
                 }
                 .disabled(isAuthenticating)
                 .opacity(isAuthenticating ? 0.6 : 1.0)
-                .padding(.horizontal, 40)
-
-                Text("Your documents are protected")
-                    .font(.caption)
-                    .foregroundColor(.gray)
+                .padding(.horizontal, 48)
 
                 Spacer()
-                    .frame(height: 60)
+                    .frame(height: 24)
+
+                // Security badge
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color(red: 0.20, green: 0.78, blue: 0.35))
+
+                    Text("On-Device Secure")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(secondaryGraphite)
+                .cornerRadius(8)
+
+                Spacer()
+                    .frame(height: 48)
             }
         }
     }
 
     private func authenticate() {
         isAuthenticating = true
+
+        // Haptic feedback
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+
         Task {
             await privacyManager.authenticateToUnlockApp()
             await MainActor.run {

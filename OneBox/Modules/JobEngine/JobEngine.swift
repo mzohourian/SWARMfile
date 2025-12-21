@@ -396,6 +396,7 @@ public class JobManager: ObservableObject {
     private let processingQueue = DispatchQueue(label: "com.onebox.jobengine", qos: .userInitiated)
     private var currentTask: Task<Void, Never>?
     private var privacyDelegate: Privacy.PrivacyManager?
+    private var cachedZeroTraceEnabled: Bool = false
 
     private let persistenceURL: URL = {
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -417,12 +418,26 @@ public class JobManager: ObservableObject {
         // Apply privacy settings from delegate if available
         var privacyJob = job
         if let delegate = privacyDelegate {
-            privacyJob.settings.enableSecureVault = delegate.getSecureVaultEnabled()
-            privacyJob.settings.enableZeroTrace = delegate.getZeroTraceEnabled()
-            privacyJob.settings.enableBiometricLock = delegate.getBiometricLockEnabled()
-            privacyJob.settings.enableStealthMode = delegate.getStealthModeEnabled()
-            privacyJob.settings.complianceMode = delegate.getSelectedComplianceMode()
-            
+            // Access @MainActor properties safely
+            let settings = await MainActor.run {
+                return (
+                    secureVault: delegate.getSecureVaultEnabled(),
+                    zeroTrace: delegate.getZeroTraceEnabled(),
+                    biometricLock: delegate.getBiometricLockEnabled(),
+                    stealthMode: delegate.getStealthModeEnabled(),
+                    complianceMode: delegate.getSelectedComplianceMode()
+                )
+            }
+
+            privacyJob.settings.enableSecureVault = settings.secureVault
+            privacyJob.settings.enableZeroTrace = settings.zeroTrace
+            privacyJob.settings.enableBiometricLock = settings.biometricLock
+            privacyJob.settings.enableStealthMode = settings.stealthMode
+            privacyJob.settings.complianceMode = settings.complianceMode
+
+            // Cache zero trace setting for saveJobs() to use safely
+            cachedZeroTraceEnabled = settings.zeroTrace
+
             // Authenticate if biometric lock is enabled
             if privacyJob.settings.enableBiometricLock {
                 do {
@@ -430,15 +445,19 @@ public class JobManager: ObservableObject {
                 } catch {
                     privacyJob.status = .failed
                     privacyJob.error = error.localizedDescription
-                    jobs.append(privacyJob)
-                    saveJobs()
+                    await MainActor.run {
+                        jobs.append(privacyJob)
+                        saveJobs()
+                    }
                     return
                 }
             }
         }
-        
-        jobs.append(privacyJob)
-        saveJobs()
+
+        await MainActor.run {
+            jobs.append(privacyJob)
+            saveJobs()
+        }
         processNextJob()
     }
 
@@ -460,8 +479,10 @@ public class JobManager: ObservableObject {
         }
         
         // Clean up secure files if secure vault was enabled
-        if job.settings.enableSecureVault {
-            privacyDelegate?.performSecureFilesCleanup()
+        if job.settings.enableSecureVault, let delegate = privacyDelegate {
+            Task { @MainActor in
+                delegate.performSecureFilesCleanup()
+            }
         }
     }
 
@@ -527,8 +548,10 @@ public class JobManager: ObservableObject {
             jobs[index].status = .success  // Set LAST so observers see complete data
 
             // Clean up secure files if secure vault was enabled
-            if job.settings.enableSecureVault {
-                privacyDelegate?.performSecureFilesCleanup()
+            if job.settings.enableSecureVault, let delegate = privacyDelegate {
+                await MainActor.run {
+                    delegate.performSecureFilesCleanup()
+                }
             }
         } catch {
             jobs[index].status = .failed
@@ -584,10 +607,10 @@ public class JobManager: ObservableObject {
 
     private func saveJobs() {
         // Don't save job history if zero-trace mode is enabled
-        if let delegate = privacyDelegate, delegate.getZeroTraceEnabled() {
+        if cachedZeroTraceEnabled {
             return
         }
-        
+
         guard let data = try? JSONEncoder().encode(jobs) else { return }
         try? data.write(to: persistenceURL)
     }

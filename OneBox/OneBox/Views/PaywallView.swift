@@ -42,7 +42,7 @@ struct PaywallView: View {
                 }
                 .padding()
             }
-            .navigationTitle("OneBox Pro")
+            .navigationTitle("Vault PDF Pro")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {

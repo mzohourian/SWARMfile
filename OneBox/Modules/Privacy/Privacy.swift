@@ -168,7 +168,7 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
         // Check if biometrics are available, fall back to passcode
         let canUseBiometrics = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
         let policy: LAPolicy = canUseBiometrics ? .deviceOwnerAuthenticationWithBiometrics : .deviceOwnerAuthentication
-        let reason = "Unlock OneBox to access your documents"
+        let reason = "Unlock Vault PDF to access your documents"
 
         do {
             let success = try await context.evaluatePolicy(policy, localizedReason: reason)

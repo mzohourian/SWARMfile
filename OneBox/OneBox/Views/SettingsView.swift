@@ -110,7 +110,7 @@ struct SettingsView: View {
             if paymentsManager.hasPro {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("OneBox Pro")
+                        Text("Vault PDF Pro")
                             .font(.headline)
                             .foregroundColor(OneBoxColors.primaryText)
                         Text("Thank you for your support!")

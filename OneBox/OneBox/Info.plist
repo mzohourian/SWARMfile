@@ -9,7 +9,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>OneBox</string>
+	<string>Vault PDF</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -25,11 +25,11 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>OneBox uses Face ID to protect your documents and secure sensitive operations</string>
+	<string>Vault PDF uses Face ID to protect your documents and secure sensitive operations</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>OneBox needs permission to save processed files</string>
+	<string>Vault PDF needs permission to save processed files</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>OneBox needs access to your photos to convert them to PDF</string>
+	<string>Vault PDF needs access to your photos to convert them to PDF</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>processing</string>

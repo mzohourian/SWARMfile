@@ -203,7 +203,7 @@ struct LockScreenView: View {
                     .frame(height: 48)
 
                 // Title
-                Text("OneBox")
+                Text("Vault PDF")
                     .font(.system(size: 28, weight: .semibold, design: .default))
                     .foregroundColor(.white)
                     .tracking(1)

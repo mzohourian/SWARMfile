@@ -1,4 +1,4 @@
-# OneBox: File Converter & Compressor
+# Vault PDF: File Converter & Compressor
 
 <div align="center">
 
@@ -34,7 +34,7 @@
 
 ## 🎯 Overview
 
-**OneBox** is a production-grade iOS/iPadOS application that provides privacy-first, on-device file processing capabilities. All operations happen locally on the user's device—no cloud uploads, no tracking, complete privacy.
+**Vault PDF** is a production-grade iOS/iPadOS application that provides privacy-first, on-device file processing capabilities. All operations happen locally on the user's device—no cloud uploads, no tracking, complete privacy.
 
 ### Key Highlights
 

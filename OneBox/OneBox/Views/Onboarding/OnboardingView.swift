@@ -24,7 +24,7 @@ struct OnboardingView: View {
     private let pages: [OnboardingPage] = [
         OnboardingPage(
             id: "welcome",
-            title: "Welcome to OneBox",
+            title: "Welcome to Vault PDF",
             subtitle: "Fort Knox for your PDF documents",
             description: "Privacy-first document processing. Transform, organize, and secure your documents entirely on your device.",
             primaryAction: "Get Started",
@@ -53,7 +53,7 @@ struct OnboardingView: View {
             id: "permissions",
             title: "Complete Setup",
             subtitle: "Optimize your experience",
-            description: "Enable biometric authentication and notifications to unlock the full OneBox experience with seamless security.",
+            description: "Enable biometric authentication and notifications to unlock the full Vault PDF experience with seamless security.",
             primaryAction: "Finish Setup",
             icon: "checkmark.shield.fill",
             gradient: [OneBoxColors.secureGreen, OneBoxColors.primaryGold]
@@ -332,7 +332,7 @@ struct OnboardingView: View {
                 }
                 
                 VStack(alignment: .leading, spacing: OneBoxSpacing.tiny) {
-                    Text("I agree to the OneBox Terms of Service and Privacy Policy")
+                    Text("I agree to the Vault PDF Terms of Service and Privacy Policy")
                         .font(OneBoxTypography.caption)
                         .foregroundColor(OneBoxColors.primaryText)
                     
@@ -585,15 +585,15 @@ struct LegalDocumentView: View {
         switch documentType {
         case .terms:
             return """
-            OneBox Terms of Service
+            Vault PDF Terms of Service
 
             Last Updated: December 2024
 
             1. ACCEPTANCE OF TERMS
-            By using OneBox, you agree to these Terms of Service. If you do not agree, please do not use the app.
+            By using Vault PDF, you agree to these Terms of Service. If you do not agree, please do not use the app.
 
             2. PRIVACY-FIRST PROCESSING
-            OneBox processes all documents entirely on your device. We do not collect, transmit, or store your documents on any external servers.
+            Vault PDF processes all documents entirely on your device. We do not collect, transmit, or store your documents on any external servers.
 
             3. YOUR DATA
             • All document processing happens locally on your device
@@ -601,7 +601,7 @@ struct LegalDocumentView: View {
             • We have no access to your documents or their contents
 
             4. LICENSE
-            OneBox grants you a limited, non-exclusive license to use the app for personal or business purposes.
+            Vault PDF grants you a limited, non-exclusive license to use the app for personal or business purposes.
 
             5. SUBSCRIPTIONS
             • Free tier includes limited daily exports
@@ -609,20 +609,20 @@ struct LegalDocumentView: View {
             • Subscriptions are managed through Apple's App Store
 
             6. LIMITATIONS
-            OneBox is provided "as is" without warranties. We are not liable for any data loss or damages.
+            Vault PDF is provided "as is" without warranties. We are not liable for any data loss or damages.
 
             7. CONTACT
             For questions about these terms, please contact support through the app.
             """
         case .privacy:
             return """
-            OneBox Privacy Policy
+            Vault PDF Privacy Policy
 
             Last Updated: December 2024
 
             YOUR PRIVACY IS OUR PRIORITY
 
-            OneBox is designed with privacy as the foundation, not an afterthought.
+            Vault PDF is designed with privacy as the foundation, not an afterthought.
 
             WHAT WE DON'T COLLECT
             • We do NOT collect your documents
@@ -649,7 +649,7 @@ struct LegalDocumentView: View {
             YOUR RIGHTS
             • Your documents are yours alone
             • Delete the app to remove all local data
-            • No account required to use OneBox
+            • No account required to use Vault PDF
 
             CONTACT
             Questions? Reach out through the app's Help Center.

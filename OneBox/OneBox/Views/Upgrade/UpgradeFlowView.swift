@@ -458,7 +458,7 @@ struct UpgradeFlowView: View {
                     socialProofStat("4.9★", "App Store Rating")
                 }
                 
-                Text("\"OneBox has transformed how our team handles sensitive documents. The security features give us complete peace of mind.\"")
+                Text("\"Vault PDF has transformed how our team handles sensitive documents. The security features give us complete peace of mind.\"")
                     .font(OneBoxTypography.caption)
                     .foregroundColor(OneBoxColors.secondaryText)
                     .italic()
@@ -695,8 +695,8 @@ enum PremiumPlan: String, CaseIterable, Identifiable {
     
     var displayName: String {
         switch self {
-        case .pro: return "OneBox Pro"
-        case .enterprise: return "OneBox Enterprise"
+        case .pro: return "Vault PDF Pro"
+        case .enterprise: return "Vault PDF Enterprise"
         }
     }
     

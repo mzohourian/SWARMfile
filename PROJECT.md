@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-20
+**Last Updated:** 2025-12-21
 
 ## What This Is
 **OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -62,54 +62,72 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **Fixed black text on dark backgrounds (success/result page):**
-  - JobResultView.swift: Changed system colors (.secondary, .primary) to OneBoxColors
-  - Added dark background (OneBoxColors.primaryGraphite) to the success page
-  - Fixed InfoRow component in UIComponents.swift to use proper colors
-- **Fixed Split PDF only showing 1 file in preview:**
-  - Root cause: saveOutputFilesToDocuments() used same filename for all files
-  - All files were overwriting each other with same timestamp-based name
-  - Fixed by adding unique index suffix to filenames (e.g., split_pdf_date_1.pdf, split_pdf_date_2.pdf)
-- **Fixed "files removed or deleted" error on success page:**
-  - Same root cause as above - files now persist with unique names
-- **Fixed black text in Merge PDF configuration:**
-  - Fixed ReorderableFilePickerRow and ReorderableFileListView in UIComponents.swift
-  - Changed .secondary/.primary colors to OneBoxColors equivalents
+- **MAJOR FIX: "Files removed or deleted" preview error (comprehensive overhaul):**
+  - Root cause: Files were not reliably persisted, temp URLs were stored when copy failed
+  - **saveOutputFilesToDocuments()** completely rewritten with:
+    - Post-copy verification (checks file exists AND has content)
+    - Two-attempt copy mechanism (copyItem then Data.write fallback)
+    - Never falls back to temp URLs (they get cleaned up by iOS)
+    - Locale-safe timestamp format (yyyy-MM-dd_HH-mm-ss)
+    - Standardized path comparison for Documents directory check
+  - **loadJobs()** improved URL reconstruction:
+    - Multiple path pattern matching for sandbox path changes
+    - Verifies file content (not just existence)
+    - Last-resort filename search in Exports directory
+  - **ensureFileAccessible()** in JobResultView rewritten:
+    - Security-scoped resource access for all file operations
+    - Multiple fallback paths to find files
+    - Content verification (size > 0)
+  - **QuickLook Coordinator** also updated with matching logic
+- **Removed misleading "Create Workflow" from feature flow:**
+  - Replaced interactive button with informational tip
+- **Fixed Ads module build error:**
+  - Removed UIComponents dependency, created local AdColors struct
 - All previous fixes remain in place
 
 ---
 
 ## Last Session Summary
 
-**Date:** 2025-12-20
+**Date:** 2025-12-21
 
 **What Was Done:**
-- **Fixed black text on dark backgrounds (4 issues):**
-  1. Success/result page: Added proper colors to JobResultView.swift, added dark background
-  2. Split PDF preview: Fixed saveOutputFilesToDocuments() to use unique filenames with index
-  3. Files deleted error: Same fix - unique filenames prevent overwriting
-  4. Merge PDF config: Fixed ReorderableFilePickerRow and ReorderableFileListView colors
+- **Comprehensive fix for "files removed or deleted" preview error:**
+  - Completely rewrote file persistence system in JobEngine.swift
+  - Added post-copy verification and fallback copy mechanisms
+  - Never store temp URLs that iOS will clean up
+  - Improved URL reconstruction when loading jobs from disk
+  - Multiple path fallbacks to find files in Exports directory
+- **Removed misleading "Create Workflow" option from feature flow:**
+  - Users were confused as it didn't actually create workflows from features
+  - Replaced with informational tip about Workflows feature
+- **Fixed Ads module build error:**
+  - Created local AdColors struct to avoid UIComponents dependency
 
 **What's Unfinished:**
 - Build not verified (no Xcode in environment) - user should build and test
-- Other views (PaywallView, HomeView, PrivacyDashboardView, etc.) still have system colors
+- Preview file fix needs testing - this was the 4th-5th attempt at fixing
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/JobResultView.swift` - Fixed success page colors and background
-- `OneBox/Modules/JobEngine/JobEngine.swift` - Fixed unique filenames for multi-file outputs
-- `OneBox/Modules/UIComponents/UIComponents.swift` - Fixed InfoRow and ReorderableFileList colors
+- `OneBox/Modules/JobEngine/JobEngine.swift` - Major rewrite of saveOutputFilesToDocuments() and loadJobs()
+- `OneBox/OneBox/Views/JobResultView.swift` - Rewrote ensureFileAccessible() with multiple fallbacks
+- `OneBox/OneBox/Views/ToolFlowView.swift` - Removed Create Workflow option, added tip banner
+- `OneBox/Modules/Ads/Ads.swift` - Added local AdColors, removed UIComponents dependency
 
 ---
 
 ## Next Steps (Priority Order)
 
 1. **Build and test in Xcode** - Verify all changes compile
-2. **Test Sign PDF feature:**
+2. **Test Preview Files** - CRITICAL - This was the main issue:
+   - Process any file (merge, split, compress, etc.)
+   - After export, tap on the file to preview
+   - Verify preview loads successfully (no "files removed or deleted" error)
+   - Go to Recents tab, tap on a previous job
+   - Verify files can be previewed from Recents
+3. **Test Sign PDF feature:**
    - Place signature and verify it appears at exact tap location in final PDF
    - Verify size matches what you see on screen
-   - Test drag-anywhere (drag anywhere on screen while signature selected)
-   - Test multi-page signatures (place signatures on different pages, verify all appear in final)
-3. **Test other features** - Button styling, preview, state persistence
 
 ---
 

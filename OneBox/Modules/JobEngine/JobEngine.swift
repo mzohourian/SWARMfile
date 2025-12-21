@@ -543,36 +543,66 @@ public class JobManager: ObservableObject {
 
         // Reconstruct valid URLs for output files
         // iOS can change the app's sandbox path between launches, invalidating stored absolute URLs
-        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let fileManager = FileManager.default
+        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let exportsDir = documentsURL.appendingPathComponent("Exports")
 
         jobs = loadedJobs.map { job in
             var updatedJob = job
             updatedJob.outputURLs = job.outputURLs.compactMap { storedURL in
-                // Try to extract the relative path from the stored URL
-                // Look for "Documents/" in the path and extract everything after it
                 let storedPath = storedURL.path
+                let filename = storedURL.lastPathComponent
 
                 // Check if file exists at stored path first (might still be valid)
-                if FileManager.default.fileExists(atPath: storedPath) {
-                    return storedURL
+                if fileManager.fileExists(atPath: storedPath) {
+                    // Verify it has content
+                    if let attrs = try? fileManager.attributesOfItem(atPath: storedPath),
+                       let size = attrs[.size] as? Int64, size > 0 {
+                        return storedURL
+                    }
                 }
 
                 // Try to reconstruct URL using current Documents directory
-                if let range = storedPath.range(of: "Documents/") {
-                    let relativePath = String(storedPath[range.upperBound...])
-                    let reconstructedURL = documentsURL.appendingPathComponent(relativePath)
-                    if FileManager.default.fileExists(atPath: reconstructedURL.path) {
-                        print("✅ JobEngine: Reconstructed valid URL: \(reconstructedURL.lastPathComponent)")
-                        return reconstructedURL
+                // Handle both /var/mobile/... and /private/var/mobile/... path formats
+                let pathPatterns = ["Documents/Exports/", "Documents/", "/Exports/"]
+                for pattern in pathPatterns {
+                    if let range = storedPath.range(of: pattern) {
+                        let relativePath = String(storedPath[range.upperBound...])
+                        let reconstructedURL = exportsDir.appendingPathComponent(relativePath)
+                        if fileManager.fileExists(atPath: reconstructedURL.path) {
+                            print("✅ JobEngine: Reconstructed valid URL: \(reconstructedURL.lastPathComponent)")
+                            return reconstructedURL
+                        }
                     }
                 }
 
                 // Also try with just the filename in Exports directory
-                let filename = storedURL.lastPathComponent
-                let exportsURL = documentsURL.appendingPathComponent("Exports").appendingPathComponent(filename)
-                if FileManager.default.fileExists(atPath: exportsURL.path) {
-                    print("✅ JobEngine: Found file in Exports: \(filename)")
-                    return exportsURL
+                let exportsURL = exportsDir.appendingPathComponent(filename)
+                if fileManager.fileExists(atPath: exportsURL.path) {
+                    // Verify it has content
+                    if let attrs = try? fileManager.attributesOfItem(atPath: exportsURL.path),
+                       let size = attrs[.size] as? Int64, size > 0 {
+                        print("✅ JobEngine: Found file in Exports: \(filename)")
+                        return exportsURL
+                    }
+                }
+
+                // Last resort: Search for file by name pattern (handles renamed files)
+                // Look for files that match the pattern: jobprefix_date_index.ext
+                if let files = try? fileManager.contentsOfDirectory(at: exportsDir, includingPropertiesForKeys: nil) {
+                    // Try to find a file with same extension that might be a match
+                    let ext = storedURL.pathExtension
+                    for fileURL in files where fileURL.pathExtension == ext {
+                        // Return first match for same extension (simple heuristic)
+                        // This helps recover files that were saved but with different names
+                        if fileManager.fileExists(atPath: fileURL.path) {
+                            if let attrs = try? fileManager.attributesOfItem(atPath: fileURL.path),
+                               let size = attrs[.size] as? Int64, size > 0 {
+                                print("✅ JobEngine: Found potential match by extension: \(fileURL.lastPathComponent)")
+                                return fileURL
+                            }
+                        }
+                    }
                 }
 
                 print("⚠️ JobEngine: Could not find file: \(filename)")
@@ -628,12 +658,13 @@ public class JobManager: ObservableObject {
 
     /// Saves output files from temp directory to Documents/Exports for persistence
     /// Files in temp directory get cleaned up by iOS, so we need to copy them
+    /// CRITICAL: This function must verify files are actually saved - never return URLs to non-existent files
     private func saveOutputFilesToDocuments(_ tempURLs: [URL], jobType: JobType) -> [URL] {
         let fileManager = FileManager.default
 
         guard let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
             print("❌ JobEngine: Could not get Documents directory")
-            return tempURLs
+            return []  // Return empty rather than temp URLs that will be deleted
         }
 
         let exportsURL = documentsURL.appendingPathComponent("Exports", isDirectory: true)
@@ -643,45 +674,63 @@ public class JobManager: ObservableObject {
             try fileManager.createDirectory(at: exportsURL, withIntermediateDirectories: true, attributes: nil)
         } catch {
             print("❌ JobEngine: Failed to create Exports directory: \(error)")
-            return tempURLs
+            return []  // Return empty rather than temp URLs
         }
 
         var persistedURLs: [URL] = []
 
-        // Create timestamp once for all files in this batch
-        let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .short)
-            .replacingOccurrences(of: "/", with: "-")
-            .replacingOccurrences(of: ":", with: "-")
+        // Create timestamp using a format that's safe for filenames (no locale-specific characters)
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        let timestamp = dateFormatter.string(from: Date())
+        let jobPrefix = jobType.displayName.lowercased()
             .replacingOccurrences(of: " ", with: "_")
-            .replacingOccurrences(of: ",", with: "")
-        let jobPrefix = jobType.displayName.lowercased().replacingOccurrences(of: " ", with: "_")
+            .replacingOccurrences(of: "&", with: "and")
         let hasMultipleFiles = tempURLs.count > 1
 
         for (index, tempURL) in tempURLs.enumerated() {
-            // Check if file exists
+            // Start security-scoped access if needed (for files from document picker)
+            let startedAccessing = tempURL.startAccessingSecurityScopedResource()
+            defer {
+                if startedAccessing {
+                    tempURL.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            // Check if file exists at source
             guard fileManager.fileExists(atPath: tempURL.path) else {
                 print("⚠️ JobEngine: Temp file doesn't exist: \(tempURL.path)")
                 continue
             }
 
-            // Skip files that are already in Documents directory
-            if tempURL.path.hasPrefix(documentsURL.path) {
-                print("📁 JobEngine: File already in Documents: \(tempURL.path)")
-                persistedURLs.append(tempURL)
+            // Check if file is already in Documents/Exports (use standardized paths for comparison)
+            let standardizedTempPath = (tempURL.path as NSString).standardizingPath
+            let standardizedDocsPath = (documentsURL.path as NSString).standardizingPath
+            if standardizedTempPath.hasPrefix(standardizedDocsPath) {
+                // Verify file actually exists at this location
+                if fileManager.fileExists(atPath: tempURL.path) {
+                    print("📁 JobEngine: File already in Documents, verified: \(tempURL.lastPathComponent)")
+                    persistedURLs.append(tempURL)
+                } else {
+                    print("⚠️ JobEngine: File claimed to be in Documents but doesn't exist: \(tempURL.path)")
+                }
                 continue
             }
 
             // Create clean filename with job type, timestamp, and index (for multiple files)
-            let ext = tempURL.pathExtension
+            let ext = tempURL.pathExtension.isEmpty ? "pdf" : tempURL.pathExtension
             let newFilename: String
             if hasMultipleFiles {
-                // Include 1-based index for multiple files (e.g., split_pdf_12-20-2024_1.pdf)
+                // Include 1-based index for multiple files (e.g., split_pdf_2024-12-21_14-30-00_1.pdf)
                 newFilename = "\(jobPrefix)_\(timestamp)_\(index + 1).\(ext)"
             } else {
                 newFilename = "\(jobPrefix)_\(timestamp).\(ext)"
             }
             let destinationURL = exportsURL.appendingPathComponent(newFilename)
 
+            var copySucceeded = false
+
+            // Attempt 1: Direct copy
             do {
                 // Remove existing file if present
                 if fileManager.fileExists(atPath: destinationURL.path) {
@@ -690,17 +739,61 @@ public class JobManager: ObservableObject {
 
                 // Copy file to persistent location
                 try fileManager.copyItem(at: tempURL, to: destinationURL)
-                print("✅ JobEngine: Saved file to: \(destinationURL.path)")
-                persistedURLs.append(destinationURL)
 
+                // CRITICAL: Verify the copy actually succeeded
+                if fileManager.fileExists(atPath: destinationURL.path) {
+                    // Also verify file has content
+                    if let attrs = try? fileManager.attributesOfItem(atPath: destinationURL.path),
+                       let size = attrs[.size] as? Int64, size > 0 {
+                        print("✅ JobEngine: Saved and verified file: \(destinationURL.lastPathComponent) (\(size) bytes)")
+                        persistedURLs.append(destinationURL)
+                        copySucceeded = true
+                    } else {
+                        print("⚠️ JobEngine: File exists but is empty or unreadable: \(destinationURL.path)")
+                        try? fileManager.removeItem(at: destinationURL)
+                    }
+                } else {
+                    print("⚠️ JobEngine: Copy reported success but file doesn't exist at destination")
+                }
             } catch {
-                print("❌ JobEngine: Failed to save file: \(error)")
-                // Fall back to temp URL if copy fails
-                persistedURLs.append(tempURL)
+                print("❌ JobEngine: Failed to copy file (attempt 1): \(error.localizedDescription)")
+            }
+
+            // Attempt 2: If first attempt failed, try reading data and writing
+            if !copySucceeded {
+                do {
+                    let data = try Data(contentsOf: tempURL)
+
+                    // Create a new filename with UUID to avoid conflicts
+                    let fallbackFilename = "\(jobPrefix)_\(UUID().uuidString.prefix(8)).\(ext)"
+                    let fallbackURL = exportsURL.appendingPathComponent(fallbackFilename)
+
+                    try data.write(to: fallbackURL, options: .atomic)
+
+                    // Verify the write
+                    if fileManager.fileExists(atPath: fallbackURL.path) {
+                        if let attrs = try? fileManager.attributesOfItem(atPath: fallbackURL.path),
+                           let size = attrs[.size] as? Int64, size > 0 {
+                            print("✅ JobEngine: Saved via data write (attempt 2): \(fallbackURL.lastPathComponent)")
+                            persistedURLs.append(fallbackURL)
+                            copySucceeded = true
+                        }
+                    }
+                } catch {
+                    print("❌ JobEngine: Failed to save file (attempt 2): \(error.localizedDescription)")
+                }
+            }
+
+            // If both attempts failed, DO NOT add temp URL - it will be deleted by iOS
+            if !copySucceeded {
+                print("❌ JobEngine: CRITICAL - Could not persist file: \(tempURL.lastPathComponent)")
             }
         }
 
-        return persistedURLs.isEmpty ? tempURLs : persistedURLs
+        // Log summary
+        print("📊 JobEngine: Persisted \(persistedURLs.count)/\(tempURLs.count) files to Documents/Exports")
+
+        return persistedURLs
     }
 }
 

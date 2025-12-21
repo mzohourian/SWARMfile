@@ -532,10 +532,12 @@ struct ExportPreviewView: View {
         if sizeReduction > 0.3 && averageFileSize < 5_000_000 { // >30% reduction, <5MB avg
             return QualityStatus(text: "Excellent", color: OneBoxColors.secureGreen, icon: "checkmark.seal.fill")
         } else if sizeReduction > 0.1 && averageFileSize < 10_000_000 { // >10% reduction, <10MB avg
-            return QualityStatus(text: "Good", color: OneBoxColors.warningAmber, icon: "checkmark.circle.fill")
-        } else if sizeReduction > 0 {
-            return QualityStatus(text: "Acceptable", color: OneBoxColors.warningAmber, icon: "exclamationmark.circle.fill")
+            return QualityStatus(text: "Good", color: OneBoxColors.secureGreen, icon: "checkmark.circle.fill")
+        } else if sizeReduction >= 0 {
+            // Size reduced slightly or unchanged - acceptable
+            return QualityStatus(text: "Ready", color: OneBoxColors.primaryGold, icon: "checkmark.circle.fill")
         } else {
+            // Size increased - needs review
             return QualityStatus(text: "Review Needed", color: OneBoxColors.criticalRed, icon: "exclamationmark.triangle.fill")
         }
     }
@@ -624,8 +626,18 @@ struct ExportPreviewView: View {
                 severity: .warning,
                 isActionable: true
             ))
+        } else if sizeReduction == 0 && originalSize > 0 {
+            // Size unchanged - informational
+            insights.append(QualityInsight(
+                id: "size_unchanged",
+                title: "Size Unchanged",
+                description: "Output size matches input",
+                icon: "equal.circle.fill",
+                severity: .info,
+                isActionable: false
+            ))
         }
-        
+
         // Average file size insight
         if averageFileSize > 10_000_000 {
             insights.append(QualityInsight(

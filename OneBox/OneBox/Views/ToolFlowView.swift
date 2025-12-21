@@ -2337,8 +2337,16 @@ struct PDFCompressionSettings: View {
     let pdfURL: URL?
 
     @State private var originalSizeMB: Double = 0
-    @State private var minAchievableMB: Double = 0.5
+    @State private var baseMinAchievableMB: Double = 0.5  // Base estimate without grayscale
     @State private var isAnalyzing: Bool = false
+
+    // Effective minimum accounts for grayscale (typically 10-15% additional reduction)
+    private var minAchievableMB: Double {
+        if settings.convertToGrayscale {
+            return max(0.1, baseMinAchievableMB * 0.85)  // 15% smaller with grayscale
+        }
+        return baseMinAchievableMB
+    }
 
     private var targetSize: Double {
         settings.targetSizeMB ?? minAchievableMB
@@ -2396,7 +2404,7 @@ struct PDFCompressionSettings: View {
 
                     Slider(
                         value: Binding(
-                            get: { targetSize },
+                            get: { min(targetSize, originalSizeMB) },
                             set: { settings.targetSizeMB = $0 }
                         ),
                         in: minAchievableMB...originalSizeMB,
@@ -2437,6 +2445,10 @@ struct PDFCompressionSettings: View {
                     }
                 }
                 .tint(OneBoxColors.primaryGold)
+                .onChange(of: settings.convertToGrayscale) { _ in
+                    // Update target to new minimum when grayscale changes
+                    settings.targetSizeMB = minAchievableMB
+                }
             }
         }
         .onAppear {
@@ -2453,7 +2465,7 @@ struct PDFCompressionSettings: View {
             originalSizeMB = Double(fileSize) / 1_000_000.0
 
             // Set initial estimate while analyzing
-            minAchievableMB = max(0.1, originalSizeMB * 0.05)
+            baseMinAchievableMB = max(0.1, originalSizeMB * 0.05)
 
             // Default to minimum achievable size
             settings.targetSizeMB = minAchievableMB
@@ -2470,7 +2482,7 @@ struct PDFCompressionSettings: View {
 
                 if analysis.original > 0 {
                     originalSizeMB = analysis.original
-                    minAchievableMB = analysis.minimum
+                    baseMinAchievableMB = analysis.minimum
 
                     // Default to minimum achievable (maximum compression)
                     settings.targetSizeMB = minAchievableMB

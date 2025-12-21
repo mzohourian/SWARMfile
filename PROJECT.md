@@ -68,6 +68,12 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - **Implemented Privacy Info modal** for all tools in HomeView
 - **Implemented Document preview** in search results
 - **Implemented Help Center buttons** (Contact Support, Video Tutorials, Feature Tour, Shortcuts)
+- **Fixed PDF compression issues:**
+  - Minimum size estimate now uses realistic values (0.3x scale, 0.05 quality)
+  - Removed 50% cap that prevented aggressive compression targets
+  - Added guard check for PDF context creation to prevent crashes
+  - Added autoreleasepool for memory management during compression
+  - Added maxDimension clamping (2000px) to prevent memory overflow
 
 ---
 
@@ -111,6 +117,7 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - `OneBox/OneBox/Views/Upgrade/UpgradeFlowView.swift` - Added Terms/Privacy sheets
 - `OneBox/OneBox/Views/NewHomeView.swift` - Added privacy info modal and document preview
 - `OneBox/OneBox/Views/Help/HelpCenterView.swift` - Implemented all help buttons
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed compression size estimate and crash prevention
 
 ---
 

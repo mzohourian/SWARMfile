@@ -4,6 +4,42 @@
 
 ---
 
+## 2025-12-21: Preview File Issue FINALLY Fixed + Workflow UI Cleanup
+
+**Issues Reported:**
+1. "Files removed or deleted" error when previewing files (4th-5th report of this issue)
+2. "Create Workflow" option in feature flow was misleading
+3. Ads module build error (UIComponents import)
+
+**Root Cause (Preview Issue):**
+- SwiftUI state race condition
+- Using separate `@State private var showPreview = false` and `@State private var previewURL: URL?`
+- When button tapped: `previewURL = url` then `showPreview = true`
+- SwiftUI could present `fullScreenCover` before `previewURL` state update propagated
+- Result: Cover appeared with nil URL, showing error
+
+**Solution:**
+- Created `PreviewItem` struct (Identifiable wrapper for URL)
+- Changed `fullScreenCover(isPresented:)` to `fullScreenCover(item:)` binding
+- Single `@State private var previewItem: PreviewItem?` bundles URL with presentation
+- No more race condition - URL is guaranteed present when cover shows
+
+**Other Fixes:**
+- Simplified file persistence in JobEngine.swift (removed overly complex verification)
+- Simplified ensureFileAccessible() in JobResultView.swift
+- Removed "Create Workflow" button, replaced with informational tip
+- Fixed Ads module with local AdColors struct
+
+**Files Modified:**
+- `OneBox/OneBox/Views/JobResultView.swift` - PreviewItem pattern for sheet presentation
+- `OneBox/Modules/JobEngine/JobEngine.swift` - Simplified file persistence
+- `OneBox/OneBox/Views/ToolFlowView.swift` - Workflow tip instead of button
+- `OneBox/Modules/Ads/Ads.swift` - Local AdColors struct
+
+**Status:** USER VERIFIED WORKING
+
+---
+
 ## 2025-12-20: Black Text on Dark Background Fixes + Split PDF Multi-file Fix
 
 **Issues Reported:**

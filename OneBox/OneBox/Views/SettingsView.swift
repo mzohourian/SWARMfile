@@ -6,6 +6,7 @@
 import SwiftUI
 import Payments
 import Privacy
+import UIComponents
 
 struct SettingsView: View {
     @EnvironmentObject var paymentsManager: PaymentsManager
@@ -61,15 +62,17 @@ struct SettingsView: View {
                 Section {
                     HStack {
                         Text("Version")
+                            .foregroundColor(OneBoxColors.primaryText)
                         Spacer()
                         Text(appVersion)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(OneBoxColors.secondaryText)
                     }
                     HStack {
                         Text("Build")
+                            .foregroundColor(OneBoxColors.primaryText)
                         Spacer()
                         Text(buildNumber)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(OneBoxColors.secondaryText)
                     }
                 } header: {
                     Text("About")
@@ -88,6 +91,8 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.large)
+            .scrollContentBackground(.hidden)
+            .background(OneBoxColors.primaryGraphite)
             .sheet(isPresented: $showingPrivacyPolicy) {
                 PrivacyPolicyView()
             }
@@ -107,13 +112,14 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("OneBox Pro")
                             .font(.headline)
+                            .foregroundColor(OneBoxColors.primaryText)
                         Text("Thank you for your support!")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(OneBoxColors.secondaryText)
                     }
                     Spacer()
                     Image(systemName: "checkmark.seal.fill")
-                        .foregroundColor(.blue)
+                        .foregroundColor(OneBoxColors.secureGreen)
                         .font(.title2)
                 }
             } else {
@@ -124,13 +130,14 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Upgrade to Pro")
                                 .font(.headline)
+                                .foregroundColor(OneBoxColors.primaryText)
                             Text("Unlimited exports, no ads, and more")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(OneBoxColors.secondaryText)
                         }
                         Spacer()
                         Image(systemName: "crown.fill")
-                            .foregroundColor(.orange)
+                            .foregroundColor(OneBoxColors.primaryGold)
                             .font(.title2)
                     }
                 }
@@ -158,6 +165,7 @@ struct PrivacyPolicyView: View {
                     Text("Privacy Policy")
                         .font(.largeTitle)
                         .fontWeight(.bold)
+                        .foregroundColor(OneBoxColors.primaryText)
 
                     Group {
                         policySection(
@@ -188,17 +196,19 @@ struct PrivacyPolicyView: View {
 
                     Text("Last updated: \(Date().formatted(date: .long, time: .omitted))")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoxColors.tertiaryText)
                         .padding(.top)
                 }
                 .padding()
             }
+            .background(OneBoxColors.primaryGraphite)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
                         dismiss()
                     }
+                    .foregroundColor(OneBoxColors.goldText)
                 }
             }
         }
@@ -208,9 +218,10 @@ struct PrivacyPolicyView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.headline)
+                .foregroundColor(OneBoxColors.primaryText)
             Text(content)
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(OneBoxColors.secondaryText)
         }
     }
 }
@@ -247,10 +258,14 @@ struct SupportView: View {
                 }
 
                 Section("Contact") {
-                    Link("Report a Bug", destination: URL(string: "https://github.com/yourcompany/onebox/issues")!)
-                    Link("Request a Feature", destination: URL(string: "https://github.com/yourcompany/onebox/discussions")!)
+                    Link("Report a Bug", destination: URL(string: "mailto:support@onebox.app")!)
+                        .foregroundColor(OneBoxColors.goldText)
+                    Link("Request a Feature", destination: URL(string: "mailto:feedback@onebox.app")!)
+                        .foregroundColor(OneBoxColors.goldText)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(OneBoxColors.primaryGraphite)
             .navigationTitle("Help & Support")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -258,6 +273,7 @@ struct SupportView: View {
                     Button("Done") {
                         dismiss()
                     }
+                    .foregroundColor(OneBoxColors.goldText)
                 }
             }
         }
@@ -273,12 +289,13 @@ struct FAQRow: View {
         DisclosureGroup(isExpanded: $isExpanded) {
             Text(answer)
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(OneBoxColors.secondaryText)
                 .padding(.top, 4)
         } label: {
             Text(question)
                 .font(.subheadline)
                 .fontWeight(.medium)
+                .foregroundColor(OneBoxColors.primaryText)
         }
     }
 }
@@ -290,9 +307,10 @@ struct FormatRow: View {
     var body: some View {
         HStack {
             Text(category)
+                .foregroundColor(OneBoxColors.primaryText)
             Spacer()
             Text(formats)
-                .foregroundColor(.secondary)
+                .foregroundColor(OneBoxColors.secondaryText)
                 .font(.subheadline)
         }
     }

@@ -113,36 +113,14 @@ class AppCoordinator: ObservableObject {
 
 // MARK: - Theme Manager
 class ThemeManager: ObservableObject {
-    @Published var themePreference: ThemePreference {
-        didSet {
-            UserDefaults.standard.set(themePreference.rawValue, forKey: "theme_preference")
-        }
-    }
-
-    enum ThemePreference: String, CaseIterable {
-        case system
-        case light
-        case dark
-
-        var displayName: String {
-            switch self {
-            case .system: return "System"
-            case .light: return "Light"
-            case .dark: return "Dark"
-            }
-        }
-    }
+    // OneBox uses a dark-only aesthetic for premium/secure feel
+    // No user preference needed - always dark
 
     var colorScheme: ColorScheme? {
-        switch themePreference {
-        case .system: return nil
-        case .light: return .light
-        case .dark: return .dark
-        }
+        return .dark
     }
 
     init() {
-        let savedRaw = UserDefaults.standard.string(forKey: "theme_preference") ?? "system"
-        self.themePreference = ThemePreference(rawValue: savedRaw) ?? .system
+        // Dark mode only - no preferences to load
     }
 }

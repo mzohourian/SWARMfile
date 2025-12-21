@@ -1266,7 +1266,6 @@ struct ConfigurationView: View {
     let selectedURLs: [URL]
     let onProcess: () -> Void
 
-    @State private var showAdvanced = false
     @State private var showContextualHelp = false
 
     private var isConfigurationValid: Bool {
@@ -1308,10 +1307,7 @@ struct ConfigurationView: View {
                     
                     // Tool-specific settings
                     toolSettingsSection
-                    
-                    // Advanced Settings with Ceremony
-                    advancedSettingsSection
-                    
+
                     // Privacy & Security Options
                     privacySettingsSection
                     
@@ -1407,44 +1403,7 @@ struct ConfigurationView: View {
             }
         }
     }
-    
-    private var advancedSettingsSection: some View {
-        OneBoxCard(style: .interactive) {
-            VStack(spacing: OneBoxSpacing.medium) {
-                Button {
-                    showAdvanced.toggle()
-                    let generator = UISelectionFeedbackGenerator()
-            generator.selectionChanged()
-                } label: {
-                    HStack {
-                        HStack(spacing: OneBoxSpacing.small) {
-                            Image(systemName: "gearshape.2")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(OneBoxColors.primaryGold)
-                            
-                            Text("Advanced Settings")
-                                .font(OneBoxTypography.cardTitle)
-                                .foregroundColor(OneBoxColors.primaryText)
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: showAdvanced ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(OneBoxColors.secondaryText)
-                    }
-                }
-                
-                if showAdvanced {
-                    advancedSettings
-                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                }
-            }
-            .padding(OneBoxSpacing.medium)
-        }
-        .animation(.easeInOut(duration: 0.3), value: showAdvanced)
-    }
-    
+
     private var privacySettingsSection: some View {
         OneBoxCard(style: .security) {
             VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
@@ -2035,32 +1994,6 @@ struct ConfigurationView: View {
                     .accessibilityValue("\(Int(settings.signatureSize * 100)) percent")
             }
         }
-    }
-
-    private var advancedSettings: some View {
-        VStack(spacing: 16) {
-            Toggle(isOn: $settings.stripMetadata) {
-                Text("Strip Metadata")
-                    .foregroundColor(OneBoxColors.primaryText)
-            }
-
-            if tool == .imagesToPDF || tool.rawValue.contains("pdf") {
-                TextField("PDF Title", text: Binding(
-                    get: { settings.pdfTitle ?? "" },
-                    set: { settings.pdfTitle = $0.isEmpty ? nil : $0 }
-                ))
-                .textFieldStyle(.roundedBorder)
-
-                TextField("PDF Author", text: Binding(
-                    get: { settings.pdfAuthor ?? "" },
-                    set: { settings.pdfAuthor = $0.isEmpty ? nil : $0 }
-                ))
-                .textFieldStyle(.roundedBorder)
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(12)
     }
 }
 

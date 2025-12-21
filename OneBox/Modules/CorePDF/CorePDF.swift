@@ -345,12 +345,8 @@ public actor PDFProcessor {
         let originalMB = Double(originalBytes) / 1_000_000.0
 
         guard let pdf = PDFDocument(url: pdfURL), pdf.pageCount > 0 else {
-            return (originalMB, originalMB * 0.1, originalMB * 0.9)
+            return (originalMB, originalMB * 0.05, originalMB * 0.9)
         }
-
-        // Quick test: compress first page at maximum compression to estimate minimum
-        let testURL = temporaryOutputURL(prefix: "compress_test")
-        defer { try? FileManager.default.removeItem(at: testURL) }
 
         // Take sample of pages (first, middle, last for better estimate)
         let pageCount = pdf.pageCount
@@ -358,37 +354,34 @@ public actor PDFProcessor {
             ? Array(0..<pageCount)
             : [0, pageCount / 2, pageCount - 1]
 
-        var totalOriginalPageSize: Double = 0
         var totalCompressedPageSize: Double = 0
 
         for pageIndex in samplePages {
-            guard let page = pdf.page(at: pageIndex) else { continue }
+            autoreleasepool {
+                guard let page = pdf.page(at: pageIndex) else { return }
 
-            let pageBounds = page.bounds(for: .mediaBox)
+                let pageBounds = page.bounds(for: .mediaBox)
 
-            // Estimate original page contribution
-            let pageRatio = 1.0 / Double(pageCount)
-            totalOriginalPageSize += originalMB * pageRatio
+                // Test compress at MAXIMUM compression (0.3x scale, 0.05 quality)
+                let scaledSize = CGSize(
+                    width: pageBounds.width * 0.3,
+                    height: pageBounds.height * 0.3
+                )
 
-            // Test compress this page at maximum compression
-            let scaledSize = CGSize(
-                width: pageBounds.width * 0.5,  // 50% resolution
-                height: pageBounds.height * 0.5
-            )
+                let renderer = UIGraphicsImageRenderer(size: scaledSize)
+                let pageImage = renderer.image { ctx in
+                    UIColor.white.setFill()
+                    ctx.fill(CGRect(origin: .zero, size: scaledSize))
+                    ctx.cgContext.scaleBy(x: 0.3, y: 0.3)
+                    ctx.cgContext.translateBy(x: 0, y: pageBounds.size.height)
+                    ctx.cgContext.scaleBy(x: 1.0, y: -1.0)
+                    page.draw(with: .mediaBox, to: ctx.cgContext)
+                }
 
-            let renderer = UIGraphicsImageRenderer(size: scaledSize)
-            let pageImage = renderer.image { ctx in
-                UIColor.white.setFill()
-                ctx.fill(CGRect(origin: .zero, size: scaledSize))
-                ctx.cgContext.scaleBy(x: 0.5, y: 0.5)
-                ctx.cgContext.translateBy(x: 0, y: pageBounds.size.height)
-                ctx.cgContext.scaleBy(x: 1.0, y: -1.0)
-                page.draw(with: .mediaBox, to: ctx.cgContext)
-            }
-
-            // Compress at minimum quality
-            if let compressedData = pageImage.jpegData(compressionQuality: 0.1) {
-                totalCompressedPageSize += Double(compressedData.count) / 1_000_000.0
+                // Compress at very low quality
+                if let compressedData = pageImage.jpegData(compressionQuality: 0.05) {
+                    totalCompressedPageSize += Double(compressedData.count) / 1_000_000.0
+                }
             }
         }
 
@@ -396,13 +389,14 @@ public actor PDFProcessor {
         let sampleRatio = Double(samplePages.count) / Double(pageCount)
         let estimatedMinMB: Double
         if sampleRatio > 0 && totalCompressedPageSize > 0 {
-            estimatedMinMB = (totalCompressedPageSize / sampleRatio) * 1.15 // 15% safety margin for PDF overhead
+            // Add PDF structure overhead (~10%)
+            estimatedMinMB = (totalCompressedPageSize / sampleRatio) * 1.1
         } else {
-            estimatedMinMB = originalMB * 0.15 // Fallback estimate
+            estimatedMinMB = originalMB * 0.05 // Fallback: 5% of original
         }
 
-        // Minimum should be at least 0.1 MB and capped at 50% of original
-        let minMB = max(0.1, min(estimatedMinMB, originalMB * 0.5))
+        // Minimum should be at least 0.1 MB - NO upper cap anymore
+        let minMB = max(0.1, estimatedMinMB)
 
         // Maximum useful compression is ~90% of original
         let maxMB = max(minMB + 0.5, originalMB * 0.9)
@@ -487,8 +481,10 @@ public actor PDFProcessor {
         let useChunkedProcessing = pageCount > 100
         let chunkSize = useChunkedProcessing ? 50 : pageCount // Process 50 pages at a time for large PDFs
 
-        UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
-        // NOTE: Explicit close at end of function - no defer needed
+        // Check if we can create the PDF context
+        guard UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil) else {
+            throw PDFError.contextCreationFailed
+        }
 
         // Process in chunks to manage memory
         var processedPages = 0
@@ -502,6 +498,7 @@ public actor PDFProcessor {
                 }
 
                 if memoryPressure == .critical {
+                    UIGraphicsEndPDFContext()
                     throw PDFError.invalidParameters("Memory critically low. Please close other apps and try again.")
                 }
             }
@@ -516,11 +513,24 @@ public actor PDFProcessor {
 
                 // Use autoreleasepool for each page to manage memory
                 autoreleasepool {
-                    // Calculate scaled size for rendering (smaller = more compression)
-                    let scaledSize = CGSize(
-                        width: pageBounds.size.width * resolutionScale,
-                        height: pageBounds.size.height * resolutionScale
-                    )
+                    // Calculate scaled size - clamp to prevent memory issues
+                    let maxDimension: CGFloat = 2000
+                    var scaledWidth = pageBounds.size.width * resolutionScale
+                    var scaledHeight = pageBounds.size.height * resolutionScale
+
+                    if scaledWidth > maxDimension || scaledHeight > maxDimension {
+                        let aspectRatio = scaledWidth / scaledHeight
+                        if scaledWidth > scaledHeight {
+                            scaledWidth = maxDimension
+                            scaledHeight = maxDimension / aspectRatio
+                        } else {
+                            scaledHeight = maxDimension
+                            scaledWidth = maxDimension * aspectRatio
+                        }
+                    }
+
+                    let scaledSize = CGSize(width: scaledWidth, height: scaledHeight)
+                    let actualScale = scaledWidth / pageBounds.size.width
 
                     // Render page at reduced resolution
                     let renderer = UIGraphicsImageRenderer(size: scaledSize)
@@ -528,7 +538,7 @@ public actor PDFProcessor {
                         UIColor.white.setFill()
                         rendererContext.fill(CGRect(origin: .zero, size: scaledSize))
 
-                        rendererContext.cgContext.scaleBy(x: resolutionScale, y: resolutionScale)
+                        rendererContext.cgContext.scaleBy(x: actualScale, y: actualScale)
                         rendererContext.cgContext.translateBy(x: 0, y: pageBounds.size.height)
                         rendererContext.cgContext.scaleBy(x: 1.0, y: -1.0)
                         page.draw(with: .mediaBox, to: rendererContext.cgContext)
@@ -582,18 +592,21 @@ public actor PDFProcessor {
         let compressionRatio = Double(targetBytes) / Double(originalSize)
         let resolutionScale: Double
 
-        if compressionRatio < 0.15 {
-            // Very aggressive compression needed (<15% of original) - use lowest resolution
-            resolutionScale = 0.5
-        } else if compressionRatio < 0.30 {
-            // Aggressive compression (15-30%) - use reduced resolution
-            resolutionScale = 0.65
+        if compressionRatio < 0.10 {
+            // Extreme compression needed (<10% of original) - use minimum resolution
+            resolutionScale = 0.3
+        } else if compressionRatio < 0.20 {
+            // Very aggressive compression needed (<20% of original) - use lowest resolution
+            resolutionScale = 0.4
+        } else if compressionRatio < 0.35 {
+            // Aggressive compression (20-35%) - use reduced resolution
+            resolutionScale = 0.55
         } else if compressionRatio < 0.50 {
-            // Moderate compression (30-50%) - use slightly reduced resolution
-            resolutionScale = 0.8
+            // Moderate compression (35-50%) - use slightly reduced resolution
+            resolutionScale = 0.7
         } else {
-            // Minimal compression (>50%) - use full resolution
-            resolutionScale = 1.0
+            // Minimal compression (>50%) - use higher resolution
+            resolutionScale = 0.85
         }
 
         // Use binary search to find the right quality level
@@ -697,40 +710,60 @@ public actor PDFProcessor {
         let outputURL = temporaryOutputURL(prefix: "compressed")
         let pageCount = pdf.pageCount
 
-        UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
+        // Check if we can create the PDF context
+        guard UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil) else {
+            throw PDFError.contextCreationFailed
+        }
 
         for pageIndex in 0..<pageCount {
-            guard let page = pdf.page(at: pageIndex) else { continue }
+            // Use autoreleasepool to manage memory for each page
+            try autoreleasepool {
+                guard let page = pdf.page(at: pageIndex) else { return }
 
-            let pageBounds = page.bounds(for: .mediaBox)
-            UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
+                let pageBounds = page.bounds(for: .mediaBox)
+                UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
 
-            guard UIGraphicsGetCurrentContext() != nil else { continue }
+                guard UIGraphicsGetCurrentContext() != nil else { return }
 
-            // Calculate scaled size for rendering (downsample for compression)
-            let scaledSize = CGSize(
-                width: pageBounds.width * resolutionScale,
-                height: pageBounds.height * resolutionScale
-            )
+                // Calculate scaled size for rendering (downsample for compression)
+                // Clamp to reasonable size to prevent memory issues
+                let maxDimension: CGFloat = 2000
+                var scaledWidth = pageBounds.width * resolutionScale
+                var scaledHeight = pageBounds.height * resolutionScale
 
-            // Render page to image at scaled resolution
-            let renderer = UIGraphicsImageRenderer(size: scaledSize)
-            let pageImage = renderer.image { rendererContext in
-                UIColor.white.setFill()
-                rendererContext.fill(CGRect(origin: .zero, size: scaledSize))
+                if scaledWidth > maxDimension || scaledHeight > maxDimension {
+                    let aspectRatio = scaledWidth / scaledHeight
+                    if scaledWidth > scaledHeight {
+                        scaledWidth = maxDimension
+                        scaledHeight = maxDimension / aspectRatio
+                    } else {
+                        scaledHeight = maxDimension
+                        scaledWidth = maxDimension * aspectRatio
+                    }
+                }
 
-                rendererContext.cgContext.scaleBy(x: resolutionScale, y: resolutionScale)
-                rendererContext.cgContext.translateBy(x: 0, y: pageBounds.size.height)
-                rendererContext.cgContext.scaleBy(x: 1.0, y: -1.0)
-                page.draw(with: .mediaBox, to: rendererContext.cgContext)
-            }
+                let scaledSize = CGSize(width: scaledWidth, height: scaledHeight)
+                let actualScale = scaledWidth / pageBounds.width
 
-            // Compress and draw to PDF context (at original page size)
-            if let compressedData = pageImage.jpegData(compressionQuality: jpegQuality),
-               let compressedImage = UIImage(data: compressedData) {
-                compressedImage.draw(in: pageBounds)
-            } else {
-                pageImage.draw(in: pageBounds)
+                // Render page to image at scaled resolution
+                let renderer = UIGraphicsImageRenderer(size: scaledSize)
+                let pageImage = renderer.image { rendererContext in
+                    UIColor.white.setFill()
+                    rendererContext.fill(CGRect(origin: .zero, size: scaledSize))
+
+                    rendererContext.cgContext.scaleBy(x: actualScale, y: actualScale)
+                    rendererContext.cgContext.translateBy(x: 0, y: pageBounds.size.height)
+                    rendererContext.cgContext.scaleBy(x: 1.0, y: -1.0)
+                    page.draw(with: .mediaBox, to: rendererContext.cgContext)
+                }
+
+                // Compress and draw to PDF context (at original page size)
+                if let compressedData = pageImage.jpegData(compressionQuality: jpegQuality),
+                   let compressedImage = UIImage(data: compressedData) {
+                    compressedImage.draw(in: pageBounds)
+                } else {
+                    pageImage.draw(in: pageBounds)
+                }
             }
 
             progressHandler(Double(pageIndex + 1) / Double(pageCount))

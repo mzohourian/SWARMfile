@@ -413,6 +413,7 @@ public actor PDFProcessor {
         _ pdfURL: URL,
         quality: CompressionQuality,
         targetSizeMB: Double? = nil,
+        convertToGrayscale: Bool = false,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
 
@@ -429,11 +430,11 @@ public actor PDFProcessor {
             let validation = await MainActor.run {
                 MemoryManager.shared.validateFileSize(fileSize: fileSize, operationType: .pdfCompress)
             }
-            
+
             if !validation.canProcess {
                 throw PDFError.invalidParameters(validation.recommendation)
             }
-            
+
             if validation.warningLevel == .high || validation.warningLevel == .critical {
                 print("⚠️ CorePDF: Memory warning for compression: \(validation.recommendation)")
             }
@@ -447,12 +448,14 @@ public actor PDFProcessor {
             return try await compressPDFToTargetSize(
                 sourcePDF,
                 targetSizeMB: targetSize,
+                convertToGrayscale: convertToGrayscale,
                 progressHandler: progressHandler
             )
         } else {
             return try await compressPDFWithQuality(
                 sourcePDF,
                 quality: quality,
+                convertToGrayscale: convertToGrayscale,
                 progressHandler: progressHandler
             )
         }
@@ -461,6 +464,7 @@ public actor PDFProcessor {
     private func compressPDFWithQuality(
         _ pdf: PDFDocument,
         quality: CompressionQuality,
+        convertToGrayscale: Bool = false,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
 
@@ -534,7 +538,7 @@ public actor PDFProcessor {
 
                     // Render page at reduced resolution
                     let renderer = UIGraphicsImageRenderer(size: scaledSize)
-                    let pageImage = renderer.image { rendererContext in
+                    var pageImage = renderer.image { rendererContext in
                         UIColor.white.setFill()
                         rendererContext.fill(CGRect(origin: .zero, size: scaledSize))
 
@@ -542,6 +546,11 @@ public actor PDFProcessor {
                         rendererContext.cgContext.translateBy(x: 0, y: pageBounds.size.height)
                         rendererContext.cgContext.scaleBy(x: 1.0, y: -1.0)
                         page.draw(with: .mediaBox, to: rendererContext.cgContext)
+                    }
+
+                    // Convert to grayscale if requested
+                    if convertToGrayscale {
+                        pageImage = convertImageToGrayscale(pageImage) ?? pageImage
                     }
 
                     // Compress and draw to PDF context (scaled back to original page size)
@@ -577,6 +586,7 @@ public actor PDFProcessor {
     private func compressPDFToTargetSize(
         _ pdf: PDFDocument,
         targetSizeMB: Double,
+        convertToGrayscale: Bool = false,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
 
@@ -621,6 +631,7 @@ public actor PDFProcessor {
                 pdf,
                 jpegQuality: 0.05,
                 resolutionScale: 0.25,
+                convertToGrayscale: convertToGrayscale,
                 progressHandler: { progressHandler($0 * 0.3) }
             )
 
@@ -656,6 +667,7 @@ public actor PDFProcessor {
                     pdf,
                     jpegQuality: currentQuality,
                     resolutionScale: resolutionScale,
+                    convertToGrayscale: convertToGrayscale,
                     progressHandler: { progress in
                         let baseProgress = 0.3 + (Double(attempt) / Double(maxAttempts)) * 0.7
                         progressHandler(baseProgress + (progress * 0.7 / Double(maxAttempts)))
@@ -718,6 +730,7 @@ public actor PDFProcessor {
                 pdf,
                 jpegQuality: 0.1, // Very low quality but still readable
                 resolutionScale: 0.5, // Reduced resolution
+                convertToGrayscale: convertToGrayscale,
                 progressHandler: { _ in }
             )
             progressHandler(1.0)
@@ -733,6 +746,7 @@ public actor PDFProcessor {
         _ pdf: PDFDocument,
         jpegQuality: Double,
         resolutionScale: Double = 1.0,
+        convertToGrayscale: Bool = false,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
 
@@ -776,7 +790,7 @@ public actor PDFProcessor {
 
                 // Render page to image at scaled resolution
                 let renderer = UIGraphicsImageRenderer(size: scaledSize)
-                let pageImage = renderer.image { rendererContext in
+                var pageImage = renderer.image { rendererContext in
                     UIColor.white.setFill()
                     rendererContext.fill(CGRect(origin: .zero, size: scaledSize))
 
@@ -784,6 +798,11 @@ public actor PDFProcessor {
                     rendererContext.cgContext.translateBy(x: 0, y: pageBounds.size.height)
                     rendererContext.cgContext.scaleBy(x: 1.0, y: -1.0)
                     page.draw(with: .mediaBox, to: rendererContext.cgContext)
+                }
+
+                // Convert to grayscale if requested
+                if convertToGrayscale {
+                    pageImage = convertImageToGrayscale(pageImage) ?? pageImage
                 }
 
                 // Compress and draw to PDF context (at original page size)
@@ -2195,6 +2214,30 @@ public actor PDFProcessor {
         )
 
         return CGRect(origin: origin, size: targetSize)
+    }
+
+    private func convertImageToGrayscale(_ image: UIImage) -> UIImage? {
+        guard let cgImage = image.cgImage else { return nil }
+
+        let colorSpace = CGColorSpaceCreateDeviceGray()
+        let width = cgImage.width
+        let height = cgImage.height
+
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else { return nil }
+
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        guard let grayCGImage = context.makeImage() else { return nil }
+
+        return UIImage(cgImage: grayCGImage, scale: image.scale, orientation: image.imageOrientation)
     }
 }
 

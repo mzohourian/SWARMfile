@@ -2424,6 +2424,19 @@ struct PDFCompressionSettings: View {
                         }
                     }
                 }
+
+                // Grayscale toggle
+                Toggle(isOn: $settings.convertToGrayscale) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Convert to Grayscale")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Text("Removes color for smaller file size")
+                            .font(.caption)
+                            .foregroundColor(OneBoxColors.secondaryText)
+                    }
+                }
+                .tint(OneBoxColors.primaryGold)
             }
         }
         .onAppear {

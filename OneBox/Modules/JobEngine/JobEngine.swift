@@ -153,6 +153,7 @@ public struct JobSettings {
     public var pdfAuthor: String?
     public var targetSizeMB: Double?
     public var compressionQuality: CompressionQuality = .medium
+    public var convertToGrayscale: Bool = false
 
     // Image Settings
     public var imageFormat: ImageFormat = .jpeg
@@ -220,7 +221,7 @@ public struct JobSettings {
 extension JobSettings: Codable {
     enum CodingKeys: String, CodingKey {
         case pageSize, orientation, margins, backgroundColor, stripMetadata
-        case pdfTitle, pdfAuthor, targetSizeMB, compressionQuality
+        case pdfTitle, pdfAuthor, targetSizeMB, compressionQuality, convertToGrayscale
         case imageFormat, imageQuality, imageQualityPreset, maxDimension, resizePercentage, imageResolution
         case watermarkText, watermarkPosition, watermarkOpacity, watermarkSize, watermarkTileDensity
         case splitRanges, selectAllPages
@@ -246,7 +247,8 @@ extension JobSettings: Codable {
         pdfAuthor = try container.decodeIfPresent(String.self, forKey: .pdfAuthor)
         targetSizeMB = try container.decodeIfPresent(Double.self, forKey: .targetSizeMB)
         compressionQuality = try container.decodeIfPresent(CompressionQuality.self, forKey: .compressionQuality) ?? .medium
-        
+        convertToGrayscale = try container.decodeIfPresent(Bool.self, forKey: .convertToGrayscale) ?? false
+
         imageFormat = try container.decodeIfPresent(ImageFormat.self, forKey: .imageFormat) ?? .jpeg
         imageQuality = try container.decodeIfPresent(Double.self, forKey: .imageQuality) ?? 0.6
         imageQualityPreset = try container.decodeIfPresent(ImageQuality.self, forKey: .imageQualityPreset) ?? .medium
@@ -316,7 +318,8 @@ extension JobSettings: Codable {
         try container.encodeIfPresent(pdfAuthor, forKey: .pdfAuthor)
         try container.encodeIfPresent(targetSizeMB, forKey: .targetSizeMB)
         try container.encode(compressionQuality, forKey: .compressionQuality)
-        
+        try container.encode(convertToGrayscale, forKey: .convertToGrayscale)
+
         try container.encode(imageFormat, forKey: .imageFormat)
         try container.encode(imageQuality, forKey: .imageQuality)
         try container.encode(imageQualityPreset, forKey: .imageQualityPreset)
@@ -839,11 +842,12 @@ actor JobProcessor {
 
         // Use compression quality directly from CommonTypes
         let quality = job.settings.compressionQuality
-        
+
         let outputURL = try await processor.compressPDF(
             pdfURL,
             quality: quality,
             targetSizeMB: job.settings.targetSizeMB,
+            convertToGrayscale: job.settings.convertToGrayscale,
             progressHandler: progressHandler
         )
         return try await applyPostProcessing(job: job, urls: [outputURL])

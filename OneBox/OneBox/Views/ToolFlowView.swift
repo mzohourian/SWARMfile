@@ -2338,108 +2338,92 @@ struct PDFCompressionSettings: View {
 
     @State private var originalSizeMB: Double = 0
     @State private var minAchievableMB: Double = 0.5
-    @State private var maxAchievableMB: Double = 50
     @State private var isAnalyzing: Bool = false
+
+    private var targetSize: Double {
+        settings.targetSizeMB ?? minAchievableMB
+    }
+
+    private var compressionPercentage: Int {
+        guard originalSizeMB > 0 else { return 0 }
+        return Int(((originalSizeMB - targetSize) / originalSizeMB) * 100)
+    }
 
     var body: some View {
         VStack(spacing: 16) {
-            // Show original size and analysis status
+            // Size info header
             if originalSizeMB > 0 {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("Original Size: \(String(format: "%.1f", originalSizeMB)) MB")
-                            .font(.subheadline)
-                            .foregroundColor(OneBoxColors.secondaryText)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Original: \(String(format: "%.1f", originalSizeMB)) MB")
+                                .font(.subheadline)
+                                .foregroundColor(OneBoxColors.secondaryText)
+
+                            if isAnalyzing {
+                                Text("Analyzing...")
+                                    .font(.caption)
+                                    .foregroundColor(OneBoxColors.secondaryText)
+                            }
+                        }
 
                         Spacer()
 
-                        if isAnalyzing {
-                            ProgressView()
-                                .scaleEffect(0.7)
+                        if !isAnalyzing {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("Target: \(String(format: "%.1f", targetSize)) MB")
+                                    .font(.subheadline.bold())
+                                    .foregroundColor(OneBoxColors.primaryGold)
+                                Text("\(compressionPercentage)% smaller")
+                                    .font(.caption)
+                                    .foregroundColor(OneBoxColors.primaryGold)
+                            }
                         }
                     }
-
-                    if isAnalyzing {
-                        Text("Analyzing PDF to determine compression limits...")
-                            .font(.caption)
-                            .foregroundColor(OneBoxColors.secondaryText)
-                    } else {
-                        Text("Achievable range: \(String(format: "%.1f", minAchievableMB)) - \(String(format: "%.1f", maxAchievableMB)) MB")
-                            .font(.caption)
-                            .foregroundColor(OneBoxColors.primaryGold)
-                    }
                 }
-                .padding(8)
+                .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(OneBoxColors.surfaceGraphite)
                 .cornerRadius(8)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Quality")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Picker("Quality", selection: $settings.compressionQuality) {
-                    ForEach(CompressionQuality.allCases, id: \.self) { quality in
-                        Text(quality.displayName).tag(quality)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
-
-            if let targetSize = settings.targetSizeMB {
+            // Size slider
+            if !isAnalyzing && originalSizeMB > 0 {
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Target Size: \(String(format: "%.1f", targetSize)) MB")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
+                    Text("Target Size")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
 
-                        Spacer()
-
-                        if targetSize <= minAchievableMB {
-                            Text("Maximum compression")
-                                .font(.caption)
-                                .foregroundColor(OneBoxColors.primaryGold)
-                        }
-                    }
-
-                    Slider(value: Binding(
-                        get: { targetSize },
-                        set: { settings.targetSizeMB = $0 }
-                    ), in: minAchievableMB...maxAchievableMB, step: 0.5)
-                    .disabled(isAnalyzing)
+                    Slider(
+                        value: Binding(
+                            get: { targetSize },
+                            set: { settings.targetSizeMB = $0 }
+                        ),
+                        in: minAchievableMB...originalSizeMB,
+                        step: 0.1
+                    )
+                    .tint(OneBoxColors.primaryGold)
 
                     HStack {
                         VStack(alignment: .leading) {
                             Text("\(String(format: "%.1f", minAchievableMB)) MB")
-                                .font(.caption)
-                                .foregroundColor(OneBoxColors.secondaryText)
-                            Text("Min achievable")
+                                .font(.caption.bold())
+                                .foregroundColor(OneBoxColors.primaryGold)
+                            Text("Smallest")
                                 .font(.system(size: 9))
                                 .foregroundColor(OneBoxColors.tertiaryText)
                         }
                         Spacer()
                         VStack(alignment: .trailing) {
-                            Text("\(String(format: "%.1f", maxAchievableMB)) MB")
+                            Text("\(String(format: "%.1f", originalSizeMB)) MB")
                                 .font(.caption)
                                 .foregroundColor(OneBoxColors.secondaryText)
-                            Text("Light compression")
+                            Text("Original")
                                 .font(.system(size: 9))
                                 .foregroundColor(OneBoxColors.tertiaryText)
                         }
                     }
                 }
-
-                Button("Clear Target Size") {
-                    settings.targetSizeMB = nil
-                }
-                .font(.subheadline)
-                .foregroundColor(.red)
-            } else {
-                Button("Set Target Size") {
-                    settings.targetSizeMB = minAchievableMB + 1.0
-                }
-                .disabled(isAnalyzing)
             }
         }
         .onAppear {
@@ -2455,9 +2439,11 @@ struct PDFCompressionSettings: View {
            let fileSize = attributes[.size] as? Int64 {
             originalSizeMB = Double(fileSize) / 1_000_000.0
 
-            // Set initial estimates while analyzing
-            minAchievableMB = max(0.1, originalSizeMB * 0.1)
-            maxAchievableMB = max(minAchievableMB + 0.5, originalSizeMB * 0.9)
+            // Set initial estimate while analyzing
+            minAchievableMB = max(0.1, originalSizeMB * 0.05)
+
+            // Default to minimum achievable size
+            settings.targetSizeMB = minAchievableMB
         }
 
         // Run detailed analysis in background
@@ -2472,21 +2458,9 @@ struct PDFCompressionSettings: View {
                 if analysis.original > 0 {
                     originalSizeMB = analysis.original
                     minAchievableMB = analysis.minimum
-                    maxAchievableMB = analysis.maximum
 
-                    // Ensure slider range is valid
-                    if maxAchievableMB <= minAchievableMB {
-                        maxAchievableMB = minAchievableMB + 0.5
-                    }
-
-                    // Adjust target size if out of range
-                    if let currentTarget = settings.targetSizeMB {
-                        if currentTarget < minAchievableMB {
-                            settings.targetSizeMB = minAchievableMB
-                        } else if currentTarget > maxAchievableMB {
-                            settings.targetSizeMB = maxAchievableMB
-                        }
-                    }
+                    // Default to minimum achievable (maximum compression)
+                    settings.targetSizeMB = minAchievableMB
                 }
             }
         }

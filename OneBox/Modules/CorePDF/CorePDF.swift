@@ -591,43 +591,74 @@ public actor PDFProcessor {
         // Determine resolution scale based on target compression ratio
         let compressionRatio = Double(targetBytes) / Double(originalSize)
         let resolutionScale: Double
+        let startingQuality: Double
 
         if compressionRatio < 0.10 {
-            // Extreme compression needed (<10% of original) - use minimum resolution
-            resolutionScale = 0.3
+            // Extreme compression needed (<10% of original) - use minimum resolution and quality
+            resolutionScale = 0.25
+            startingQuality = 0.05
         } else if compressionRatio < 0.20 {
-            // Very aggressive compression needed (<20% of original) - use lowest resolution
-            resolutionScale = 0.4
+            // Very aggressive compression needed (<20% of original)
+            resolutionScale = 0.3
+            startingQuality = 0.08
         } else if compressionRatio < 0.35 {
-            // Aggressive compression (20-35%) - use reduced resolution
-            resolutionScale = 0.55
+            // Aggressive compression (20-35%)
+            resolutionScale = 0.45
+            startingQuality = 0.15
         } else if compressionRatio < 0.50 {
-            // Moderate compression (35-50%) - use slightly reduced resolution
-            resolutionScale = 0.7
+            // Moderate compression (35-50%)
+            resolutionScale = 0.6
+            startingQuality = 0.25
         } else {
-            // Minimal compression (>50%) - use higher resolution
-            resolutionScale = 0.85
+            // Minimal compression (>50%)
+            resolutionScale = 0.75
+            startingQuality = 0.4
+        }
+
+        // For very aggressive targets, try maximum compression first
+        if compressionRatio < 0.25 {
+            let extremeURL = try await compressPDFWithCustomQuality(
+                pdf,
+                jpegQuality: 0.05,
+                resolutionScale: 0.25,
+                progressHandler: { progressHandler($0 * 0.3) }
+            )
+
+            if let attributes = try? FileManager.default.attributesOfItem(atPath: extremeURL.path),
+               let fileSize = attributes[.size] as? Int,
+               fileSize <= targetBytes {
+                // Maximum compression achieved the target
+                progressHandler(1.0)
+                return extremeURL
+            }
+
+            // If even maximum compression doesn't hit target, return it as best effort
+            if compressionRatio < 0.15 {
+                progressHandler(1.0)
+                return extremeURL
+            }
+
+            try? FileManager.default.removeItem(at: extremeURL)
         }
 
         // Use binary search to find the right quality level
-        var minQuality = 0.05  // Maximum compression (don't go lower to avoid corruption)
-        var maxQuality = 0.95  // Minimum compression
+        var minQuality = 0.05  // Maximum compression
+        var maxQuality = startingQuality + 0.3  // Start search near expected quality
         var bestURL: URL?
         var bestSize: Int = Int.max
-        let maxAttempts = 10
+        let maxAttempts = 8
 
         for attempt in 0..<maxAttempts {
             let currentQuality = (minQuality + maxQuality) / 2.0
 
-            // Try to compress, but catch errors and continue to next iteration
             do {
                 let testURL = try await compressPDFWithCustomQuality(
                     pdf,
                     jpegQuality: currentQuality,
                     resolutionScale: resolutionScale,
                     progressHandler: { progress in
-                        let attemptProgress = Double(attempt) / Double(maxAttempts)
-                        progressHandler(attemptProgress + (progress / Double(maxAttempts)))
+                        let baseProgress = 0.3 + (Double(attempt) / Double(maxAttempts)) * 0.7
+                        progressHandler(baseProgress + (progress * 0.7 / Double(maxAttempts)))
                     }
                 )
 
@@ -645,9 +676,9 @@ public actor PDFProcessor {
                         // Try less compression (higher quality) to get closer to target
                         minQuality = currentQuality
 
-                        // If we're very close to target (within 5%), accept it
+                        // If we're very close to target (within 10%), accept it
                         let percentOfTarget = Double(fileSize) / Double(targetBytes)
-                        if percentOfTarget > 0.95 && percentOfTarget <= 1.0 {
+                        if percentOfTarget > 0.90 && percentOfTarget <= 1.0 {
                             progressHandler(1.0)
                             return testURL
                         }
@@ -658,19 +689,17 @@ public actor PDFProcessor {
                     }
                 }
             } catch {
-                // Compression failed at this quality level, try with lower compression (higher quality)
                 minQuality = currentQuality
                 continue
             }
 
-            // If quality range is very narrow, we've converged
             if maxQuality - minQuality < 0.02 {
                 break
             }
         }
 
-        // Return best result if we have one that's under target
-        if let finalURL = bestURL, bestSize <= targetBytes {
+        // Return best result if we have one
+        if let finalURL = bestURL {
             progressHandler(1.0)
             return finalURL
         }

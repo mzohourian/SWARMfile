@@ -149,7 +149,7 @@ struct PrivacyDashboardView: View {
             VStack(spacing: 12) {
                 PrivacyToggleRow(
                     title: "Secure Vault",
-                    description: "Encrypted temporary storage",
+                    description: "Encrypt files, biometric to access",
                     icon: "lock.shield.fill",
                     isOn: $privacyManager.isSecureVaultEnabled,
                     color: .red
@@ -168,8 +168,8 @@ struct PrivacyDashboardView: View {
                 }
                 
                 PrivacyToggleRow(
-                    title: "Biometric Lock",
-                    description: "Face ID/Touch ID for processing",
+                    title: "App Lock",
+                    description: "Face ID/Touch ID to open the app",
                     icon: "faceid",
                     isOn: $privacyManager.isBiometricLockEnabled,
                     color: .blue

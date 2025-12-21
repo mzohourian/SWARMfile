@@ -64,6 +64,10 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 4 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
+- **Repurposed Biometric Lock for real security** - Now locks the entire app (not just processing)
+  - App-level lock screen with Face ID/Touch ID
+  - Re-locks automatically when app goes to background
+  - Secure Vault requires biometric to access encrypted files
 - **Fixed critical Face ID crash** - Added NSFaceIDUsageDescription to project.yml for XcodeGen
 - **Fixed invalid SF Symbol** - Replaced non-existent "vault.fill" with "lock.shield.fill" in PrivacyDashboardView
 - **Fixed MainActor isolation crashes** when all privacy features enabled:
@@ -109,25 +113,29 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2025-12-21 (Continued Session - Privacy Crash Fixes)
+**Date:** 2025-12-21 (Continued Session - Biometric Repurposing)
 
 **What Was Done:**
-- **Fixed critical Face ID crash** - NSFaceIDUsageDescription was in Info.plist but missing from project.yml (XcodeGen config)
+- **Repurposed Biometric Lock to provide real security:**
+  - App-level lock: Face ID/Touch ID required to open the app
+  - Lock screen shows when app launches if enabled
+  - App re-locks when going to background
+  - Removed pointless "before processing" authentication
+- **Vault biometric access**: Secure Vault now requires biometric to access encrypted files
+- **Fixed critical Face ID crash** - NSFaceIDUsageDescription was in Info.plist but missing from project.yml
 - **Fixed invalid SF Symbol** - "vault.fill" doesn't exist, replaced with "lock.shield.fill"
-- **Fixed MainActor isolation crashes** - Privacy delegate calls from JobEngine now properly wrapped in MainActor.run
-- **Fixed PBKDF2 encryption crashes** - Fixed force unwraps and type mismatches in key derivation
-- **Enforced dark-only aesthetic** - ThemeManager, SettingsView, and related views updated
+- **Fixed MainActor isolation crashes** - Privacy delegate calls properly wrapped in MainActor.run
+- **Fixed PBKDF2 encryption crashes** - Fixed force unwraps and type mismatches
+- **Enforced dark-only aesthetic** - ThemeManager simplified for dark-only
 
 **What's Unfinished:**
-- None - all crash fixes completed
+- None - all changes completed
 
 **Files Modified This Session:**
+- `OneBox/OneBox/OneBoxApp.swift` - Added AppLockContainer, LockScreenView, scenePhase handling
+- `OneBox/Modules/Privacy/Privacy.swift` - Added isAppUnlocked, authenticateToUnlockApp(), lockApp(), authenticateForVaultAccess()
+- `OneBox/OneBox/Views/PrivacyDashboardView.swift` - Updated toggle descriptions
 - `OneBox/project.yml` - Added NSFaceIDUsageDescription to XcodeGen config
-- `OneBox/OneBox/Views/PrivacyDashboardView.swift` - Fixed invalid vault.fill SF Symbol
-- `OneBox/Modules/Privacy/Privacy.swift` - Fixed PBKDF2 and encryption crashes
-- `OneBox/Modules/JobEngine/JobEngine.swift` - Fixed MainActor isolation issues
-- `OneBox/OneBox/OneBoxApp.swift` - Simplified ThemeManager for dark-only
-- `OneBox/OneBox/Views/SettingsView.swift` - Dark mode styling consistency
 
 ---
 

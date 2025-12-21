@@ -63,7 +63,7 @@ public protocol JobPrivacyDelegate {
 @MainActor
 public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
     public static let shared = PrivacyManager()
-    
+
     @Published public var isSecureVaultEnabled = false
     @Published public var isZeroTraceEnabled = false
     @Published public var isBiometricLockEnabled = false
@@ -72,6 +72,9 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
     @Published public var airplaneModeStatus: AirplaneModeStatus = .unknown
     @Published public var memoryStatus = MemoryStatus()
     @Published public var networkStatus = NetworkStatus()
+
+    // App-level lock state
+    @Published public var isAppUnlocked = false
     
     private var auditTrail: [PrivacyAuditEntry] = []
     private var networkMonitor: NWPathMonitor?
@@ -145,26 +148,65 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
         logAuditEvent(.complianceModeChanged(mode))
     }
     
-    // MARK: - Biometric Authentication
+    // MARK: - App-Level Biometric Lock
 
+    /// Authenticate to unlock the app. Returns true if successful or if biometric lock is disabled.
     @MainActor
-    public func authenticateForProcessing() async throws {
-        guard isBiometricLockEnabled else { return }
+    public func authenticateToUnlockApp() async -> Bool {
+        // If biometric lock is disabled, app is always unlocked
+        guard isBiometricLockEnabled else {
+            isAppUnlocked = true
+            return true
+        }
+
+        // If already unlocked, no need to authenticate again
+        guard !isAppUnlocked else { return true }
 
         let context = LAContext()
         var error: NSError?
 
-        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
-            throw PrivacyError.biometricNotAvailable
-        }
-
-        let reason = "Authenticate to process files securely"
+        // Check if biometrics are available, fall back to passcode
+        let canUseBiometrics = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+        let policy: LAPolicy = canUseBiometrics ? .deviceOwnerAuthenticationWithBiometrics : .deviceOwnerAuthentication
+        let reason = "Unlock OneBox to access your documents"
 
         do {
-            let success = try await context.evaluatePolicy(
-                .deviceOwnerAuthenticationWithBiometrics,
-                localizedReason: reason
-            )
+            let success = try await context.evaluatePolicy(policy, localizedReason: reason)
+
+            if success {
+                isAppUnlocked = true
+                logAuditEvent(.biometricAuthenticationSucceeded)
+                return true
+            } else {
+                logAuditEvent(.biometricAuthenticationFailed)
+                return false
+            }
+        } catch {
+            logAuditEvent(.biometricAuthenticationFailed)
+            return false
+        }
+    }
+
+    /// Lock the app (called when app goes to background)
+    public func lockApp() {
+        guard isBiometricLockEnabled else { return }
+        isAppUnlocked = false
+    }
+
+    /// Authenticate to access encrypted vault files
+    @MainActor
+    public func authenticateForVaultAccess() async throws {
+        guard isSecureVaultEnabled else { return }
+
+        let context = LAContext()
+        var error: NSError?
+
+        let canUseBiometrics = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+        let policy: LAPolicy = canUseBiometrics ? .deviceOwnerAuthenticationWithBiometrics : .deviceOwnerAuthentication
+        let reason = "Authenticate to access encrypted files"
+
+        do {
+            let success = try await context.evaluatePolicy(policy, localizedReason: reason)
 
             if success {
                 logAuditEvent(.biometricAuthenticationSucceeded)
@@ -173,6 +215,16 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
             }
         } catch {
             logAuditEvent(.biometricAuthenticationFailed)
+            throw PrivacyError.biometricAuthenticationFailed
+        }
+    }
+
+    // Legacy method for JobPrivacyDelegate - now just checks app is unlocked
+    @MainActor
+    public func authenticateForProcessing() async throws {
+        // No longer requires separate auth - app-level lock handles this
+        guard isBiometricLockEnabled else { return }
+        guard isAppUnlocked else {
             throw PrivacyError.biometricAuthenticationFailed
         }
     }

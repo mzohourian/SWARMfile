@@ -4,6 +4,60 @@
 
 ---
 
+## 2025-12-21: Critical Bug Fixes + Empty Button Implementations
+
+**Issues Addressed:**
+1. CRITICAL: 3 force unwrap crashes in encryption code (`.combined!`)
+2. CRITICAL: Infinite loop hang risk in workflow execution
+3. Empty button handlers throughout the app
+4. Missing Terms/Privacy policy sheets
+5. Missing Privacy Info modal for tools
+6. Missing document preview in search
+
+**Fixes Applied:**
+
+**Phase 1: Crash Prevention**
+- Fixed `Privacy.swift:371` - `encryptedData.combined!` → `guard let`
+- Fixed `MultipeerDocumentService.swift:179` - `sealedBox.combined!` → `guard let`
+- Fixed `SecureCollaborationView.swift:768` - `sealedBox.combined!` → `guard let`
+
+**Phase 2: Hang Prevention**
+- Added 5-minute timeout to `waitForJobCompletion()` in WorkflowExecutionService
+- Added `WorkflowError.timeout` error case
+
+**Phase 3: Terms/Privacy Implementation**
+- Created `LegalDocumentView` component with actual policy content
+- Added sheets to OnboardingView for Terms/Privacy buttons
+- Added sheets to UpgradeFlowView for Terms/Privacy buttons
+
+**Phase 4: Privacy Info Modal**
+- Created `ToolPrivacyInfoView` showing privacy details per tool
+- Implemented `showPrivacyInfo()` function in NewHomeView
+
+**Phase 5: Document Preview**
+- Added QuickLook preview for documents in search results
+- Documents now open in native iOS preview
+
+**Phase 6: Help Center**
+- Created `ContactSupportView` with support options
+- Created `VideoTutorialsView` with coming soon placeholders
+- Created `FeatureTourView` with interactive tour
+- Created `KeyboardShortcutsView` with iPad shortcuts
+
+**Files Modified:**
+- `OneBox/Modules/Privacy/Privacy.swift`
+- `OneBox/Modules/Networking/MultipeerDocumentService.swift`
+- `OneBox/OneBox/Views/Advanced/SecureCollaborationView.swift`
+- `OneBox/OneBox/Services/WorkflowExecutionService.swift`
+- `OneBox/OneBox/Views/Onboarding/OnboardingView.swift`
+- `OneBox/OneBox/Views/Upgrade/UpgradeFlowView.swift`
+- `OneBox/OneBox/Views/NewHomeView.swift`
+- `OneBox/OneBox/Views/Help/HelpCenterView.swift`
+
+**Status:** All fixes complete
+
+---
+
 ## 2025-12-21: Preview File Issue FINALLY Fixed + Workflow UI Cleanup
 
 **Issues Reported:**

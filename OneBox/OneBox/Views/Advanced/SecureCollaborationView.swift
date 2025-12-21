@@ -14,6 +14,17 @@ import UniformTypeIdentifiers
 import MultipeerConnectivity
 import Network
 
+enum SecureCollaborationError: LocalizedError {
+    case encryptionFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .encryptionFailed:
+            return "Failed to encrypt document for secure sharing"
+        }
+    }
+}
+
 struct SecureCollaborationView: View {
     let pdfURL: URL
     @Environment(\.dismiss) var dismiss
@@ -763,9 +774,13 @@ struct SecureCollaborationView: View {
         let fileData = try Data(contentsOf: pdfURL)
         let encryptionKey = SymmetricKey(size: .bits256)
         let sealedBox = try AES.GCM.seal(fileData, using: encryptionKey)
-        
+
+        guard let combinedData = sealedBox.combined else {
+            throw SecureCollaborationError.encryptionFailed
+        }
+
         return SecureEncryptedDocument(
-            encryptedData: sealedBox.combined!,
+            encryptedData: combinedData,
             key: encryptionKey,
             originalFilename: pdfURL.lastPathComponent
         )

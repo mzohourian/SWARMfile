@@ -62,16 +62,12 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 | 2 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **MAJOR FIX: "Files removed or deleted" preview error:**
-  - **Root cause identified:** SwiftUI state race condition - `showPreview` was set to `true` before `previewURL` was updated, causing fullScreenCover to render with nil URL
-  - **Solution:** Changed from separate `showPreview` + `previewURL` states to single `PreviewItem` (Identifiable wrapper) with `fullScreenCover(item:)` binding
-  - Also simplified file persistence logic in JobEngine.swift
-  - Also simplified ensureFileAccessible() in JobResultView.swift
-- **Removed misleading "Create Workflow" from feature flow:**
-  - Replaced interactive button with informational tip
-- **Fixed Ads module build error:**
-  - Removed UIComponents dependency, created local AdColors struct
-- All previous fixes remain in place
+- **Fixed 3 potential crash bugs** (`.combined!` force unwraps in encryption code)
+- **Fixed infinite loop hang risk** (added 5-minute timeout to workflow execution)
+- **Implemented Terms/Privacy sheets** in Onboarding and Upgrade flows
+- **Implemented Privacy Info modal** for all tools in HomeView
+- **Implemented Document preview** in search results
+- **Implemented Help Center buttons** (Contact Support, Video Tutorials, Feature Tour, Shortcuts)
 
 ---
 
@@ -80,24 +76,41 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 **Date:** 2025-12-21
 
 **What Was Done:**
-- **Fixed "files removed or deleted" preview error (USER VERIFIED WORKING):**
-  - Root cause: SwiftUI state race condition between `showPreview` and `previewURL`
-  - Solution: Combined into single `PreviewItem` with `fullScreenCover(item:)` binding
-  - Simplified file persistence logic in JobEngine.swift
-  - Simplified ensureFileAccessible() in JobResultView.swift
-- **Removed misleading "Create Workflow" option from feature flow:**
-  - Replaced with informational tip about Workflows feature
-- **Fixed Ads module build error:**
-  - Created local AdColors struct to avoid UIComponents dependency
+- **CRITICAL: Fixed 3 force unwrap crashes in encryption code:**
+  - Privacy.swift:371 - `encryptedData.combined!`
+  - MultipeerDocumentService.swift:179 - `sealedBox.combined!`
+  - SecureCollaborationView.swift:768 - `sealedBox.combined!`
+  - All now use `guard let` with proper error handling
+- **CRITICAL: Fixed infinite loop hang in WorkflowExecutionService:**
+  - Added 5-minute timeout to `waitForJobCompletion()`
+  - Added `WorkflowError.timeout` case
+- **Implemented Terms of Service and Privacy Policy sheets:**
+  - OnboardingView now shows full legal content
+  - UpgradeFlowView now shows full legal content
+  - LegalDocumentView component created with actual policy text
+- **Implemented Privacy Info modal in NewHomeView:**
+  - ToolPrivacyInfoView shows privacy details per tool
+  - Explains on-device processing for each feature
+- **Implemented Document preview in search results:**
+  - Search result documents now open in QuickLook
+- **Implemented Help Center features:**
+  - ContactSupportView with support options
+  - VideoTutorialsView with coming soon placeholders
+  - FeatureTourView with interactive tour
+  - KeyboardShortcutsView with iPad shortcuts
 
 **What's Unfinished:**
-- None - all reported issues resolved and verified by user
+- None - all identified issues fixed
 
 **Files Modified This Session:**
-- `OneBox/Modules/JobEngine/JobEngine.swift` - Simplified saveOutputFilesToDocuments() and loadJobs()
-- `OneBox/OneBox/Views/JobResultView.swift` - Fixed state race condition with PreviewItem pattern
-- `OneBox/OneBox/Views/ToolFlowView.swift` - Removed Create Workflow option, added tip banner
-- `OneBox/Modules/Ads/Ads.swift` - Added local AdColors, removed UIComponents dependency
+- `OneBox/Modules/Privacy/Privacy.swift` - Fixed .combined! force unwrap
+- `OneBox/Modules/Networking/MultipeerDocumentService.swift` - Fixed .combined! force unwrap
+- `OneBox/OneBox/Views/Advanced/SecureCollaborationView.swift` - Fixed .combined! force unwrap
+- `OneBox/OneBox/Services/WorkflowExecutionService.swift` - Added timeout to while-true loop
+- `OneBox/OneBox/Views/Onboarding/OnboardingView.swift` - Added Terms/Privacy sheets
+- `OneBox/OneBox/Views/Upgrade/UpgradeFlowView.swift` - Added Terms/Privacy sheets
+- `OneBox/OneBox/Views/NewHomeView.swift` - Added privacy info modal and document preview
+- `OneBox/OneBox/Views/Help/HelpCenterView.swift` - Implemented all help buttons
 
 ---
 

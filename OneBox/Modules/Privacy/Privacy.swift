@@ -365,11 +365,14 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
         
         do {
             let encryptedData = try AES.GCM.seal(sourceData, using: key)
-            
+
             // Prepend salt to encrypted data for decryption
+            guard let combinedData = encryptedData.combined else {
+                throw PrivacyError.encryptionFailed
+            }
             var finalData = salt
-            finalData.append(encryptedData.combined!)
-            
+            finalData.append(combinedData)
+
             try finalData.write(to: encryptedURL)
             
             logAuditEvent(.fileEncrypted(sourceURL.lastPathComponent))

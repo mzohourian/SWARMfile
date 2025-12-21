@@ -174,9 +174,13 @@ public class MultipeerDocumentService: NSObject, ObservableObject {
         return try await encryptionQueue.run {
             let key = SymmetricKey(size: .bits256)
             let sealedBox = try AES.GCM.seal(document.data, using: key)
-            
+
+            guard let combinedData = sealedBox.combined else {
+                throw MultipeerError.encryptionFailed
+            }
+
             return EncryptedDocument(
-                encryptedData: sealedBox.combined!,
+                encryptedData: combinedData,
                 keyData: key.withUnsafeBytes { Data($0) },
                 originalFilename: document.name,
                 metadata: EncryptionMetadata(

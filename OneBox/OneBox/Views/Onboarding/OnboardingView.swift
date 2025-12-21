@@ -18,6 +18,8 @@ struct OnboardingView: View {
     @State private var privacyAccepted = false
     @State private var notificationsEnabled = false
     @State private var biometricType: BiometricType = .none
+    @State private var showingTerms = false
+    @State private var showingPrivacy = false
     
     private let pages: [OnboardingPage] = [
         OnboardingPage(
@@ -102,8 +104,14 @@ struct OnboardingView: View {
         .onAppear {
             checkBiometricCapability()
         }
+        .sheet(isPresented: $showingTerms) {
+            LegalDocumentView(title: "Terms of Service", documentType: .terms)
+        }
+        .sheet(isPresented: $showingPrivacy) {
+            LegalDocumentView(title: "Privacy Policy", documentType: .privacy)
+        }
     }
-    
+
     // MARK: - Page Content
     private var onboardingPageContent: some View {
         let page = pages[currentPage]
@@ -330,17 +338,17 @@ struct OnboardingView: View {
                     
                     HStack(spacing: OneBoxSpacing.small) {
                         Button("Terms of Service") {
-                            // Open Terms of Service
+                            showingTerms = true
                         }
                         .font(OneBoxTypography.micro)
                         .foregroundColor(OneBoxColors.primaryGold)
-                        
+
                         Text("•")
                             .font(OneBoxTypography.micro)
                             .foregroundColor(OneBoxColors.primaryText.opacity(0.5))
-                        
+
                         Button("Privacy Policy") {
-                            // Open Privacy Policy
+                            showingPrivacy = true
                         }
                         .font(OneBoxTypography.micro)
                         .foregroundColor(OneBoxColors.primaryGold)
@@ -518,7 +526,7 @@ struct OnboardingPage: Identifiable {
 
 enum BiometricType {
     case none, faceID, touchID, opticID
-    
+
     var displayName: String {
         switch self {
         case .none: return "Passcode"
@@ -527,13 +535,125 @@ enum BiometricType {
         case .opticID: return "Optic ID"
         }
     }
-    
+
     var icon: String {
         switch self {
         case .none: return "key.fill"
         case .faceID: return "faceid"
         case .touchID: return "touchid"
         case .opticID: return "opticid"
+        }
+    }
+}
+
+// MARK: - Legal Document View
+
+enum LegalDocumentType {
+    case terms, privacy
+}
+
+struct LegalDocumentView: View {
+    let title: String
+    let documentType: LegalDocumentType
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: OneBoxSpacing.large) {
+                    Text(documentContent)
+                        .font(OneBoxTypography.body)
+                        .foregroundColor(OneBoxColors.primaryText)
+                        .padding(OneBoxSpacing.medium)
+                }
+            }
+            .background(OneBoxColors.primaryGraphite)
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(OneBoxColors.primaryGold)
+                }
+            }
+        }
+    }
+
+    private var documentContent: String {
+        switch documentType {
+        case .terms:
+            return """
+            OneBox Terms of Service
+
+            Last Updated: December 2024
+
+            1. ACCEPTANCE OF TERMS
+            By using OneBox, you agree to these Terms of Service. If you do not agree, please do not use the app.
+
+            2. PRIVACY-FIRST PROCESSING
+            OneBox processes all documents entirely on your device. We do not collect, transmit, or store your documents on any external servers.
+
+            3. YOUR DATA
+            • All document processing happens locally on your device
+            • Your files never leave your device unless you explicitly share them
+            • We have no access to your documents or their contents
+
+            4. LICENSE
+            OneBox grants you a limited, non-exclusive license to use the app for personal or business purposes.
+
+            5. SUBSCRIPTIONS
+            • Free tier includes limited daily exports
+            • Pro subscription unlocks unlimited exports and premium features
+            • Subscriptions are managed through Apple's App Store
+
+            6. LIMITATIONS
+            OneBox is provided "as is" without warranties. We are not liable for any data loss or damages.
+
+            7. CONTACT
+            For questions about these terms, please contact support through the app.
+            """
+        case .privacy:
+            return """
+            OneBox Privacy Policy
+
+            Last Updated: December 2024
+
+            YOUR PRIVACY IS OUR PRIORITY
+
+            OneBox is designed with privacy as the foundation, not an afterthought.
+
+            WHAT WE DON'T COLLECT
+            • We do NOT collect your documents
+            • We do NOT track your document contents
+            • We do NOT send your files to any server
+            • We do NOT use cloud processing
+
+            WHAT STAYS ON YOUR DEVICE
+            • All PDF and image processing
+            • All document storage
+            • All workflow automation
+            • All search indexing
+
+            WHAT WE MAY COLLECT
+            • Anonymous crash reports (if you opt in)
+            • Basic app usage analytics (if you opt in)
+            • Purchase information (processed by Apple)
+
+            DATA SECURITY
+            • AES-256 encryption for sensitive operations
+            • Biometric authentication support
+            • Secure file handling practices
+
+            YOUR RIGHTS
+            • Your documents are yours alone
+            • Delete the app to remove all local data
+            • No account required to use OneBox
+
+            CONTACT
+            Questions? Reach out through the app's Help Center.
+            """
         }
     }
 }

@@ -10,6 +10,7 @@ import UIComponents
 import Privacy
 import JobEngine
 import CommonTypes
+import QuickLook
 
 struct HomeView: View {
     @EnvironmentObject var paymentsManager: PaymentsManager
@@ -22,6 +23,9 @@ struct HomeView: View {
     @State private var showingIntegrityDashboard = false
     @State private var showingWorkflowConcierge = false
     @State private var showingRecentFiles = false
+    @State private var showingPrivacyInfo = false
+    @State private var privacyInfoTool: ToolType?
+    @State private var documentPreviewURL: URL?
     @StateObject private var searchService = OnDeviceSearchService.shared
 
     var body: some View {
@@ -87,6 +91,12 @@ struct HomeView: View {
             RecentsView()
                 .environmentObject(jobManager)
         }
+        .sheet(isPresented: $showingPrivacyInfo) {
+            if let tool = privacyInfoTool {
+                ToolPrivacyInfoView(tool: tool)
+            }
+        }
+        .quickLookPreview($documentPreviewURL)
     }
 
     // MARK: - Privacy Hero Section
@@ -525,8 +535,10 @@ struct HomeView: View {
         case .workflow:
             showingWorkflowConcierge = true
         case .document:
-            // TODO: Preview the document
-            break
+            // Preview the document if URL is available
+            if let url = result.url, FileManager.default.fileExists(atPath: url.path) {
+                documentPreviewURL = url
+            }
         }
         searchText = ""
     }
@@ -539,7 +551,8 @@ struct HomeView: View {
 
     // MARK: - Helper Functions
     private func showPrivacyInfo(for tool: ToolType) {
-        // TODO: Show privacy information modal for the tool
+        privacyInfoTool = tool
+        showingPrivacyInfo = true
         HapticManager.shared.impact(.light)
     }
 
@@ -614,6 +627,173 @@ struct HomeView: View {
         }
 
         return totalSize
+    }
+}
+
+// MARK: - Tool Privacy Info View
+
+struct ToolPrivacyInfoView: View {
+    let tool: ToolType
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: OneBoxSpacing.large) {
+                    // Privacy Badge
+                    HStack {
+                        Image(systemName: "checkmark.shield.fill")
+                            .font(.system(size: 40))
+                            .foregroundColor(OneBoxColors.secureGreen)
+
+                        VStack(alignment: .leading, spacing: OneBoxSpacing.tiny) {
+                            Text("100% On-Device")
+                                .font(OneBoxTypography.cardTitle)
+                                .foregroundColor(OneBoxColors.primaryText)
+
+                            Text("No data leaves your device")
+                                .font(OneBoxTypography.caption)
+                                .foregroundColor(OneBoxColors.secondaryText)
+                        }
+                    }
+                    .padding(OneBoxSpacing.medium)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(OneBoxColors.secureGreen.opacity(0.1))
+                    .cornerRadius(OneBoxRadius.medium)
+
+                    // Tool-specific privacy info
+                    VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
+                        Text("How \(tool.displayName) Protects Your Privacy")
+                            .font(OneBoxTypography.sectionTitle)
+                            .foregroundColor(OneBoxColors.primaryText)
+
+                        ForEach(privacyPoints, id: \.self) { point in
+                            HStack(alignment: .top, spacing: OneBoxSpacing.small) {
+                                Image(systemName: "lock.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(OneBoxColors.primaryGold)
+                                    .frame(width: 20)
+
+                                Text(point)
+                                    .font(OneBoxTypography.body)
+                                    .foregroundColor(OneBoxColors.secondaryText)
+                            }
+                        }
+                    }
+
+                    // Data handling section
+                    VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
+                        Text("Data Handling")
+                            .font(OneBoxTypography.sectionTitle)
+                            .foregroundColor(OneBoxColors.primaryText)
+
+                        dataHandlingRow("Processing", "On your device only", "cpu")
+                        dataHandlingRow("Storage", "Local app sandbox", "internaldrive")
+                        dataHandlingRow("Network", "Never transmitted", "wifi.slash")
+                        dataHandlingRow("Third Parties", "No access", "person.2.slash")
+                    }
+                }
+                .padding(OneBoxSpacing.large)
+            }
+            .background(OneBoxColors.primaryGraphite)
+            .navigationTitle("\(tool.displayName) Privacy")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(OneBoxColors.primaryGold)
+                }
+            }
+        }
+    }
+
+    private func dataHandlingRow(_ title: String, _ value: String, _ icon: String) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundColor(OneBoxColors.primaryGold)
+                .frame(width: 30)
+
+            Text(title)
+                .font(OneBoxTypography.body)
+                .foregroundColor(OneBoxColors.secondaryText)
+
+            Spacer()
+
+            Text(value)
+                .font(OneBoxTypography.body)
+                .foregroundColor(OneBoxColors.secureGreen)
+        }
+        .padding(OneBoxSpacing.small)
+        .background(OneBoxColors.surfaceGraphite.opacity(0.5))
+        .cornerRadius(OneBoxRadius.small)
+    }
+
+    private var privacyPoints: [String] {
+        switch tool {
+        case .imagesToPDF:
+            return [
+                "Images are converted to PDF entirely on your device",
+                "Original images remain untouched",
+                "No image data is uploaded or shared"
+            ]
+        case .pdfMerge:
+            return [
+                "PDFs are merged locally using Apple's PDFKit",
+                "Document contents never leave your device",
+                "No external servers involved in processing"
+            ]
+        case .pdfSplit:
+            return [
+                "PDF splitting uses on-device processing",
+                "Split files are saved to your local storage",
+                "No cloud services used"
+            ]
+        case .pdfCompress:
+            return [
+                "Compression algorithms run locally",
+                "Your documents stay on your device",
+                "File size reduction without data exposure"
+            ]
+        case .pdfWatermark:
+            return [
+                "Watermarks are applied on-device",
+                "Your branding stays private",
+                "No external API calls"
+            ]
+        case .pdfSign:
+            return [
+                "Signatures are stored locally only",
+                "Biometric data never leaves your device",
+                "Digital signing is entirely offline"
+            ]
+        case .pdfRedact:
+            return [
+                "Redaction permanently removes sensitive data",
+                "Processing happens entirely on-device",
+                "Redacted content cannot be recovered"
+            ]
+        case .pdfOrganize:
+            return [
+                "Page organization is performed locally",
+                "No document data is transmitted",
+                "Changes are saved to your device only"
+            ]
+        case .pdfToImages:
+            return [
+                "PDF pages are extracted on-device",
+                "Images are saved to local storage",
+                "No cloud processing involved"
+            ]
+        case .imageResize:
+            return [
+                "Image resizing uses local processing",
+                "No images are uploaded anywhere",
+                "EXIF data can be stripped for privacy"
+            ]
+        }
     }
 }
 

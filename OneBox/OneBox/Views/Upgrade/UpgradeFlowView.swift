@@ -24,7 +24,9 @@ struct UpgradeFlowView: View {
     @State private var animateFeatures = false
     @State private var paymentError: String?
     @State private var isAuthenticating = false
-    
+    @State private var showingTerms = false
+    @State private var showingPrivacy = false
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -944,20 +946,26 @@ struct PaymentView: View {
                 .font(OneBoxTypography.micro)
                 .foregroundColor(OneBoxColors.tertiaryText)
                 .multilineTextAlignment(.center)
-            
+
             HStack(spacing: OneBoxSpacing.medium) {
                 Button("Terms of Service") {
-                    // Open terms
+                    showingTerms = true
                 }
                 .font(OneBoxTypography.micro)
                 .foregroundColor(OneBoxColors.primaryGold)
-                
+
                 Button("Privacy Policy") {
-                    // Open privacy
+                    showingPrivacy = true
                 }
                 .font(OneBoxTypography.micro)
                 .foregroundColor(OneBoxColors.primaryGold)
             }
+        }
+        .sheet(isPresented: $showingTerms) {
+            LegalDocumentView(title: "Terms of Service", documentType: .terms)
+        }
+        .sheet(isPresented: $showingPrivacy) {
+            LegalDocumentView(title: "Privacy Policy", documentType: .privacy)
         }
     }
     

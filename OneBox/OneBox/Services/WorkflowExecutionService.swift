@@ -172,7 +172,16 @@ class WorkflowExecutionService: ObservableObject {
     }
 
     private func waitForJobCompletion(jobId: UUID, jobManager: JobManager) async throws -> [URL] {
+        let startTime = Date()
+        let timeoutSeconds: TimeInterval = 300 // 5 minutes
+
         while true {
+            // Check for timeout
+            if Date().timeIntervalSince(startTime) > timeoutSeconds {
+                print("Workflow: Job timed out after \(Int(timeoutSeconds)) seconds")
+                throw WorkflowError.timeout
+            }
+
             guard let job = jobManager.jobs.first(where: { $0.id == jobId }) else {
                 throw WorkflowError.jobLost
             }
@@ -201,7 +210,7 @@ class WorkflowExecutionService: ObservableObject {
                 throw WorkflowError.stepFailed(job.error ?? "Unknown error")
 
             case .pending, .running:
-                try await Task.sleep(nanoseconds: 100_000_000) // 0.1s poll (was 0.5s)
+                try await Task.sleep(nanoseconds: 100_000_000) // 0.1s poll
             }
         }
     }
@@ -391,11 +400,13 @@ class WorkflowExecutionService: ObservableObject {
 enum WorkflowError: LocalizedError {
     case jobLost
     case stepFailed(String)
-    
+    case timeout
+
     var errorDescription: String? {
         switch self {
         case .jobLost: return "The job was lost during processing."
         case .stepFailed(let msg): return "Workflow step failed: \(msg)"
+        case .timeout: return "Workflow step timed out after 5 minutes."
         }
     }
 }

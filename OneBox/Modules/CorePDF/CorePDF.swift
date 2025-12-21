@@ -874,7 +874,9 @@ public actor PDFProcessor {
             throw PDFError.invalidPDF("\(pdfURL.lastPathComponent) - PDF has no pages")
         }
 
-        UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil)
+        guard UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, nil) else {
+            throw PDFError.writeFailed
+        }
         // NOTE: Do NOT use defer here - context must close BEFORE returning
 
         // Process pages with memory management and debugging
@@ -1816,7 +1818,7 @@ public actor PDFProcessor {
             print("🔵 CorePDF.redactPDF: Output file size: \(fileSize) bytes")
 
             // Verify file is not empty
-            if fileSize as! Int64 == 0 {
+            if let size = fileSize as? Int64, size == 0 {
                 print("❌ CorePDF.redactPDF: Output file is empty!")
                 try? FileManager.default.removeItem(at: outputURL)
                 throw PDFError.writeFailed

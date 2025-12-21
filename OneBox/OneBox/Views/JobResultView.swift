@@ -673,7 +673,11 @@ struct QuickLookPreview: UIViewControllerRepresentable {
                 return newItem
             }
 
-            // Last resort: return URL directly (QuickLook can sometimes handle this)
+            // Last resort: return URL directly if file exists (QuickLook can sometimes handle this)
+            guard FileManager.default.fileExists(atPath: currentURL.path) else {
+                print("❌ File does not exist for preview: \(currentURL.path)")
+                return currentURL as QLPreviewItem // QuickLook will show appropriate error
+            }
             print("⚠️ No preview item available, using URL directly: \(currentURL.path)")
             // Ensure we have security-scoped access
             _ = currentURL.startAccessingSecurityScopedResource()

@@ -58,8 +58,10 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 | # | Severity | Issue | Location | Status |
 |---|----------|-------|----------|--------|
-| 1 | Low | Swift 6 concurrency warnings (3) | MultipeerDocumentService, OnDeviceSearchService | Non-blocking |
-| 2 | Info | "Update to recommended settings" | Xcode project | Informational |
+| 1 | **BLOCKER** | App icon image missing | Assets.xcassets/AppIcon.appiconset/ | Need 1024x1024 PNG |
+| 2 | Medium | Accessibility labels incomplete | Multiple views | ~50 labels needed |
+| 3 | Low | Swift 6 concurrency warnings (3) | MultipeerDocumentService, OnDeviceSearchService | Non-blocking |
+| 4 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
 - **Fixed 3 potential crash bugs** (`.combined!` force unwraps in encryption code)
@@ -84,6 +86,12 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
   - ProfessionalSigningView: Removed disabled "Visible signature" toggle
   - NewHomeView: Replaced non-functional Search button with Privacy button
   - IntegrityDashboardView: Removed 3 fake quick action buttons (Backup Settings, Privacy Audit, Export Logs)
+- **Fixed 4 crash risks found in pre-launch audit:**
+  - InteractivePDFPageView.swift: Force unwrap on graphics context → guard let
+  - CorePDF.swift: Missing guard on watermark PDF context creation
+  - CorePDF.swift: Force unwrap `as!` on file size check → safe cast
+  - RedactionView.swift: Silent failure if graphics context nil → proper error handling
+- **Fixed file preview edge case** in JobResultView (missing file check in QuickLook fallback)
 
 ---
 
@@ -122,9 +130,9 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Next Steps (Priority Order)
 
-1. **Continue testing other features** - Sign PDF, Watermark, Redact
-2. **Test Recents tab** - Verify old jobs can still preview files
-3. **Prepare for App Store submission** - Review checklist
+1. **BLOCKER: Add app icon** - Create 1024x1024 PNG and add to AppIcon.appiconset
+2. **Add accessibility labels** - ~50 labels needed across PaywallView, ToolFlowView, HomeView
+3. **Final device testing** - Test all features on physical device before submission
 
 ---
 

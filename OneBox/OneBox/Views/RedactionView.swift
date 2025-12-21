@@ -1079,6 +1079,8 @@ struct RedactionView: View {
             throw NSError(domain: "RedactionView", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create PDF context"])
         }
 
+        var contextError = false
+
         for pageIndex in 0..<pageCount {
             autoreleasepool {
                 guard let page = document.page(at: pageIndex) else { return }
@@ -1088,36 +1090,46 @@ struct RedactionView: View {
 
                 UIGraphicsBeginPDFPageWithInfo(pageBounds, nil)
 
-                if let pdfContext = UIGraphicsGetCurrentContext() {
-                    pdfContext.saveGState()
-                    pdfContext.translateBy(x: 0, y: pageBounds.height)
-                    pdfContext.scaleBy(x: 1.0, y: -1.0)
-                    page.draw(with: .mediaBox, to: pdfContext)
-                    pdfContext.restoreGState()
+                guard let pdfContext = UIGraphicsGetCurrentContext() else {
+                    print("❌ RedactionView: Failed to get graphics context for page \(pageIndex)")
+                    contextError = true
+                    return
+                }
 
-                    // Draw redaction boxes
-                    pdfContext.setFillColor(UIColor.black.cgColor)
+                pdfContext.saveGState()
+                pdfContext.translateBy(x: 0, y: pageBounds.height)
+                pdfContext.scaleBy(x: 1.0, y: -1.0)
+                page.draw(with: .mediaBox, to: pdfContext)
+                pdfContext.restoreGState()
 
-                    for box in pageBoxes {
-                        let x = box.normalizedRect.origin.x * pageBounds.width
-                        let y = pageBounds.height * (1.0 - box.normalizedRect.origin.y - box.normalizedRect.height)
-                        let width = box.normalizedRect.width * pageBounds.width
-                        let height = box.normalizedRect.height * pageBounds.height
+                // Draw redaction boxes
+                pdfContext.setFillColor(UIColor.black.cgColor)
 
-                        let padding: CGFloat = 3
-                        let rect = CGRect(
-                            x: x - padding,
-                            y: y - padding,
-                            width: width + padding * 2,
-                            height: height + padding * 2
-                        )
-                        pdfContext.fill(rect)
-                    }
+                for box in pageBoxes {
+                    let x = box.normalizedRect.origin.x * pageBounds.width
+                    let y = pageBounds.height * (1.0 - box.normalizedRect.origin.y - box.normalizedRect.height)
+                    let width = box.normalizedRect.width * pageBounds.width
+                    let height = box.normalizedRect.height * pageBounds.height
+
+                    let padding: CGFloat = 3
+                    let rect = CGRect(
+                        x: x - padding,
+                        y: y - padding,
+                        width: width + padding * 2,
+                        height: height + padding * 2
+                    )
+                    pdfContext.fill(rect)
                 }
             }
         }
 
         UIGraphicsEndPDFContext()
+
+        // Check if any pages failed to get graphics context
+        if contextError {
+            try? FileManager.default.removeItem(at: outputURL)
+            throw NSError(domain: "RedactionView", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to apply redactions - graphics context unavailable"])
+        }
 
         guard FileManager.default.fileExists(atPath: outputURL.path) else {
             throw NSError(domain: "RedactionView", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create redacted PDF"])

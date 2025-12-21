@@ -371,8 +371,8 @@ class PDFPageView: UIView {
         // Clear the background first to prevent previous page showing through
         backgroundColor?.setFill()
         UIRectFill(rect)
-        
-        let context = UIGraphicsGetCurrentContext()!
+
+        guard let context = UIGraphicsGetCurrentContext() else { return }
         context.saveGState()
         
         // Calculate scaled page dimensions

@@ -423,67 +423,35 @@ struct JobResultView: View {
     // MARK: - File Access Helper
     private func ensureFileAccessible(_ sourceURL: URL) -> URL? {
         let fileManager = FileManager.default
+
+        // First, try the URL directly (most common case)
+        if fileManager.fileExists(atPath: sourceURL.path) {
+            return sourceURL
+        }
+
+        // If that fails, try to find the file in Documents/Exports
         let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let exportsDir = documentsURL.appendingPathComponent("Exports")
+        let filename = sourceURL.lastPathComponent
+        let exportsURL = exportsDir.appendingPathComponent(filename)
 
-        // Try to access with security-scoped resource if needed
-        let startedAccessing = sourceURL.startAccessingSecurityScopedResource()
+        if fileManager.fileExists(atPath: exportsURL.path) {
+            return exportsURL
+        }
+
+        // Try with security-scoped access (for external files)
+        let didStartAccess = sourceURL.startAccessingSecurityScopedResource()
         defer {
-            if startedAccessing {
+            if didStartAccess {
                 sourceURL.stopAccessingSecurityScopedResource()
             }
         }
 
-        // Check if file exists at source (using standardized path)
         if fileManager.fileExists(atPath: sourceURL.path) {
-            // Verify it has content
-            if let attrs = try? fileManager.attributesOfItem(atPath: sourceURL.path),
-               let size = attrs[.size] as? Int64, size > 0 {
-                print("✅ File accessible: \(sourceURL.lastPathComponent)")
-                return sourceURL
-            }
+            // Return a copy in accessible location since we need to stop access
+            return copyFileToAccessibleLocation(sourceURL)
         }
 
-        // File doesn't exist at stored path - try to find it in Exports directory
-        let filename = sourceURL.lastPathComponent
-        let exportsURL = exportsDir.appendingPathComponent(filename)
-        if fileManager.fileExists(atPath: exportsURL.path) {
-            if let attrs = try? fileManager.attributesOfItem(atPath: exportsURL.path),
-               let size = attrs[.size] as? Int64, size > 0 {
-                print("✅ Found file in Exports: \(filename)")
-                return exportsURL
-            }
-        }
-
-        // Try to reconstruct using standardized paths (handles /private/var vs /var differences)
-        let storedPath = sourceURL.path
-        let pathPatterns = ["Documents/Exports/", "Documents/", "/Exports/"]
-        for pattern in pathPatterns {
-            if let range = storedPath.range(of: pattern) {
-                let relativePath = String(storedPath[range.upperBound...])
-                let reconstructedURL = exportsDir.appendingPathComponent(relativePath)
-                if fileManager.fileExists(atPath: reconstructedURL.path) {
-                    print("✅ Reconstructed valid URL: \(reconstructedURL.lastPathComponent)")
-                    return reconstructedURL
-                }
-            }
-        }
-
-        // Last resort: search for similar files in Exports
-        if let files = try? fileManager.contentsOfDirectory(at: exportsDir, includingPropertiesForKeys: nil) {
-            let ext = sourceURL.pathExtension
-            for fileURL in files where fileURL.pathExtension == ext {
-                if fileManager.fileExists(atPath: fileURL.path) {
-                    if let attrs = try? fileManager.attributesOfItem(atPath: fileURL.path),
-                       let size = attrs[.size] as? Int64, size > 0 {
-                        print("✅ Found potential match: \(fileURL.lastPathComponent)")
-                        return fileURL
-                    }
-                }
-            }
-        }
-
-        print("❌ Could not find file: \(filename)")
         return nil
     }
     
@@ -721,67 +689,34 @@ struct QuickLookPreview: UIViewControllerRepresentable {
         
         private func ensureFileAccessible(_ sourceURL: URL) -> URL? {
             let fileManager = FileManager.default
+
+            // First, try the URL directly (most common case)
+            if fileManager.fileExists(atPath: sourceURL.path) {
+                return sourceURL
+            }
+
+            // If that fails, try to find the file in Documents/Exports
             let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let exportsDir = documentsURL.appendingPathComponent("Exports")
+            let filename = sourceURL.lastPathComponent
+            let exportsURL = exportsDir.appendingPathComponent(filename)
 
-            // Try to access with security-scoped resource if needed
-            let startedAccessing = sourceURL.startAccessingSecurityScopedResource()
+            if fileManager.fileExists(atPath: exportsURL.path) {
+                return exportsURL
+            }
+
+            // Try with security-scoped access (for external files)
+            let didStartAccess = sourceURL.startAccessingSecurityScopedResource()
             defer {
-                if startedAccessing {
+                if didStartAccess {
                     sourceURL.stopAccessingSecurityScopedResource()
                 }
             }
 
-            // Check if file exists at source
             if fileManager.fileExists(atPath: sourceURL.path) {
-                // Verify it has content
-                if let attrs = try? fileManager.attributesOfItem(atPath: sourceURL.path),
-                   let size = attrs[.size] as? Int64, size > 0 {
-                    print("✅ QuickLook: File accessible: \(sourceURL.lastPathComponent)")
-                    return sourceURL
-                }
+                return copyToAccessibleLocation(sourceURL)
             }
 
-            // File doesn't exist at stored path - try to find it in Exports directory
-            let filename = sourceURL.lastPathComponent
-            let exportsURL = exportsDir.appendingPathComponent(filename)
-            if fileManager.fileExists(atPath: exportsURL.path) {
-                if let attrs = try? fileManager.attributesOfItem(atPath: exportsURL.path),
-                   let size = attrs[.size] as? Int64, size > 0 {
-                    print("✅ QuickLook: Found file in Exports: \(filename)")
-                    return exportsURL
-                }
-            }
-
-            // Try to reconstruct using standardized paths
-            let storedPath = sourceURL.path
-            let pathPatterns = ["Documents/Exports/", "Documents/", "/Exports/"]
-            for pattern in pathPatterns {
-                if let range = storedPath.range(of: pattern) {
-                    let relativePath = String(storedPath[range.upperBound...])
-                    let reconstructedURL = exportsDir.appendingPathComponent(relativePath)
-                    if fileManager.fileExists(atPath: reconstructedURL.path) {
-                        print("✅ QuickLook: Reconstructed valid URL: \(reconstructedURL.lastPathComponent)")
-                        return reconstructedURL
-                    }
-                }
-            }
-
-            // Last resort: search for similar files in Exports
-            if let files = try? fileManager.contentsOfDirectory(at: exportsDir, includingPropertiesForKeys: nil) {
-                let ext = sourceURL.pathExtension
-                for fileURL in files where fileURL.pathExtension == ext {
-                    if fileManager.fileExists(atPath: fileURL.path) {
-                        if let attrs = try? fileManager.attributesOfItem(atPath: fileURL.path),
-                           let size = attrs[.size] as? Int64, size > 0 {
-                            print("✅ QuickLook: Found potential match: \(fileURL.lastPathComponent)")
-                            return fileURL
-                        }
-                    }
-                }
-            }
-
-            print("❌ QuickLook: Could not find file: \(filename)")
             return nil
         }
         

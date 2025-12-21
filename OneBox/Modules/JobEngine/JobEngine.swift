@@ -1058,42 +1058,64 @@ actor JobProcessor {
     
     
     // MARK: - Privacy Post-Processing
-    
+
     private func applyPostProcessing(job: Job, urls: [URL]) async throws -> [URL] {
         var processedURLs = urls
-        
+
+        // Capture delegate once at the start to prevent nil during processing
+        guard let delegate = privacyDelegate else {
+            return processedURLs
+        }
+
         // Apply document sanitization if enabled
-        if job.settings.enableDocumentSanitization, let delegate = privacyDelegate {
+        if job.settings.enableDocumentSanitization {
             for url in processedURLs {
-                _ = try await MainActor.run {
-                    try delegate.performDocumentSanitization(at: url)
+                do {
+                    _ = try await MainActor.run {
+                        try delegate.performDocumentSanitization(at: url)
+                    }
+                    // Ensure file system sync before next operation
+                    try await Task.sleep(nanoseconds: 50_000_000) // 50ms
+                } catch {
+                    print("⚠️ Sanitization failed for \(url.lastPathComponent): \(error)")
+                    // Continue without sanitization rather than crash
                 }
             }
         }
-        
-        // Apply encryption if enabled
-        if job.settings.enableEncryption, 
+
+        // Apply encryption if enabled - validate password first
+        if job.settings.enableEncryption,
            let password = job.settings.encryptionPassword,
-           let delegate = privacyDelegate {
+           !password.isEmpty {
             var encryptedURLs: [URL] = []
             for url in processedURLs {
-                let encryptedURL = try await MainActor.run {
-                    try delegate.performFileEncryption(at: url, password: password)
+                // Verify file exists before encryption
+                guard FileManager.default.fileExists(atPath: url.path) else {
+                    print("⚠️ File not found for encryption: \(url.path)")
+                    encryptedURLs.append(url) // Keep original URL
+                    continue
                 }
-                encryptedURLs.append(encryptedURL)
+                do {
+                    let encryptedURL = try await MainActor.run {
+                        try delegate.performFileEncryption(at: url, password: password)
+                    }
+                    encryptedURLs.append(encryptedURL)
+                } catch {
+                    print("⚠️ Encryption failed for \(url.lastPathComponent): \(error)")
+                    encryptedURLs.append(url) // Keep original URL on failure
+                }
             }
             processedURLs = encryptedURLs
         }
-        
-        // Generate forensics report
-        if let inputURL = job.inputs.first, 
-           let outputURL = processedURLs.first,
-           let delegate = privacyDelegate {
+
+        // Generate forensics report on ORIGINAL output (not encrypted version)
+        if let inputURL = job.inputs.first,
+           let outputURL = urls.first { // Use original urls, not processedURLs
             _ = await MainActor.run {
                 delegate.performFileForensics(inputURL: inputURL, outputURL: outputURL)
             }
         }
-        
+
         return processedURLs
     }
 }

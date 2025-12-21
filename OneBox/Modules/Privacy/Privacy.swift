@@ -345,24 +345,32 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
     // MARK: - Encrypted Output
     
     public func encryptFile(at sourceURL: URL, password: String) throws -> URL {
+        // Validate password is not empty
+        guard !password.isEmpty else {
+            throw PrivacyError.encryptionFailed
+        }
+
         let encryptedURL = sourceURL.appendingPathExtension("encrypted")
-        
+
         guard let sourceData = try? Data(contentsOf: sourceURL) else {
             throw PrivacyError.encryptionFailed
         }
-        
+
         // Generate random salt for each encryption
         var salt = Data(count: 16) // 128-bit salt
-        let result = salt.withUnsafeMutableBytes {
-            SecRandomCopyBytes(kSecRandomDefault, 16, $0.bindMemory(to: UInt8.self).baseAddress!)
+        let result = salt.withUnsafeMutableBytes { buffer -> OSStatus in
+            guard let baseAddress = buffer.bindMemory(to: UInt8.self).baseAddress else {
+                return errSecAllocate
+            }
+            return SecRandomCopyBytes(kSecRandomDefault, 16, baseAddress)
         }
         guard result == errSecSuccess else {
             throw PrivacyError.encryptionFailed
         }
-        
+
         // Derive key using PBKDF2 (secure key derivation)
         let key = try deriveKey(from: password, salt: salt)
-        
+
         do {
             let encryptedData = try AES.GCM.seal(sourceData, using: key)
 
@@ -374,9 +382,9 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
             finalData.append(combinedData)
 
             try finalData.write(to: encryptedURL)
-            
+
             logAuditEvent(.fileEncrypted(sourceURL.lastPathComponent))
-            
+
             return encryptedURL
         } catch {
             throw PrivacyError.encryptionFailed
@@ -385,36 +393,43 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
     
     /// Securely derives encryption key from password using PBKDF2
     private func deriveKey(from password: String, salt: Data) throws -> SymmetricKey {
-        guard let passwordData = password.data(using: .utf8) else {
+        guard let passwordData = password.data(using: .utf8), !passwordData.isEmpty else {
             throw PrivacyError.encryptionFailed
         }
-        
+
         let iterations: Int = 100_000 // NIST recommended minimum
         let keyLength: Int = 32 // 256-bit key
-        
+
         var derivedKey = Data(count: keyLength)
-        let result = derivedKey.withUnsafeMutableBytes { derivedKeyBytes in
+        var result: Int32 = kCCParamError
+
+        derivedKey.withUnsafeMutableBytes { derivedKeyBytes in
             passwordData.withUnsafeBytes { passwordBytes in
                 salt.withUnsafeBytes { saltBytes in
-                    CCKeyDerivationPBKDF(
+                    guard let derivedPtr = derivedKeyBytes.bindMemory(to: UInt8.self).baseAddress,
+                          let passwordPtr = passwordBytes.bindMemory(to: Int8.self).baseAddress,
+                          let saltPtr = saltBytes.bindMemory(to: UInt8.self).baseAddress else {
+                        return
+                    }
+                    result = CCKeyDerivationPBKDF(
                         CCPBKDFAlgorithm(kCCPBKDF2),
-                        passwordBytes.bindMemory(to: Int8.self).baseAddress!,
+                        passwordPtr,
                         passwordData.count,
-                        saltBytes.bindMemory(to: UInt8.self).baseAddress!,
+                        saltPtr,
                         salt.count,
                         CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
                         UInt32(iterations),
-                        derivedKeyBytes.bindMemory(to: UInt8.self).baseAddress!,
+                        derivedPtr,
                         keyLength
                     )
                 }
             }
         }
-        
+
         guard result == kCCSuccess else {
             throw PrivacyError.encryptionFailed
         }
-        
+
         return SymmetricKey(data: derivedKey)
     }
     

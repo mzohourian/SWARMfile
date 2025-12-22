@@ -4,6 +4,53 @@
 
 ---
 
+## 2024-12-22: Premium UI Redesign - Home Screen Hero & Usage Sections
+
+**Focus:**
+Complete redesign of home screen for premium, minimal, luxury aesthetic.
+
+**Issues Addressed:**
+1. Hero section was cluttered with gimmicky elements (100% SECURE dial, 3 green privacy badges)
+2. Tool cards had off-brand green "SECURE" text badges
+3. Usage section had negative framing ("X of 3 used")
+4. Logo needed to be more prominent with embedded tagline
+
+**Changes Made:**
+
+**Hero Section Complete Redesign:**
+- Removed: `safeDial` function (100% SECURE circular dial)
+- Removed: `privacyGuarantees` section (3 green badges: No Cloud, No Tracking, Encrypted)
+- Removed: `privacyGuaranteeItem` helper function
+- Added: Branded logo with embedded tagline (vaultpdf_sub_transparent2.png)
+- Added: Single elegant "100% Offline" gold badge
+- Fine-tuned positioning: 280pt height, -50pt top padding for minimal margin
+
+**Tool Cards Refined:**
+- Removed: Green "SECURE" text badges from each tool card
+- Added: Subtle gold shield icon (`shield.fill`) with 60% opacity
+- Cleaner appearance matching gold/black premium palette
+
+**Usage Section Redesigned:**
+- Changed from "X of 3 secure exports used" to "X free exports left" (positive framing)
+- Added elegant gold dot indicators for remaining exports
+- Added premium gold gradient "Unlock Unlimited" CTA button
+
+**Logo Iterations:**
+- Started with separate logo + "Fort Knox of PDF Apps" text
+- Evolved to logo with embedded "Your documents never leave" tagline
+- Multiple sizing iterations (200pt → 320pt → final 280pt)
+- Multiple position iterations (top padding: -12 → -60 → final -50)
+- Final: vaultpdf_sub_transparent2.png at 280pt height
+
+**Files Modified:**
+- `OneBox/OneBox/Views/NewHomeView.swift` - Complete hero and usage section redesign
+- `OneBox/OneBox/Assets.xcassets/VaultLogoWithText.imageset/Contents.json` - Updated to vaultpdf_sub_transparent2.png
+- `OneBox/OneBox/Assets.xcassets/VaultLogoWithText.imageset/` - Multiple logo files added
+
+**Status:** UI polish complete, all changes functional
+
+---
+
 ## 2024-12-22: App Store Preparation - MultipeerConnectivity Removal & URL Updates
 
 **Focus:**

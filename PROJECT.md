@@ -115,31 +115,33 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2024-12-22 (App Icon & Branding Complete)
+**Date:** 2024-12-22 (Premium UI Redesign - Home Screen)
 
 **What Was Done:**
-- **App icon completed:**
-  - Added vaultpdflogo.png (prominent gold shield on dark background)
-  - Configured AppIcon.appiconset with 1024x1024 PNG
-  - Configured VaultLogo.imageset for in-app branding
-- **VaultLogo integrated throughout app:**
-  - NewHomeView.swift - Hero section (prominent logo above "FORT KNOX" title)
-  - OneBoxApp.swift - Lock screen display
-  - OnboardingView.swift - Welcome page
-  - PaywallView.swift - Upgrade header
-  - SettingsView.swift - About section
-- **Previous session work:**
-  - Removed MultipeerConnectivity feature for v1.0
-  - Updated all URLs to use spuud.com and hello@spuud.com
-  - Fixed privacy policy date to December 22, 2024
+- **Home screen hero section completely redesigned:**
+  - Removed cluttered elements (100% SECURE dial, 3 green privacy badges)
+  - Added premium branded logo with embedded tagline (vaultpdf_sub_transparent2.png)
+  - Single gold "100% Offline" badge - elegant, on-brand
+  - Minimal luxury aesthetic with optimized spacing
+- **Tool cards refined:**
+  - Replaced green "SECURE" text badges with subtle gold shield icons
+  - Cleaner, on-brand appearance matching gold/black palette
+- **Usage section redesigned:**
+  - Changed from "X of 3 used" to "X free exports left" (positive framing)
+  - Added elegant gold dot indicators
+  - Premium gold gradient "Unlock Unlimited" CTA button
+- **Multiple logo iterations:**
+  - Started with separate logo + text, evolved to logo with embedded tagline
+  - Fine-tuned sizing (280pt) and positioning (-50pt top padding)
+  - Fixed overlap issues between logo tagline and badge
 
 **What's Unfinished:**
-- None - all blockers resolved
+- None - UI polish complete
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/NewHomeView.swift` - Added VaultLogo to hero section
-- `OneBox/OneBox/Assets.xcassets/VaultLogo.imageset/Contents.json` - Updated to use vaultpdflogo.png
-- `OneBox/OneBox/Assets.xcassets/AppIcon.appiconset/AppIcon.png` - Updated with new logo
+- `OneBox/OneBox/Views/NewHomeView.swift` - Complete hero and usage section redesign
+- `OneBox/OneBox/Assets.xcassets/VaultLogoWithText.imageset/Contents.json` - Updated to vaultpdf_sub_transparent2.png
+- Multiple logo files added to VaultLogoWithText.imageset
 
 ---
 

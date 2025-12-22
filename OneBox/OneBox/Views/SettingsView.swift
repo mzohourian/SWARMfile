@@ -60,19 +60,42 @@ struct SettingsView: View {
 
                 // About
                 Section {
-                    HStack {
-                        Text("Version")
-                            .foregroundColor(OneBoxColors.primaryText)
+                    // Brand identity with logo
+                    HStack(spacing: 16) {
+                        Image("VaultLogo")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 60, height: 60)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Vault PDF")
+                                .font(.headline)
+                                .foregroundColor(OneBoxColors.primaryText)
+                            Text("Version \(appVersion) (\(buildNumber))")
+                                .font(.caption)
+                                .foregroundColor(OneBoxColors.secondaryText)
+                            Text("Privacy-first document processing")
+                                .font(.caption2)
+                                .foregroundColor(OneBoxColors.tertiaryText)
+                        }
+
                         Spacer()
-                        Text(appVersion)
-                            .foregroundColor(OneBoxColors.secondaryText)
                     }
-                    HStack {
-                        Text("Build")
-                            .foregroundColor(OneBoxColors.primaryText)
-                        Spacer()
-                        Text(buildNumber)
-                            .foregroundColor(OneBoxColors.secondaryText)
+                    .padding(.vertical, 4)
+
+                    // Website link
+                    Link(destination: URL(string: "https://spuud.com")!) {
+                        HStack {
+                            Text("Website")
+                                .foregroundColor(OneBoxColors.primaryText)
+                            Spacer()
+                            Text("spuud.com")
+                                .foregroundColor(OneBoxColors.secondaryText)
+                            Image(systemName: "arrow.up.right.square")
+                                .foregroundColor(OneBoxColors.tertiaryText)
+                                .font(.caption)
+                        }
                     }
                 } header: {
                     Text("About")

@@ -115,24 +115,37 @@ struct OnboardingView: View {
     // MARK: - Page Content
     private var onboardingPageContent: some View {
         let page = pages[currentPage]
-        
+
         return VStack(spacing: OneBoxSpacing.xxl) {
-            // Icon with ceremony
-            ZStack {
-                Circle()
-                    .fill(OneBoxColors.primaryText.opacity(0.1))
+            // Icon/Logo with ceremony
+            if currentPage == 0 {
+                // Welcome page: Show brand logo prominently
+                Image("VaultLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
                     .frame(width: 140, height: 140)
-                
-                Circle()
-                    .fill(OneBoxColors.primaryText.opacity(0.05))
-                    .frame(width: 120, height: 120)
-                
-                Image(systemName: page.icon)
-                    .font(.system(size: 48, weight: .medium))
-                    .foregroundColor(OneBoxColors.primaryText)
+                    .clipShape(Circle())
+                    .shadow(color: OneBoxColors.primaryGold.opacity(0.4), radius: 16, x: 0, y: 0)
+                    .scaleEffect(1.0)
+                    .animation(.easeInOut(duration: 0.6).delay(0.2), value: currentPage)
+            } else {
+                // Other pages: Show system icons
+                ZStack {
+                    Circle()
+                        .fill(OneBoxColors.primaryText.opacity(0.1))
+                        .frame(width: 140, height: 140)
+
+                    Circle()
+                        .fill(OneBoxColors.primaryText.opacity(0.05))
+                        .frame(width: 120, height: 120)
+
+                    Image(systemName: page.icon)
+                        .font(.system(size: 48, weight: .medium))
+                        .foregroundColor(OneBoxColors.primaryText)
+                }
+                .scaleEffect(1.0)
+                .animation(.easeInOut(duration: 0.6).delay(0.2), value: currentPage)
             }
-            .scaleEffect(1.0)
-            .animation(.easeInOut(duration: 0.6).delay(0.2), value: currentPage)
             
             // Text content
             VStack(spacing: OneBoxSpacing.large) {

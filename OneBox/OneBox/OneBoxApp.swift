@@ -184,20 +184,13 @@ struct LockScreenView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                // Minimalist lock icon with gold accent
-                ZStack {
-                    Circle()
-                        .fill(secondaryGraphite)
-                        .frame(width: 120, height: 120)
-
-                    Circle()
-                        .stroke(primaryGold.opacity(0.3), lineWidth: 1)
-                        .frame(width: 120, height: 120)
-
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 44, weight: .light))
-                        .foregroundColor(primaryGold)
-                }
+                // Brand logo - prominent and centered
+                Image("VaultLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 160, height: 160)
+                    .clipShape(Circle())
+                    .shadow(color: primaryGold.opacity(0.3), radius: 20, x: 0, y: 0)
 
                 Spacer()
                     .frame(height: 48)

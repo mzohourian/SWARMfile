@@ -102,7 +102,7 @@ struct HomeView: View {
     // MARK: - Privacy Hero Section
     private var privacyHeroSection: some View {
         OneBoxCard(style: .security) {
-            VStack(spacing: OneBoxSpacing.large) {
+            VStack(spacing: OneBoxSpacing.medium) {
                 // Brand Logo with Text - prominent and centered
                 Image("VaultLogoWithText")
                     .resizable()
@@ -110,18 +110,11 @@ struct HomeView: View {
                     .frame(width: 200, height: 200)
                     .shadow(color: OneBoxColors.primaryGold.opacity(0.3), radius: 16, x: 0, y: 4)
 
-                // Privacy tagline
-                Text(ConciergeCopy.privacyHero)
-                    .font(OneBoxTypography.body)
-                    .foregroundColor(OneBoxColors.secondaryText)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, OneBoxSpacing.medium)
+                // Privacy Guarantees - moved up, closer to logo
+                privacyGuarantees
 
                 // Safe Dial Animation
                 safeDial
-
-                // Privacy Guarantees
-                privacyGuarantees
             }
         }
     }

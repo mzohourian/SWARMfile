@@ -102,138 +102,90 @@ struct HomeView: View {
     // MARK: - Privacy Hero Section
     private var privacyHeroSection: some View {
         OneBoxCard(style: .security) {
-            VStack(spacing: 0) {
-                // Brand Logo with Text - prominent and centered
+            VStack(spacing: OneBoxSpacing.medium) {
+                // Brand Logo - prominent and centered with breathing room
                 Image("VaultLogoWithText")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 200, height: 200)
-                    .shadow(color: OneBoxColors.primaryGold.opacity(0.3), radius: 16, x: 0, y: 4)
+                    .frame(width: 180, height: 180)
 
-                // Privacy Guarantees - tight spacing from logo
-                privacyGuarantees
-                    .padding(.top, OneBoxSpacing.small)
+                // Single confident tagline
+                Text("Your documents never leave.")
+                    .font(OneBoxTypography.body)
+                    .foregroundColor(OneBoxColors.secondaryText)
+                    .padding(.top, OneBoxSpacing.tiny)
 
-                // Safe Dial Animation - more breathing room
-                safeDial
-                    .padding(.top, OneBoxSpacing.medium)
-                    .padding(.bottom, OneBoxSpacing.small)
+                // Single elegant badge - gold, on-brand
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 14, weight: .medium))
+                    Text("100% Offline")
+                        .font(.system(size: 14, weight: .semibold))
+                        .tracking(0.5)
+                }
+                .foregroundColor(OneBoxColors.primaryGold)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(OneBoxColors.primaryGold.opacity(0.1))
+                .cornerRadius(20)
+                .padding(.top, OneBoxSpacing.small)
             }
             .frame(maxWidth: .infinity)
-        }
-    }
-
-    private var safeDial: some View {
-        ZStack {
-            // Outer ring
-            Circle()
-                .stroke(OneBoxColors.primaryGold.opacity(0.3), lineWidth: 3)
-                .frame(width: 120, height: 120)
-
-            // Progress ring
-            Circle()
-                .trim(from: 0, to: 0.85) // 85% for "secure" feeling
-                .stroke(
-                    LinearGradient(
-                        colors: [OneBoxColors.primaryGold, OneBoxColors.secondaryGold],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                )
-                .frame(width: 120, height: 120)
-                .rotationEffect(.degrees(-90))
-
-            // Center content with security badge
-            VStack(spacing: OneBoxSpacing.tiny) {
-                Image(systemName: "checkmark.shield.fill")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(OneBoxColors.secureGreen)
-
-                Text("100%")
-                    .font(OneBoxTypography.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(OneBoxColors.primaryText)
-
-                Text("SECURE")
-                    .font(OneBoxTypography.micro)
-                    .foregroundColor(OneBoxColors.secondaryText)
-            }
-        }
-    }
-
-    private var privacyGuarantees: some View {
-        HStack(spacing: 0) {
-            privacyGuaranteeItem("shield.fill", "On-Device", "Processing")
-                .frame(maxWidth: .infinity)
-            privacyGuaranteeItem("lock.fill", "Zero", "Cloud Calls")
-                .frame(maxWidth: .infinity)
-            privacyGuaranteeItem("eye.slash.fill", "No", "Tracking")
-                .frame(maxWidth: .infinity)
-        }
-    }
-
-    private func privacyGuaranteeItem(_ icon: String, _ title: String, _ subtitle: String) -> some View {
-        VStack(spacing: OneBoxSpacing.tiny) {
-            Image(systemName: icon)
-                .font(.system(size: 20, weight: .medium))
-                .foregroundColor(OneBoxColors.secureGreen)
-
-            Text(title)
-                .font(OneBoxTypography.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(OneBoxColors.primaryText)
-
-            Text(subtitle)
-                .font(OneBoxTypography.micro)
-                .foregroundColor(OneBoxColors.secondaryText)
+            .padding(.vertical, OneBoxSpacing.medium)
         }
     }
 
     // MARK: - Usage Status Section
     private var usageStatusSection: some View {
         OneBoxCard(style: .standard) {
-            VStack(spacing: OneBoxSpacing.medium) {
-                // Usage meter with contextual messaging
-                UsageMeter(
-                    current: paymentsManager.exportsUsed,
-                    limit: paymentsManager.freeExportLimit,
-                    type: "exports"
-                )
+            HStack(spacing: OneBoxSpacing.medium) {
+                // Remaining count
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(remainingExports) free export\(remainingExports == 1 ? "" : "s") left")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(OneBoxColors.primaryText)
 
-                // Contextual upgrade messaging (only when near limit)
-                if shouldShowUpgradePrompt {
-                    contextualUpgradePrompt
+                    // Elegant dot indicators
+                    HStack(spacing: 6) {
+                        ForEach(0..<paymentsManager.freeExportLimit, id: \.self) { index in
+                            Circle()
+                                .fill(index < remainingExports ? OneBoxColors.primaryGold : OneBoxColors.primaryGold.opacity(0.2))
+                                .frame(width: 8, height: 8)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                // Upgrade CTA
+                Button(action: {
+                    // Show upgrade flow
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Unlock Unlimited")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(OneBoxColors.primaryGraphite)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(
+                        LinearGradient(
+                            colors: [OneBoxColors.primaryGold, OneBoxColors.secondaryGold],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(16)
                 }
             }
+            .padding(.vertical, OneBoxSpacing.tiny)
         }
     }
 
-    private var contextualUpgradePrompt: some View {
-        HStack(spacing: OneBoxSpacing.small) {
-            Image(systemName: "crown.fill")
-                .foregroundColor(OneBoxColors.primaryGold)
-                .font(.system(size: 16))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Almost at your limit")
-                    .font(OneBoxTypography.caption)
-                    .foregroundColor(OneBoxColors.primaryText)
-
-                Text("Unlock unlimited secure processing")
-                    .font(OneBoxTypography.micro)
-                    .foregroundColor(OneBoxColors.secondaryText)
-            }
-
-            Spacer()
-
-            OneBoxButton("Upgrade", style: .security) {
-                // Show upgrade flow
-            }
-        }
-        .padding(OneBoxSpacing.small)
-        .background(OneBoxColors.mutedGold)
-        .cornerRadius(OneBoxRadius.small)
+    private var remainingExports: Int {
+        max(0, paymentsManager.freeExportLimit - paymentsManager.exportsUsed)
     }
 
     // MARK: - All Tools Section (No Tabs - All Visible)
@@ -525,12 +477,6 @@ struct HomeView: View {
             }
         }
         searchText = ""
-    }
-
-    // MARK: - Computed Properties
-    private var shouldShowUpgradePrompt: Bool {
-        let usageRatio = Double(paymentsManager.exportsUsed) / Double(paymentsManager.freeExportLimit)
-        return usageRatio >= 0.7 // Show when 70% or more used
     }
 
     // MARK: - Helper Functions

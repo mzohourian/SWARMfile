@@ -102,12 +102,12 @@ struct HomeView: View {
     // MARK: - Privacy Hero Section
     private var privacyHeroSection: some View {
         OneBoxCard(style: .security) {
-            VStack(spacing: 8) {
+            VStack(spacing: 2) {
                 // Brand Logo with embedded tagline
                 Image("VaultLogoWithText")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(height: 160)
+                    .frame(height: 200)
 
                 // Single elegant badge - gold, on-brand
                 HStack(spacing: 6) {
@@ -124,7 +124,7 @@ struct HomeView: View {
                 .cornerRadius(16)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, 8)
         }
     }
 

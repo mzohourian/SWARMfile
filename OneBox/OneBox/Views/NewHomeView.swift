@@ -103,43 +103,19 @@ struct HomeView: View {
     private var privacyHeroSection: some View {
         OneBoxCard(style: .security) {
             VStack(spacing: OneBoxSpacing.large) {
-                // Brand Logo - prominent at top
-                Image("VaultLogo")
+                // Brand Logo with Text - prominent and centered
+                Image("VaultLogoWithText")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 100, height: 100)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .shadow(color: OneBoxColors.primaryGold.opacity(0.4), radius: 12, x: 0, y: 4)
+                    .frame(width: 200, height: 200)
+                    .shadow(color: OneBoxColors.primaryGold.opacity(0.3), radius: 16, x: 0, y: 4)
 
-                // Hero Statement
-                VStack(spacing: OneBoxSpacing.small) {
-                    // Main title with dramatic emphasis
-                    VStack(spacing: 4) {
-                        Text("FORT KNOX")
-                            .font(OneBoxTypography.heroTitle)
-                            .fontWeight(.heavy)
-                            .foregroundColor(OneBoxColors.primaryGold)
-                            .tracking(2.0) // Wide letter spacing for impact
-
-                        Rectangle()
-                            .fill(OneBoxColors.primaryGold)
-                            .frame(height: 2)
-                            .frame(maxWidth: 120) // Underline accent
-                    }
-
-                    Text("of PDF Apps")
-                        .font(OneBoxTypography.sectionTitle)
-                        .fontWeight(.medium)
-                        .foregroundColor(OneBoxColors.primaryText)
-                        .tracking(1.0)
-                        .opacity(0.9)
-
-                    Text(ConciergeCopy.privacyHero)
-                        .font(OneBoxTypography.body)
-                        .foregroundColor(OneBoxColors.secondaryText)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, OneBoxSpacing.medium)
-                }
+                // Privacy tagline
+                Text(ConciergeCopy.privacyHero)
+                    .font(OneBoxTypography.body)
+                    .foregroundColor(OneBoxColors.secondaryText)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, OneBoxSpacing.medium)
 
                 // Safe Dial Animation
                 safeDial

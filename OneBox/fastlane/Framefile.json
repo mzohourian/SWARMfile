@@ -1,0 +1,75 @@
+{
+  "device_frame_version": "latest",
+  "default": {
+    "keyword": {
+      "fonts": [
+        {
+          "font": "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+          "supported": ["en-US"]
+        }
+      ],
+      "color": "#D4AF37"
+    },
+    "title": {
+      "fonts": [
+        {
+          "font": "/System/Library/Fonts/Supplemental/Arial.ttf",
+          "supported": ["en-US"]
+        }
+      ],
+      "color": "#FFFFFF"
+    },
+    "background": "#1C1C1E",
+    "padding": 50,
+    "show_complete_frame": true,
+    "stack_title": true,
+    "title_below_image": false
+  },
+  "data": [
+    {
+      "filter": "01_HomeScreen",
+      "keyword": "100% Offline",
+      "title": "Your documents never leave your device"
+    },
+    {
+      "filter": "02_ToolGrid",
+      "keyword": "10 Pro Tools",
+      "title": "Merge, split, sign, redact, watermark & more"
+    },
+    {
+      "filter": "03_PrivacyDashboard",
+      "keyword": "Bank-Level Privacy",
+      "title": "No accounts. No uploads. No tracking."
+    },
+    {
+      "filter": "04_SignPDF",
+      "keyword": "Sign Instantly",
+      "title": "Draw your signature. Place anywhere. Done."
+    },
+    {
+      "filter": "05_Results",
+      "keyword": "Professional Results",
+      "title": "Export, share, or save your way"
+    },
+    {
+      "filter": "Alt_MergePDFs",
+      "keyword": "Merge PDFs",
+      "title": "Combine multiple documents into one"
+    },
+    {
+      "filter": "Alt_RedactPDF",
+      "keyword": "Redact Sensitive Data",
+      "title": "Auto-detect and remove private information"
+    },
+    {
+      "filter": "Alt_WatermarkPDF",
+      "keyword": "Add Watermarks",
+      "title": "Protect your documents professionally"
+    },
+    {
+      "filter": "Bonus_Upgrade",
+      "keyword": "Go Pro",
+      "title": "Unlimited exports. One-time purchase available."
+    }
+  ]
+}

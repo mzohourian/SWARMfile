@@ -102,37 +102,29 @@ struct HomeView: View {
     // MARK: - Privacy Hero Section
     private var privacyHeroSection: some View {
         OneBoxCard(style: .security) {
-            VStack(spacing: 0) {
-                // Brand Logo - prominent and centered
+            VStack(spacing: 8) {
+                // Brand Logo with embedded tagline
                 Image("VaultLogoWithText")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 220, height: 220)
-
-                // Single confident tagline - elegant script style
-                Text("Your documents never leave.")
-                    .font(.system(size: 16, weight: .regular, design: .serif))
-                    .italic()
-                    .foregroundColor(OneBoxColors.secondaryText)
-                    .padding(.top, 4)
+                    .frame(height: 160)
 
                 // Single elegant badge - gold, on-brand
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                     Text("100% Offline")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .tracking(0.5)
                 }
                 .foregroundColor(OneBoxColors.primaryGold)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
                 .background(OneBoxColors.primaryGold.opacity(0.1))
-                .cornerRadius(20)
-                .padding(.top, 12)
+                .cornerRadius(16)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+            .padding(.vertical, 12)
         }
     }
 

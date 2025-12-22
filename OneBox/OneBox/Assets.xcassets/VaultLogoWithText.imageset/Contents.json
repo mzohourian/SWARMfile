@@ -1,17 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "VaultLogoWithText.png",
+      "filename" : "vaultpdf_transparent.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
-      "filename" : "VaultLogoWithText.png",
+      "filename" : "vaultpdf_transparent.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
-      "filename" : "VaultLogoWithText.png",
+      "filename" : "vaultpdf_transparent.png",
       "idiom" : "universal",
       "scale" : "3x"
     }

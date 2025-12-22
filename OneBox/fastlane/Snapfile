@@ -3,9 +3,9 @@
 
 # Devices to screenshot (App Store required sizes)
 devices([
-  "iPhone 15 Pro Max",       # 6.7" - Required
-  "iPhone 14 Plus",          # 6.5" - Required (alternative)
-  "iPad Pro 12.9-inch (6th generation)"  # If iPad supported
+  "iPhone 17 Pro Max",       # 6.7" - Required
+  "iPhone 17 Pro",           # 6.1" - Required
+  "iPad Pro 13-inch (M5)"    # If iPad supported
 ])
 
 # Languages

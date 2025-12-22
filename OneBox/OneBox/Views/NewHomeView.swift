@@ -107,9 +107,8 @@ struct HomeView: View {
                 Image("VaultLogoWithText")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(height: 300)
-                    .padding(.top, -60) // Pull logo to top
-                    .padding(.bottom, -20)
+                    .frame(height: 280)
+                    .padding(.top, -50)
 
                 // Single elegant badge - gold, on-brand
                 HStack(spacing: 6) {

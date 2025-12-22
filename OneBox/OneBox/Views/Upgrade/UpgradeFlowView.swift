@@ -24,7 +24,7 @@ struct UpgradeFlowView: View {
     @State private var animateFeatures = false
     @State private var paymentError: String?
     @State private var isAuthenticating = false
-    
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -458,7 +458,7 @@ struct UpgradeFlowView: View {
                     socialProofStat("4.9★", "App Store Rating")
                 }
                 
-                Text("\"OneBox has transformed how our team handles sensitive documents. The security features give us complete peace of mind.\"")
+                Text("\"Vault PDF has transformed how our team handles sensitive documents. The security features give us complete peace of mind.\"")
                     .font(OneBoxTypography.caption)
                     .foregroundColor(OneBoxColors.secondaryText)
                     .italic()
@@ -695,8 +695,8 @@ enum PremiumPlan: String, CaseIterable, Identifiable {
     
     var displayName: String {
         switch self {
-        case .pro: return "OneBox Pro"
-        case .enterprise: return "OneBox Enterprise"
+        case .pro: return "Vault PDF Pro"
+        case .enterprise: return "Vault PDF Enterprise"
         }
     }
     
@@ -751,8 +751,10 @@ struct PaymentView: View {
     @Binding var paymentError: String?
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var paymentsManager: PaymentsManager
-    
+
     @State private var isAuthenticating = false
+    @State private var showingTerms = false
+    @State private var showingPrivacy = false
     
     var body: some View {
         NavigationStack {
@@ -944,20 +946,26 @@ struct PaymentView: View {
                 .font(OneBoxTypography.micro)
                 .foregroundColor(OneBoxColors.tertiaryText)
                 .multilineTextAlignment(.center)
-            
+
             HStack(spacing: OneBoxSpacing.medium) {
                 Button("Terms of Service") {
-                    // Open terms
+                    showingTerms = true
                 }
                 .font(OneBoxTypography.micro)
                 .foregroundColor(OneBoxColors.primaryGold)
-                
+
                 Button("Privacy Policy") {
-                    // Open privacy
+                    showingPrivacy = true
                 }
                 .font(OneBoxTypography.micro)
                 .foregroundColor(OneBoxColors.primaryGold)
             }
+        }
+        .sheet(isPresented: $showingTerms) {
+            LegalDocumentView(title: "Terms of Service", documentType: .terms)
+        }
+        .sheet(isPresented: $showingPrivacy) {
+            LegalDocumentView(title: "Privacy Policy", documentType: .privacy)
         }
     }
     
@@ -1038,11 +1046,20 @@ struct FeatureComparisonView: View {
                     Text("Feature Comparison")
                         .font(OneBoxTypography.sectionTitle)
                         .foregroundColor(OneBoxColors.primaryText)
-                    
-                    // Comparison table would go here
-                    Text("Detailed feature comparison coming soon...")
-                        .font(OneBoxTypography.body)
-                        .foregroundColor(OneBoxColors.secondaryText)
+
+                    VStack(spacing: 0) {
+                        comparisonRow("Daily Exports", free: "3", pro: "Unlimited")
+                        comparisonRow("PDF Merge & Split", free: "✓", pro: "✓")
+                        comparisonRow("PDF Compress", free: "✓", pro: "✓")
+                        comparisonRow("Image to PDF", free: "✓", pro: "✓")
+                        comparisonRow("Watermark PDF", free: "—", pro: "✓")
+                        comparisonRow("Sign PDF", free: "—", pro: "✓")
+                        comparisonRow("Redact PDF", free: "—", pro: "✓")
+                        comparisonRow("Workflows", free: "—", pro: "✓")
+                        comparisonRow("Priority Support", free: "—", pro: "✓")
+                    }
+                    .background(OneBoxColors.surfaceGraphite)
+                    .cornerRadius(OneBoxRadius.medium)
                 }
                 .padding(OneBoxSpacing.medium)
             }
@@ -1057,6 +1074,28 @@ struct FeatureComparisonView: View {
                 }
             }
         }
+    }
+
+    private func comparisonRow(_ feature: String, free: String, pro: String) -> some View {
+        HStack {
+            Text(feature)
+                .font(OneBoxTypography.body)
+                .foregroundColor(OneBoxColors.primaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(free)
+                .font(OneBoxTypography.body)
+                .foregroundColor(free == "✓" ? OneBoxColors.secureGreen : OneBoxColors.tertiaryText)
+                .frame(width: 60)
+
+            Text(pro)
+                .font(OneBoxTypography.body.bold())
+                .foregroundColor(pro == "✓" || pro == "Unlimited" ? OneBoxColors.primaryGold : OneBoxColors.tertiaryText)
+                .frame(width: 80)
+        }
+        .padding(.horizontal, OneBoxSpacing.medium)
+        .padding(.vertical, OneBoxSpacing.small)
+        .background(OneBoxColors.surfaceGraphite)
     }
 }
 

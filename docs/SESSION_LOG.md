@@ -4,6 +4,200 @@
 
 ---
 
+## 2024-12-22: Premium UI Redesign - Home Screen Hero & Usage Sections
+
+**Focus:**
+Complete redesign of home screen for premium, minimal, luxury aesthetic.
+
+**Issues Addressed:**
+1. Hero section was cluttered with gimmicky elements (100% SECURE dial, 3 green privacy badges)
+2. Tool cards had off-brand green "SECURE" text badges
+3. Usage section had negative framing ("X of 3 used")
+4. Logo needed to be more prominent with embedded tagline
+
+**Changes Made:**
+
+**Hero Section Complete Redesign:**
+- Removed: `safeDial` function (100% SECURE circular dial)
+- Removed: `privacyGuarantees` section (3 green badges: No Cloud, No Tracking, Encrypted)
+- Removed: `privacyGuaranteeItem` helper function
+- Added: Branded logo with embedded tagline (vaultpdf_sub_transparent2.png)
+- Added: Single elegant "100% Offline" gold badge
+- Fine-tuned positioning: 280pt height, -50pt top padding for minimal margin
+
+**Tool Cards Refined:**
+- Removed: Green "SECURE" text badges from each tool card
+- Added: Subtle gold shield icon (`shield.fill`) with 60% opacity
+- Cleaner appearance matching gold/black premium palette
+
+**Usage Section Redesigned:**
+- Changed from "X of 3 secure exports used" to "X free exports left" (positive framing)
+- Added elegant gold dot indicators for remaining exports
+- Added premium gold gradient "Unlock Unlimited" CTA button
+
+**Logo Iterations:**
+- Started with separate logo + "Fort Knox of PDF Apps" text
+- Evolved to logo with embedded "Your documents never leave" tagline
+- Multiple sizing iterations (200pt → 320pt → final 280pt)
+- Multiple position iterations (top padding: -12 → -60 → final -50)
+- Final: vaultpdf_sub_transparent2.png at 280pt height
+
+**Files Modified:**
+- `OneBox/OneBox/Views/NewHomeView.swift` - Complete hero and usage section redesign
+- `OneBox/OneBox/Assets.xcassets/VaultLogoWithText.imageset/Contents.json` - Updated to vaultpdf_sub_transparent2.png
+- `OneBox/OneBox/Assets.xcassets/VaultLogoWithText.imageset/` - Multiple logo files added
+
+**Status:** UI polish complete, all changes functional
+
+---
+
+## 2024-12-22: App Store Preparation - MultipeerConnectivity Removal & URL Updates
+
+**Focus:**
+Address App Store submission blockers identified in previous analysis.
+
+**Issues Addressed:**
+1. MultipeerConnectivity feature removed for v1.0 (requires Local Network permission)
+2. Placeholder URLs updated to real contact info (spuud.com, hello@spuud.com)
+3. Privacy policy date fixed to current date
+
+**Changes Made:**
+
+**MultipeerConnectivity Removal (SecureCollaborationView.swift):**
+- Removed `import MultipeerConnectivity`
+- Removed multipeerService StateObject and related state variables
+- Removed PeerDiscoveryView sheet and struct
+- Removed peerToPeer case from ShareMethod enum
+- Updated uploadSecureDocument to use local share URLs
+- Added comment noting MultipeerDocumentService.swift available for future expansion
+
+**URL Updates:**
+- SettingsView.swift: Report an Issue, Report a Bug, Request a Feature → hello@spuud.com
+- HelpCenterView.swift: Email Support → hello@spuud.com
+- PRIVACY_POLICY.md: Support email → hello@spuud.com, date → December 22, 2024
+- README.md: Support section → spuud.com, hello@spuud.com
+- CONTRIBUTING.md: Contact info → hello@spuud.com, title → Vault PDF
+- QUICKSTART.md: Support section → spuud.com, hello@spuud.com
+- APP_STORE_SUBMISSION_CHECKLIST.md: Support email → hello@spuud.com
+
+**Files Modified:**
+- `OneBox/OneBox/Views/Advanced/SecureCollaborationView.swift`
+- `OneBox/OneBox/Views/SettingsView.swift`
+- `OneBox/OneBox/Views/Help/HelpCenterView.swift`
+- `OneBox/PRIVACY_POLICY.md`
+- `OneBox/README.md`
+- `OneBox/CONTRIBUTING.md`
+- `OneBox/QUICKSTART.md`
+- `OneBox/APP_STORE_SUBMISSION_CHECKLIST.md`
+
+**Outstanding:**
+- App icon still needs 1024x1024 PNG (logo files not found in doc directory)
+
+---
+
+## 2025-12-21: Pre-Launch Audit + Placeholder Cleanup (Continued Session)
+
+**Focus:**
+Pre-launch audit to remove all placeholder/non-functional UI elements.
+
+**Issues Addressed:**
+1. PDF compression UI too complex (quality presets unnecessary)
+2. Grayscale option missing for compression
+3. Grayscale size estimate not updating dynamically
+4. Placeholder/non-functional UI elements throughout app
+
+**Fixes Applied:**
+
+**Phase 1: PDF Compression Improvements**
+- Simplified UI: Removed quality presets (High/Medium/Low), single size slider
+- Added grayscale toggle for 10-15% smaller files
+- Fixed estimate to update when grayscale toggled (separated base vs computed values)
+
+**Phase 2: Pre-Launch Audit**
+- Identified 6 placeholder/non-functional elements
+- Conducted detailed audit of Integrity Dashboard functionality
+
+**Phase 3: Placeholder/Fake UI Removal**
+- HelpCenterView: Replaced "Articles coming soon..." with helpful guidance
+- HelpCenterView: Replaced video tutorials placeholder with redirect message
+- UpgradeFlowView: Added actual feature comparison table (was "coming soon")
+- WorkflowConciergeView: Removed disabled Cancel button
+- ProfessionalSigningView: Removed disabled "Visible signature" toggle
+- NewHomeView: Replaced non-functional Search button with Privacy button
+- IntegrityDashboardView: Removed 3 fake quick action buttons:
+  - Backup Settings (only played haptic)
+  - Privacy Audit (only refreshed page)
+  - Export Logs (only played haptic)
+
+**Files Modified:**
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Grayscale conversion
+- `OneBox/Modules/JobEngine/JobEngine.swift` - convertToGrayscale setting
+- `OneBox/OneBox/Views/ToolFlowView.swift` - Simplified compression UI
+- `OneBox/OneBox/Views/Help/HelpCenterView.swift` - Placeholder text replaced
+- `OneBox/OneBox/Views/Upgrade/UpgradeFlowView.swift` - Feature comparison table
+- `OneBox/OneBox/Views/WorkflowConciergeView.swift` - Disabled button removed
+- `OneBox/OneBox/Views/Advanced/ProfessionalSigningView.swift` - Disabled toggle removed
+- `OneBox/OneBox/Views/NewHomeView.swift` - Search→Privacy button
+- `OneBox/OneBox/Views/IntegrityDashboardView.swift` - 3 fake buttons removed
+
+**Status:** All fixes complete. App is cleaner for launch.
+
+---
+
+## 2025-12-21: Critical Bug Fixes + Empty Button Implementations
+
+**Issues Addressed:**
+1. CRITICAL: 3 force unwrap crashes in encryption code (`.combined!`)
+2. CRITICAL: Infinite loop hang risk in workflow execution
+3. Empty button handlers throughout the app
+4. Missing Terms/Privacy policy sheets
+5. Missing Privacy Info modal for tools
+6. Missing document preview in search
+
+**Fixes Applied:**
+
+**Phase 1: Crash Prevention**
+- Fixed `Privacy.swift:371` - `encryptedData.combined!` → `guard let`
+- Fixed `MultipeerDocumentService.swift:179` - `sealedBox.combined!` → `guard let`
+- Fixed `SecureCollaborationView.swift:768` - `sealedBox.combined!` → `guard let`
+
+**Phase 2: Hang Prevention**
+- Added 5-minute timeout to `waitForJobCompletion()` in WorkflowExecutionService
+- Added `WorkflowError.timeout` error case
+
+**Phase 3: Terms/Privacy Implementation**
+- Created `LegalDocumentView` component with actual policy content
+- Added sheets to OnboardingView for Terms/Privacy buttons
+- Added sheets to UpgradeFlowView for Terms/Privacy buttons
+
+**Phase 4: Privacy Info Modal**
+- Created `ToolPrivacyInfoView` showing privacy details per tool
+- Implemented `showPrivacyInfo()` function in NewHomeView
+
+**Phase 5: Document Preview**
+- Added QuickLook preview for documents in search results
+- Documents now open in native iOS preview
+
+**Phase 6: Help Center**
+- Created `ContactSupportView` with support options
+- Created `VideoTutorialsView` with coming soon placeholders
+- Created `FeatureTourView` with interactive tour
+- Created `KeyboardShortcutsView` with iPad shortcuts
+
+**Files Modified:**
+- `OneBox/Modules/Privacy/Privacy.swift`
+- `OneBox/Modules/Networking/MultipeerDocumentService.swift`
+- `OneBox/OneBox/Views/Advanced/SecureCollaborationView.swift`
+- `OneBox/OneBox/Services/WorkflowExecutionService.swift`
+- `OneBox/OneBox/Views/Onboarding/OnboardingView.swift`
+- `OneBox/OneBox/Views/Upgrade/UpgradeFlowView.swift`
+- `OneBox/OneBox/Views/NewHomeView.swift`
+- `OneBox/OneBox/Views/Help/HelpCenterView.swift`
+
+**Status:** All fixes complete
+
+---
+
 ## 2025-12-21: Preview File Issue FINALLY Fixed + Workflow UI Cleanup
 
 **Issues Reported:**

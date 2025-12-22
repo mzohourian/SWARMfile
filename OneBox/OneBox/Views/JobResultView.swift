@@ -175,6 +175,15 @@ struct JobResultView: View {
                         icon: "arrow.down.circle"
                     )
                 }
+
+                // Show target vs achieved for compression jobs
+                if let targetInfo = compressionTargetInfo {
+                    InfoRow(
+                        label: targetInfo.achieved ? "Target Achieved" : "Best Achievable",
+                        value: targetInfo.message,
+                        icon: targetInfo.achieved ? "checkmark.circle.fill" : "info.circle"
+                    )
+                }
             }
             .padding()
             .background(OneBoxColors.secondaryGraphite)
@@ -397,6 +406,28 @@ struct JobResultView: View {
         }
 
         return nil
+    }
+
+    private var compressionTargetInfo: (achieved: Bool, message: String)? {
+        guard job.type == .pdfCompress,
+              let targetMB = job.settings.targetSizeMB else {
+            return nil
+        }
+
+        let outputSize = job.outputURLs.reduce(Int64(0)) { sum, url in
+            let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+            let size = attrs?[.size] as? Int64 ?? 0
+            return sum + size
+        }
+
+        let outputMB = Double(outputSize) / 1_000_000.0
+        let targetBytes = Int64(targetMB * 1_000_000)
+
+        if outputSize <= targetBytes {
+            return (true, String(format: "%.1f MB (target: %.1f MB)", outputMB, targetMB))
+        } else {
+            return (false, String(format: "%.1f MB (target was %.1f MB)", outputMB, targetMB))
+        }
     }
     
     // MARK: - File Access Helper
@@ -642,7 +673,11 @@ struct QuickLookPreview: UIViewControllerRepresentable {
                 return newItem
             }
 
-            // Last resort: return URL directly (QuickLook can sometimes handle this)
+            // Last resort: return URL directly if file exists (QuickLook can sometimes handle this)
+            guard FileManager.default.fileExists(atPath: currentURL.path) else {
+                print("❌ File does not exist for preview: \(currentURL.path)")
+                return currentURL as QLPreviewItem // QuickLook will show appropriate error
+            }
             print("⚠️ No preview item available, using URL directly: \(currentURL.path)")
             // Ensure we have security-scoped access
             _ = currentURL.startAccessingSecurityScopedResource()

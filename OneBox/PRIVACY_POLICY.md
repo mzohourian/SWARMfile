@@ -1,14 +1,14 @@
-# OneBox Privacy Policy
+# Vault PDF Privacy Policy
 
-**Last Updated: December 2, 2025**
+**Last Updated: December 22, 2024**
 
 ## Our Privacy Commitment
 
-OneBox is built with privacy as our fundamental principle. We believe your files and data should stay private and under your complete control.
+Vault PDF is built with privacy as our fundamental principle. We believe your files and data should stay private and under your complete control.
 
 ## Data Collection: None
 
-**We collect NO data whatsoever from OneBox users.**
+**We collect NO data whatsoever from Vault PDF users.**
 
 - ❌ No personal information
 - ❌ No file contents or metadata
@@ -20,7 +20,7 @@ OneBox is built with privacy as our fundamental principle. We believe your files
 - ❌ No browsing history
 - ❌ No advertising identifiers
 
-## How OneBox Protects Your Privacy
+## How Vault PDF Protects Your Privacy
 
 ### 100% On-Device Processing
 - All file processing happens entirely on your iPhone or iPad
@@ -35,7 +35,7 @@ OneBox is built with privacy as our fundamental principle. We believe your files
 - Document signing: 100% offline
 
 ### Apple-Only Technologies
-OneBox uses exclusively Apple frameworks and technologies:
+Vault PDF uses exclusively Apple frameworks and technologies:
 - **PDFKit** for PDF manipulation
 - **Core Graphics** for image processing
 - **Core Spotlight** for on-device search
@@ -71,7 +71,7 @@ All of this data:
 
 ## Third-Party Services: None
 
-OneBox does not integrate with any third-party services, analytics platforms, advertising networks, or cloud providers for its core functionality.
+Vault PDF does not integrate with any third-party services, analytics platforms, advertising networks, or cloud providers for its core functionality.
 
 ### In-App Purchases
 - Handled directly by Apple's StoreKit
@@ -95,7 +95,7 @@ OneBox does not integrate with any third-party services, analytics platforms, ad
 
 ## Children's Privacy
 
-OneBox does not collect any personal information from anyone, including children under 13. The app is designed to be safe for users of all ages.
+Vault PDF does not collect any personal information from anyone, including children under 13. The app is designed to be safe for users of all ages.
 
 ## Data Retention
 
@@ -105,8 +105,8 @@ Since we collect no data, there is nothing to retain. All processing happens loc
 
 You have complete control over your data because it never leaves your device:
 
-- **Access**: All your data is on your device in the OneBox app
-- **Deletion**: Delete the app to remove all OneBox data
+- **Access**: All your data is on your device in the Vault PDF app
+- **Deletion**: Delete the app to remove all Vault PDF data
 - **Portability**: Export your processed files to any app or service you choose
 - **Transparency**: This privacy policy covers everything - there are no hidden data practices
 
@@ -121,7 +121,7 @@ If we ever change our privacy practices (which would only happen to become more 
 
 Since we collect no data, there are no privacy-related inquiries about data we hold. However, if you have questions about our privacy practices:
 
-- **Support Email**: [Your support email]
+- **Support Email**: vaultpdf@spuud.com
 - **Subject Line**: "Privacy Policy Question"
 
 ## Legal Basis (GDPR Compliance)
@@ -154,6 +154,6 @@ For California residents:
 
 ---
 
-**Summary**: OneBox collects zero data. Your files are processed entirely on your device using Apple's built-in technologies. Nothing leaves your device unless you explicitly choose to export or share it through iOS standard sharing mechanisms.
+**Summary**: Vault PDF collects zero data. Your files are processed entirely on your device using Apple's built-in technologies. Nothing leaves your device unless you explicitly choose to export or share it through iOS standard sharing mechanisms.
 
-**Verification**: You can verify this by monitoring network activity while using OneBox - you'll see no data transmission for core features.
+**Verification**: You can verify this by monitoring network activity while using Vault PDF - you'll see no data transmission for core features.

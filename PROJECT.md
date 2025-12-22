@@ -1,9 +1,9 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-21
+**Last Updated:** 2024-12-22
 
 ## What This Is
-**OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
+**Vault PDF** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
 
 **Target Users:** Anyone who works with PDFs and images on iPhone/iPad and cares about privacy.
 
@@ -58,54 +58,98 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 | # | Severity | Issue | Location | Status |
 |---|----------|-------|----------|--------|
-| 1 | Low | Swift 6 concurrency warnings (3) | MultipeerDocumentService, OnDeviceSearchService | Non-blocking |
-| 2 | Info | "Update to recommended settings" | Xcode project | Informational |
+| 1 | Medium | Accessibility labels incomplete | Multiple views | ~50 labels needed |
+| 2 | Low | Swift 6 concurrency warnings (3) | MultipeerDocumentService, OnDeviceSearchService | Non-blocking |
+| 3 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
-- **MAJOR FIX: "Files removed or deleted" preview error:**
-  - **Root cause identified:** SwiftUI state race condition - `showPreview` was set to `true` before `previewURL` was updated, causing fullScreenCover to render with nil URL
-  - **Solution:** Changed from separate `showPreview` + `previewURL` states to single `PreviewItem` (Identifiable wrapper) with `fullScreenCover(item:)` binding
-  - Also simplified file persistence logic in JobEngine.swift
-  - Also simplified ensureFileAccessible() in JobResultView.swift
-- **Removed misleading "Create Workflow" from feature flow:**
-  - Replaced interactive button with informational tip
-- **Fixed Ads module build error:**
-  - Removed UIComponents dependency, created local AdColors struct
-- All previous fixes remain in place
+- **RESOLVED: App icon and branding complete** - Using vaultpdflogo.png (prominent gold shield on dark background)
+  - App icon: 1024x1024 PNG properly configured in AppIcon.appiconset
+  - VaultLogo integrated throughout app: Home screen, Lock screen, Onboarding, Paywall, Settings
+- **Repurposed Biometric Lock for real security** - Now locks the entire app (not just processing)
+  - App-level lock screen with Face ID/Touch ID
+  - Re-locks automatically when app goes to background
+  - Secure Vault requires biometric to access encrypted files
+- **Fixed critical Face ID crash** - Added NSFaceIDUsageDescription to project.yml for XcodeGen
+- **Fixed invalid SF Symbol** - Replaced non-existent "vault.fill" with "lock.shield.fill" in PrivacyDashboardView
+- **Fixed MainActor isolation crashes** when all privacy features enabled:
+  - JobEngine.swift: Wrapped privacyDelegate calls in MainActor.run { }
+  - Cached zeroTraceEnabled to avoid synchronous MainActor access from non-isolated context
+  - Fixed deleteJob and processJob secure file cleanup
+- **Fixed PBKDF2 encryption crashes** (Privacy.swift):
+  - Fixed 4 force unwraps in key derivation
+  - Fixed type mismatch: Int32 for CCKeyDerivationPBKDF result
+  - Added password validation (reject empty passwords)
+  - Fixed salt generation with safe guard check
+- **Enforced dark-only aesthetic** - ThemeManager simplified to always return .dark
+- **Fixed 3 potential crash bugs** (`.combined!` force unwraps in encryption code)
+- **Fixed infinite loop hang risk** (added 5-minute timeout to workflow execution)
+- **Implemented Terms/Privacy sheets** in Onboarding and Upgrade flows
+- **Implemented Privacy Info modal** for all tools in HomeView
+- **Implemented Document preview** in search results
+- **Implemented Help Center buttons** (Contact Support, Video Tutorials, Feature Tour, Shortcuts)
+- **Fixed PDF compression issues:**
+  - Minimum size estimate now uses realistic values (0.3x scale, 0.05 quality)
+  - Removed 50% cap that prevented aggressive compression targets
+  - Added guard check for PDF context creation to prevent crashes
+  - Added autoreleasepool for memory management during compression
+  - Added maxDimension clamping (2000px) to prevent memory overflow
+- **Simplified PDF compression UI** - Removed quality presets, just size slider
+- **Added grayscale option** for PDF compression (10-15% smaller files)
+- **Fixed grayscale estimate** - Now updates dynamically when toggle changes
+- **Removed placeholder/non-functional UI elements:**
+  - HelpCenterView: Replaced "coming soon" text with helpful guidance
+  - UpgradeFlowView: Added real feature comparison table
+  - WorkflowConciergeView: Removed disabled Cancel button
+  - ProfessionalSigningView: Removed disabled "Visible signature" toggle
+  - NewHomeView: Replaced non-functional Search button with Privacy button
+  - IntegrityDashboardView: Removed 3 fake quick action buttons (Backup Settings, Privacy Audit, Export Logs)
+- **Fixed 4 crash risks found in pre-launch audit:**
+  - InteractivePDFPageView.swift: Force unwrap on graphics context → guard let
+  - CorePDF.swift: Missing guard on watermark PDF context creation
+  - CorePDF.swift: Force unwrap `as!` on file size check → safe cast
+  - RedactionView.swift: Silent failure if graphics context nil → proper error handling
+- **Fixed file preview edge case** in JobResultView (missing file check in QuickLook fallback)
 
 ---
 
 ## Last Session Summary
 
-**Date:** 2025-12-21
+**Date:** 2024-12-22 (Premium UI Redesign - Home Screen)
 
 **What Was Done:**
-- **Fixed "files removed or deleted" preview error (USER VERIFIED WORKING):**
-  - Root cause: SwiftUI state race condition between `showPreview` and `previewURL`
-  - Solution: Combined into single `PreviewItem` with `fullScreenCover(item:)` binding
-  - Simplified file persistence logic in JobEngine.swift
-  - Simplified ensureFileAccessible() in JobResultView.swift
-- **Removed misleading "Create Workflow" option from feature flow:**
-  - Replaced with informational tip about Workflows feature
-- **Fixed Ads module build error:**
-  - Created local AdColors struct to avoid UIComponents dependency
+- **Home screen hero section completely redesigned:**
+  - Removed cluttered elements (100% SECURE dial, 3 green privacy badges)
+  - Added premium branded logo with embedded tagline (vaultpdf_sub_transparent2.png)
+  - Single gold "100% Offline" badge - elegant, on-brand
+  - Minimal luxury aesthetic with optimized spacing
+- **Tool cards refined:**
+  - Replaced green "SECURE" text badges with subtle gold shield icons
+  - Cleaner, on-brand appearance matching gold/black palette
+- **Usage section redesigned:**
+  - Changed from "X of 3 used" to "X free exports left" (positive framing)
+  - Added elegant gold dot indicators
+  - Premium gold gradient "Unlock Unlimited" CTA button
+- **Multiple logo iterations:**
+  - Started with separate logo + text, evolved to logo with embedded tagline
+  - Fine-tuned sizing (280pt) and positioning (-50pt top padding)
+  - Fixed overlap issues between logo tagline and badge
 
 **What's Unfinished:**
-- None - all reported issues resolved and verified by user
+- None - UI polish complete
 
 **Files Modified This Session:**
-- `OneBox/Modules/JobEngine/JobEngine.swift` - Simplified saveOutputFilesToDocuments() and loadJobs()
-- `OneBox/OneBox/Views/JobResultView.swift` - Fixed state race condition with PreviewItem pattern
-- `OneBox/OneBox/Views/ToolFlowView.swift` - Removed Create Workflow option, added tip banner
-- `OneBox/Modules/Ads/Ads.swift` - Added local AdColors, removed UIComponents dependency
+- `OneBox/OneBox/Views/NewHomeView.swift` - Complete hero and usage section redesign
+- `OneBox/OneBox/Assets.xcassets/VaultLogoWithText.imageset/Contents.json` - Updated to vaultpdf_sub_transparent2.png
+- Multiple logo files added to VaultLogoWithText.imageset
 
 ---
 
 ## Next Steps (Priority Order)
 
-1. **Continue testing other features** - Sign PDF, Watermark, Redact
-2. **Test Recents tab** - Verify old jobs can still preview files
-3. **Prepare for App Store submission** - Review checklist
+1. **Add accessibility labels** - ~50 labels needed across PaywallView, ToolFlowView, HomeView
+2. **Final device testing** - Test all features on physical device before submission
+3. **App Store submission** - All blockers resolved, ready for review
 
 ---
 

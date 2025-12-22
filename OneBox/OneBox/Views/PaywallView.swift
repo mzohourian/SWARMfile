@@ -42,7 +42,7 @@ struct PaywallView: View {
                 }
                 .padding()
             }
-            .navigationTitle("OneBox Pro")
+            .navigationTitle("Vault PDF Pro")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -61,15 +61,31 @@ struct PaywallView: View {
 
     private var headerView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "crown.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.orange, .yellow],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+            // Brand logo with PRO badge
+            ZStack(alignment: .bottomTrailing) {
+                Image("VaultLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 100, height: 100)
+                    .clipShape(Circle())
+                    .shadow(color: Color.orange.opacity(0.3), radius: 12, x: 0, y: 0)
+
+                // PRO badge
+                Text("PRO")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        LinearGradient(
+                            colors: [.orange, .yellow],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                )
+                    .cornerRadius(8)
+                    .offset(x: 4, y: 4)
+            }
 
             Text("Unlock All Features")
                 .font(.title)

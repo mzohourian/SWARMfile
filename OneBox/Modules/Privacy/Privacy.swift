@@ -63,7 +63,7 @@ public protocol JobPrivacyDelegate {
 @MainActor
 public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
     public static let shared = PrivacyManager()
-    
+
     @Published public var isSecureVaultEnabled = false
     @Published public var isZeroTraceEnabled = false
     @Published public var isBiometricLockEnabled = false
@@ -72,6 +72,9 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
     @Published public var airplaneModeStatus: AirplaneModeStatus = .unknown
     @Published public var memoryStatus = MemoryStatus()
     @Published public var networkStatus = NetworkStatus()
+
+    // App-level lock state
+    @Published public var isAppUnlocked = false
     
     private var auditTrail: [PrivacyAuditEntry] = []
     private var networkMonitor: NWPathMonitor?
@@ -145,26 +148,65 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
         logAuditEvent(.complianceModeChanged(mode))
     }
     
-    // MARK: - Biometric Authentication
+    // MARK: - App-Level Biometric Lock
 
+    /// Authenticate to unlock the app. Returns true if successful or if biometric lock is disabled.
     @MainActor
-    public func authenticateForProcessing() async throws {
-        guard isBiometricLockEnabled else { return }
+    public func authenticateToUnlockApp() async -> Bool {
+        // If biometric lock is disabled, app is always unlocked
+        guard isBiometricLockEnabled else {
+            isAppUnlocked = true
+            return true
+        }
+
+        // If already unlocked, no need to authenticate again
+        guard !isAppUnlocked else { return true }
 
         let context = LAContext()
         var error: NSError?
 
-        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
-            throw PrivacyError.biometricNotAvailable
-        }
-
-        let reason = "Authenticate to process files securely"
+        // Check if biometrics are available, fall back to passcode
+        let canUseBiometrics = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+        let policy: LAPolicy = canUseBiometrics ? .deviceOwnerAuthenticationWithBiometrics : .deviceOwnerAuthentication
+        let reason = "Unlock Vault PDF to access your documents"
 
         do {
-            let success = try await context.evaluatePolicy(
-                .deviceOwnerAuthenticationWithBiometrics,
-                localizedReason: reason
-            )
+            let success = try await context.evaluatePolicy(policy, localizedReason: reason)
+
+            if success {
+                isAppUnlocked = true
+                logAuditEvent(.biometricAuthenticationSucceeded)
+                return true
+            } else {
+                logAuditEvent(.biometricAuthenticationFailed)
+                return false
+            }
+        } catch {
+            logAuditEvent(.biometricAuthenticationFailed)
+            return false
+        }
+    }
+
+    /// Lock the app (called when app goes to background)
+    public func lockApp() {
+        guard isBiometricLockEnabled else { return }
+        isAppUnlocked = false
+    }
+
+    /// Authenticate to access encrypted vault files
+    @MainActor
+    public func authenticateForVaultAccess() async throws {
+        guard isSecureVaultEnabled else { return }
+
+        let context = LAContext()
+        var error: NSError?
+
+        let canUseBiometrics = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+        let policy: LAPolicy = canUseBiometrics ? .deviceOwnerAuthenticationWithBiometrics : .deviceOwnerAuthentication
+        let reason = "Authenticate to access encrypted files"
+
+        do {
+            let success = try await context.evaluatePolicy(policy, localizedReason: reason)
 
             if success {
                 logAuditEvent(.biometricAuthenticationSucceeded)
@@ -173,6 +215,16 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
             }
         } catch {
             logAuditEvent(.biometricAuthenticationFailed)
+            throw PrivacyError.biometricAuthenticationFailed
+        }
+    }
+
+    // Legacy method for JobPrivacyDelegate - now just checks app is unlocked
+    @MainActor
+    public func authenticateForProcessing() async throws {
+        // No longer requires separate auth - app-level lock handles this
+        guard isBiometricLockEnabled else { return }
+        guard isAppUnlocked else {
             throw PrivacyError.biometricAuthenticationFailed
         }
     }
@@ -345,35 +397,46 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
     // MARK: - Encrypted Output
     
     public func encryptFile(at sourceURL: URL, password: String) throws -> URL {
+        // Validate password is not empty
+        guard !password.isEmpty else {
+            throw PrivacyError.encryptionFailed
+        }
+
         let encryptedURL = sourceURL.appendingPathExtension("encrypted")
-        
+
         guard let sourceData = try? Data(contentsOf: sourceURL) else {
             throw PrivacyError.encryptionFailed
         }
-        
+
         // Generate random salt for each encryption
         var salt = Data(count: 16) // 128-bit salt
-        let result = salt.withUnsafeMutableBytes {
-            SecRandomCopyBytes(kSecRandomDefault, 16, $0.bindMemory(to: UInt8.self).baseAddress!)
+        let result = salt.withUnsafeMutableBytes { buffer -> OSStatus in
+            guard let baseAddress = buffer.bindMemory(to: UInt8.self).baseAddress else {
+                return errSecAllocate
+            }
+            return SecRandomCopyBytes(kSecRandomDefault, 16, baseAddress)
         }
         guard result == errSecSuccess else {
             throw PrivacyError.encryptionFailed
         }
-        
+
         // Derive key using PBKDF2 (secure key derivation)
         let key = try deriveKey(from: password, salt: salt)
-        
+
         do {
             let encryptedData = try AES.GCM.seal(sourceData, using: key)
-            
+
             // Prepend salt to encrypted data for decryption
+            guard let combinedData = encryptedData.combined else {
+                throw PrivacyError.encryptionFailed
+            }
             var finalData = salt
-            finalData.append(encryptedData.combined!)
-            
+            finalData.append(combinedData)
+
             try finalData.write(to: encryptedURL)
-            
+
             logAuditEvent(.fileEncrypted(sourceURL.lastPathComponent))
-            
+
             return encryptedURL
         } catch {
             throw PrivacyError.encryptionFailed
@@ -382,36 +445,43 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
     
     /// Securely derives encryption key from password using PBKDF2
     private func deriveKey(from password: String, salt: Data) throws -> SymmetricKey {
-        guard let passwordData = password.data(using: .utf8) else {
+        guard let passwordData = password.data(using: .utf8), !passwordData.isEmpty else {
             throw PrivacyError.encryptionFailed
         }
-        
+
         let iterations: Int = 100_000 // NIST recommended minimum
         let keyLength: Int = 32 // 256-bit key
-        
+
         var derivedKey = Data(count: keyLength)
-        let result = derivedKey.withUnsafeMutableBytes { derivedKeyBytes in
+        var result: Int32 = Int32(kCCParamError)
+
+        derivedKey.withUnsafeMutableBytes { derivedKeyBytes in
             passwordData.withUnsafeBytes { passwordBytes in
                 salt.withUnsafeBytes { saltBytes in
-                    CCKeyDerivationPBKDF(
+                    guard let derivedPtr = derivedKeyBytes.bindMemory(to: UInt8.self).baseAddress,
+                          let passwordPtr = passwordBytes.bindMemory(to: Int8.self).baseAddress,
+                          let saltPtr = saltBytes.bindMemory(to: UInt8.self).baseAddress else {
+                        return
+                    }
+                    result = CCKeyDerivationPBKDF(
                         CCPBKDFAlgorithm(kCCPBKDF2),
-                        passwordBytes.bindMemory(to: Int8.self).baseAddress!,
+                        passwordPtr,
                         passwordData.count,
-                        saltBytes.bindMemory(to: UInt8.self).baseAddress!,
+                        saltPtr,
                         salt.count,
                         CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
                         UInt32(iterations),
-                        derivedKeyBytes.bindMemory(to: UInt8.self).baseAddress!,
+                        derivedPtr,
                         keyLength
                     )
                 }
             }
         }
-        
+
         guard result == kCCSuccess else {
             throw PrivacyError.encryptionFailed
         }
-        
+
         return SymmetricKey(data: derivedKey)
     }
     

@@ -16,6 +16,10 @@ struct HelpCenterView: View {
     @State private var recentlyViewed: [HelpArticle] = []
     @State private var popularArticles: [HelpArticle] = []
     @State private var featuredTutorials: [Tutorial] = []
+    @State private var showingContactSupport = false
+    @State private var showingVideoTutorials = false
+    @State private var showingFeatureTour = false
+    @State private var showingShortcuts = false
     
     var body: some View {
         NavigationStack {
@@ -62,8 +66,20 @@ struct HelpCenterView: View {
         .onAppear {
             loadHelpContent()
         }
+        .sheet(isPresented: $showingContactSupport) {
+            ContactSupportView()
+        }
+        .sheet(isPresented: $showingVideoTutorials) {
+            VideoTutorialsView()
+        }
+        .sheet(isPresented: $showingFeatureTour) {
+            FeatureTourView()
+        }
+        .sheet(isPresented: $showingShortcuts) {
+            KeyboardShortcutsView()
+        }
     }
-    
+
     // MARK: - Search Header
     private var searchHeader: some View {
         OneBoxCard(style: .elevated) {
@@ -531,19 +547,19 @@ struct HelpCenterView: View {
     }
     
     private func contactSupport() {
-        // Open support contact
+        showingContactSupport = true
     }
-    
+
     private func showVideoTutorials() {
-        // Navigate to video tutorials
+        showingVideoTutorials = true
     }
-    
+
     private func startFeatureTour() {
-        // Start interactive feature tour
+        showingFeatureTour = true
     }
-    
+
     private func showShortcuts() {
-        // Show keyboard shortcuts
+        showingShortcuts = true
     }
 }
 
@@ -650,9 +666,8 @@ struct CategoryDetailView: View {
                 Text("Articles in this category")
                     .font(OneBoxTypography.cardTitle)
                     .foregroundColor(OneBoxColors.primaryText)
-                
-                // Articles would be loaded here
-                Text("Articles coming soon...")
+
+                Text("Browse the guides above or contact support for personalized help.")
                     .font(OneBoxTypography.caption)
                     .foregroundColor(OneBoxColors.tertiaryText)
             }
@@ -800,6 +815,288 @@ struct TutorialDetailView: View {
         .background(OneBoxColors.primaryGraphite)
         .navigationTitle(tutorial.title)
         .navigationBarTitleDisplayMode(.large)
+    }
+}
+
+// MARK: - Contact Support View
+
+struct ContactSupportView: View {
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: OneBoxSpacing.large) {
+                    Image(systemName: "envelope.circle.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(OneBoxColors.primaryGold)
+
+                    Text("Contact Support")
+                        .font(OneBoxTypography.heroTitle)
+                        .foregroundColor(OneBoxColors.primaryText)
+
+                    Text("We're here to help! Since Vault PDF is a privacy-first app, we don't collect any usage data. Please describe your issue below.")
+                        .font(OneBoxTypography.body)
+                        .foregroundColor(OneBoxColors.secondaryText)
+                        .multilineTextAlignment(.center)
+
+                    VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
+                        supportOption("Email Support", "envelope.fill", "vaultpdf@spuud.com")
+                        supportOption("In-App Feedback", "bubble.left.fill", "Use the feedback form in Settings")
+                        supportOption("FAQ", "questionmark.circle.fill", "Check our frequently asked questions")
+                    }
+                    .padding(.top, OneBoxSpacing.large)
+                }
+                .padding(OneBoxSpacing.large)
+            }
+            .background(OneBoxColors.primaryGraphite)
+            .navigationTitle("Contact Support")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .foregroundColor(OneBoxColors.primaryGold)
+                }
+            }
+        }
+    }
+
+    private func supportOption(_ title: String, _ icon: String, _ detail: String) -> some View {
+        HStack(spacing: OneBoxSpacing.medium) {
+            Image(systemName: icon)
+                .font(.system(size: 24))
+                .foregroundColor(OneBoxColors.primaryGold)
+                .frame(width: 40)
+
+            VStack(alignment: .leading, spacing: OneBoxSpacing.tiny) {
+                Text(title)
+                    .font(OneBoxTypography.cardTitle)
+                    .foregroundColor(OneBoxColors.primaryText)
+                Text(detail)
+                    .font(OneBoxTypography.caption)
+                    .foregroundColor(OneBoxColors.secondaryText)
+            }
+        }
+        .padding(OneBoxSpacing.medium)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(OneBoxColors.surfaceGraphite)
+        .cornerRadius(OneBoxRadius.medium)
+    }
+}
+
+// MARK: - Video Tutorials View
+
+struct VideoTutorialsView: View {
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: OneBoxSpacing.large) {
+                    Image(systemName: "book.pages.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(OneBoxColors.primaryGold)
+
+                    Text("Learn OneBox")
+                        .font(OneBoxTypography.heroTitle)
+                        .foregroundColor(OneBoxColors.primaryText)
+
+                    Text("Explore our written guides in the Help Center to master all features. Tap the Feature Tour for an interactive walkthrough.")
+                        .font(OneBoxTypography.body)
+                        .foregroundColor(OneBoxColors.secondaryText)
+                        .multilineTextAlignment(.center)
+
+                    Button(action: { dismiss() }) {
+                        HStack {
+                            Image(systemName: "arrow.left.circle.fill")
+                            Text("Back to Help Center")
+                        }
+                        .font(OneBoxTypography.body)
+                        .foregroundColor(OneBoxColors.primaryGold)
+                    }
+                    .padding(.top, OneBoxSpacing.medium)
+                }
+                .padding(OneBoxSpacing.large)
+            }
+            .background(OneBoxColors.primaryGraphite)
+            .navigationTitle("Video Tutorials")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .foregroundColor(OneBoxColors.primaryGold)
+                }
+            }
+        }
+    }
+
+    private func tutorialPlaceholder(_ title: String, _ duration: String) -> some View {
+        HStack {
+            Image(systemName: "play.circle.fill")
+                .font(.system(size: 32))
+                .foregroundColor(OneBoxColors.primaryGold.opacity(0.5))
+
+            VStack(alignment: .leading) {
+                Text(title)
+                    .font(OneBoxTypography.cardTitle)
+                    .foregroundColor(OneBoxColors.primaryText)
+                Text(duration + " • Coming Soon")
+                    .font(OneBoxTypography.caption)
+                    .foregroundColor(OneBoxColors.tertiaryText)
+            }
+
+            Spacer()
+        }
+        .padding(OneBoxSpacing.medium)
+        .background(OneBoxColors.surfaceGraphite.opacity(0.5))
+        .cornerRadius(OneBoxRadius.medium)
+    }
+}
+
+// MARK: - Feature Tour View
+
+struct FeatureTourView: View {
+    @Environment(\.dismiss) var dismiss
+    @State private var currentStep = 0
+
+    private let tourSteps = [
+        ("Fort Knox Security", "shield.lefthalf.filled", "All processing happens on your device. Your documents never leave your control."),
+        ("Powerful PDF Tools", "doc.fill", "Merge, split, compress, sign, redact, and watermark PDFs with ease."),
+        ("Smart Workflows", "gearshape.2.fill", "Automate repetitive tasks with customizable workflows."),
+        ("Privacy Dashboard", "lock.shield.fill", "Monitor your security settings and audit trail in one place.")
+    ]
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: OneBoxSpacing.xxl) {
+                Spacer()
+
+                Image(systemName: tourSteps[currentStep].1)
+                    .font(.system(size: 80))
+                    .foregroundColor(OneBoxColors.primaryGold)
+
+                Text(tourSteps[currentStep].0)
+                    .font(OneBoxTypography.heroTitle)
+                    .foregroundColor(OneBoxColors.primaryText)
+
+                Text(tourSteps[currentStep].2)
+                    .font(OneBoxTypography.body)
+                    .foregroundColor(OneBoxColors.secondaryText)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, OneBoxSpacing.large)
+
+                Spacer()
+
+                // Progress dots
+                HStack(spacing: OneBoxSpacing.small) {
+                    ForEach(0..<tourSteps.count, id: \.self) { index in
+                        Circle()
+                            .fill(index == currentStep ? OneBoxColors.primaryGold : OneBoxColors.surfaceGraphite)
+                            .frame(width: 8, height: 8)
+                    }
+                }
+
+                // Navigation buttons
+                HStack(spacing: OneBoxSpacing.medium) {
+                    if currentStep > 0 {
+                        Button("Previous") {
+                            withAnimation { currentStep -= 1 }
+                        }
+                        .foregroundColor(OneBoxColors.secondaryText)
+                    }
+
+                    Spacer()
+
+                    Button(currentStep < tourSteps.count - 1 ? "Next" : "Done") {
+                        if currentStep < tourSteps.count - 1 {
+                            withAnimation { currentStep += 1 }
+                        } else {
+                            dismiss()
+                        }
+                    }
+                    .foregroundColor(OneBoxColors.primaryGold)
+                    .fontWeight(.semibold)
+                }
+                .padding(.horizontal, OneBoxSpacing.large)
+                .padding(.bottom, OneBoxSpacing.large)
+            }
+            .background(OneBoxColors.primaryGraphite)
+            .navigationTitle("Feature Tour")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Skip") { dismiss() }
+                        .foregroundColor(OneBoxColors.secondaryText)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Keyboard Shortcuts View
+
+struct KeyboardShortcutsView: View {
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: OneBoxSpacing.large) {
+                    Image(systemName: "keyboard.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(OneBoxColors.primaryGold)
+
+                    Text("Keyboard Shortcuts")
+                        .font(OneBoxTypography.heroTitle)
+                        .foregroundColor(OneBoxColors.primaryText)
+
+                    Text("Use these shortcuts with an external keyboard on iPad.")
+                        .font(OneBoxTypography.body)
+                        .foregroundColor(OneBoxColors.secondaryText)
+                        .multilineTextAlignment(.center)
+
+                    VStack(spacing: OneBoxSpacing.small) {
+                        shortcutRow("New Document", "⌘ N")
+                        shortcutRow("Open File", "⌘ O")
+                        shortcutRow("Save", "⌘ S")
+                        shortcutRow("Export", "⌘ E")
+                        shortcutRow("Search", "⌘ F")
+                        shortcutRow("Settings", "⌘ ,")
+                        shortcutRow("Help", "⌘ ?")
+                    }
+                    .padding(.top, OneBoxSpacing.medium)
+                }
+                .padding(OneBoxSpacing.large)
+            }
+            .background(OneBoxColors.primaryGraphite)
+            .navigationTitle("Keyboard Shortcuts")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .foregroundColor(OneBoxColors.primaryGold)
+                }
+            }
+        }
+    }
+
+    private func shortcutRow(_ action: String, _ shortcut: String) -> some View {
+        HStack {
+            Text(action)
+                .font(OneBoxTypography.body)
+                .foregroundColor(OneBoxColors.primaryText)
+
+            Spacer()
+
+            Text(shortcut)
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(OneBoxColors.primaryGold)
+                .padding(.horizontal, OneBoxSpacing.small)
+                .padding(.vertical, OneBoxSpacing.tiny)
+                .background(OneBoxColors.surfaceGraphite)
+                .cornerRadius(OneBoxRadius.small)
+        }
+        .padding(OneBoxSpacing.small)
     }
 }
 

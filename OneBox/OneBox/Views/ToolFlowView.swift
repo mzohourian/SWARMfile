@@ -14,6 +14,7 @@ import UIComponents
 import PDFKit
 import Foundation
 import UIKit
+import CorePDF
 
 // Wrapper for URL to make it Identifiable
 struct IdentifiableURL: Identifiable {
@@ -1266,7 +1267,6 @@ struct ConfigurationView: View {
     let selectedURLs: [URL]
     let onProcess: () -> Void
 
-    @State private var showAdvanced = false
     @State private var showContextualHelp = false
 
     private var isConfigurationValid: Bool {
@@ -1308,10 +1308,7 @@ struct ConfigurationView: View {
                     
                     // Tool-specific settings
                     toolSettingsSection
-                    
-                    // Advanced Settings with Ceremony
-                    advancedSettingsSection
-                    
+
                     // Privacy & Security Options
                     privacySettingsSection
                     
@@ -1407,44 +1404,7 @@ struct ConfigurationView: View {
             }
         }
     }
-    
-    private var advancedSettingsSection: some View {
-        OneBoxCard(style: .interactive) {
-            VStack(spacing: OneBoxSpacing.medium) {
-                Button {
-                    showAdvanced.toggle()
-                    let generator = UISelectionFeedbackGenerator()
-            generator.selectionChanged()
-                } label: {
-                    HStack {
-                        HStack(spacing: OneBoxSpacing.small) {
-                            Image(systemName: "gearshape.2")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(OneBoxColors.primaryGold)
-                            
-                            Text("Advanced Settings")
-                                .font(OneBoxTypography.cardTitle)
-                                .foregroundColor(OneBoxColors.primaryText)
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: showAdvanced ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(OneBoxColors.secondaryText)
-                    }
-                }
-                
-                if showAdvanced {
-                    advancedSettings
-                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                }
-            }
-            .padding(OneBoxSpacing.medium)
-        }
-        .animation(.easeInOut(duration: 0.3), value: showAdvanced)
-    }
-    
+
     private var privacySettingsSection: some View {
         OneBoxCard(style: .security) {
             VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
@@ -2036,32 +1996,6 @@ struct ConfigurationView: View {
             }
         }
     }
-
-    private var advancedSettings: some View {
-        VStack(spacing: 16) {
-            Toggle(isOn: $settings.stripMetadata) {
-                Text("Strip Metadata")
-                    .foregroundColor(OneBoxColors.primaryText)
-            }
-
-            if tool == .imagesToPDF || tool.rawValue.contains("pdf") {
-                TextField("PDF Title", text: Binding(
-                    get: { settings.pdfTitle ?? "" },
-                    set: { settings.pdfTitle = $0.isEmpty ? nil : $0 }
-                ))
-                .textFieldStyle(.roundedBorder)
-
-                TextField("PDF Author", text: Binding(
-                    get: { settings.pdfAuthor ?? "" },
-                    set: { settings.pdfAuthor = $0.isEmpty ? nil : $0 }
-                ))
-                .textFieldStyle(.roundedBorder)
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(12)
-    }
 }
 
 // MARK: - Processing View
@@ -2403,70 +2337,117 @@ struct PDFCompressionSettings: View {
     let pdfURL: URL?
 
     @State private var originalSizeMB: Double = 0
-    @State private var minAchievableMB: Double = 0.5
-    @State private var maxAchievableMB: Double = 50
+    @State private var baseMinAchievableMB: Double = 0.5  // Base estimate without grayscale
+    @State private var isAnalyzing: Bool = false
+
+    // Effective minimum accounts for grayscale (typically 10-15% additional reduction)
+    private var minAchievableMB: Double {
+        if settings.convertToGrayscale {
+            return max(0.1, baseMinAchievableMB * 0.85)  // 15% smaller with grayscale
+        }
+        return baseMinAchievableMB
+    }
+
+    private var targetSize: Double {
+        settings.targetSizeMB ?? minAchievableMB
+    }
+
+    private var compressionPercentage: Int {
+        guard originalSizeMB > 0 else { return 0 }
+        return Int(((originalSizeMB - targetSize) / originalSizeMB) * 100)
+    }
 
     var body: some View {
         VStack(spacing: 16) {
-            // Show original size
+            // Size info header
             if originalSizeMB > 0 {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Original Size: \(String(format: "%.1f", originalSizeMB)) MB")
-                        .font(.subheadline)
-                        .foregroundColor(OneBoxColors.secondaryText)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Original: \(String(format: "%.1f", originalSizeMB)) MB")
+                                .font(.subheadline)
+                                .foregroundColor(OneBoxColors.secondaryText)
 
-                    Text("Achievable range: \(String(format: "%.1f", minAchievableMB)) - \(String(format: "%.1f", maxAchievableMB)) MB")
-                        .font(.caption)
-                        .foregroundColor(OneBoxColors.primaryGold)
+                            if isAnalyzing {
+                                Text("Analyzing...")
+                                    .font(.caption)
+                                    .foregroundColor(OneBoxColors.secondaryText)
+                            }
+                        }
+
+                        Spacer()
+
+                        if !isAnalyzing {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("Target: \(String(format: "%.1f", targetSize)) MB")
+                                    .font(.subheadline.bold())
+                                    .foregroundColor(OneBoxColors.primaryGold)
+                                Text("\(compressionPercentage)% smaller")
+                                    .font(.caption)
+                                    .foregroundColor(OneBoxColors.primaryGold)
+                            }
+                        }
+                    }
                 }
-                .padding(8)
+                .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(OneBoxColors.surfaceGraphite)
                 .cornerRadius(8)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Quality")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Picker("Quality", selection: $settings.compressionQuality) {
-                    ForEach(CompressionQuality.allCases, id: \.self) { quality in
-                        Text(quality.displayName).tag(quality)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
-
-            if let targetSize = settings.targetSizeMB {
+            // Size slider
+            if !isAnalyzing && originalSizeMB > 0 {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Target Size: \(String(format: "%.1f", targetSize)) MB")
+                    Text("Target Size")
                         .font(.subheadline)
                         .fontWeight(.medium)
 
-                    Slider(value: Binding(
-                        get: { targetSize },
-                        set: { settings.targetSizeMB = $0 }
-                    ), in: minAchievableMB...maxAchievableMB, step: 0.5)
+                    Slider(
+                        value: Binding(
+                            get: { min(targetSize, originalSizeMB) },
+                            set: { settings.targetSizeMB = $0 }
+                        ),
+                        in: minAchievableMB...originalSizeMB,
+                        step: 0.1
+                    )
+                    .tint(OneBoxColors.primaryGold)
 
                     HStack {
-                        Text("\(String(format: "%.1f", minAchievableMB)) MB")
-                            .font(.caption)
-                            .foregroundColor(OneBoxColors.secondaryText)
+                        VStack(alignment: .leading) {
+                            Text("\(String(format: "%.1f", minAchievableMB)) MB")
+                                .font(.caption.bold())
+                                .foregroundColor(OneBoxColors.primaryGold)
+                            Text("Smallest")
+                                .font(.system(size: 9))
+                                .foregroundColor(OneBoxColors.tertiaryText)
+                        }
                         Spacer()
-                        Text("\(String(format: "%.1f", maxAchievableMB)) MB")
+                        VStack(alignment: .trailing) {
+                            Text("\(String(format: "%.1f", originalSizeMB)) MB")
+                                .font(.caption)
+                                .foregroundColor(OneBoxColors.secondaryText)
+                            Text("Original")
+                                .font(.system(size: 9))
+                                .foregroundColor(OneBoxColors.tertiaryText)
+                        }
+                    }
+                }
+
+                // Grayscale toggle
+                Toggle(isOn: $settings.convertToGrayscale) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Convert to Grayscale")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Text("Removes color for smaller file size")
                             .font(.caption)
                             .foregroundColor(OneBoxColors.secondaryText)
                     }
                 }
-
-                Button("Clear Target Size") {
-                    settings.targetSizeMB = nil
-                }
-                .font(.subheadline)
-                .foregroundColor(.red)
-            } else {
-                Button("Set Target Size") {
-                    settings.targetSizeMB = minAchievableMB + 1.0
+                .tint(OneBoxColors.primaryGold)
+                .onChange(of: settings.convertToGrayscale) { _ in
+                    // Update target to new minimum when grayscale changes
+                    settings.targetSizeMB = minAchievableMB
                 }
             }
         }
@@ -2478,28 +2459,33 @@ struct PDFCompressionSettings: View {
     private func loadPDFInfo() {
         guard let url = pdfURL else { return }
 
-        // Get original file size
+        // Get original file size first (quick)
         if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
            let fileSize = attributes[.size] as? Int64 {
             originalSizeMB = Double(fileSize) / 1_000_000.0
 
-            // Estimate minimum achievable size with enhanced compression (resolution downsampling + JPEG quality)
-            // With 0.5x resolution scale + aggressive JPEG compression, can achieve ~5-8% of original
-            minAchievableMB = max(0.1, originalSizeMB * 0.07)
+            // Set initial estimate while analyzing
+            baseMinAchievableMB = max(0.1, originalSizeMB * 0.05)
 
-            // Estimate maximum useful size (90% of original - not worth compressing beyond this)
-            maxAchievableMB = max(minAchievableMB + 0.5, originalSizeMB * 0.9)
+            // Default to minimum achievable size
+            settings.targetSizeMB = minAchievableMB
+        }
 
-            // Round values for better UX
-            minAchievableMB = (minAchievableMB * 10).rounded() / 10
-            maxAchievableMB = (maxAchievableMB * 10).rounded() / 10
+        // Run detailed analysis in background
+        isAnalyzing = true
+        Task {
+            let processor = PDFProcessor()
+            let analysis = await processor.analyzeCompressionPotential(url)
 
-            // If target size is set but out of range, adjust it
-            if let currentTarget = settings.targetSizeMB {
-                if currentTarget < minAchievableMB {
+            await MainActor.run {
+                isAnalyzing = false
+
+                if analysis.original > 0 {
+                    originalSizeMB = analysis.original
+                    baseMinAchievableMB = analysis.minimum
+
+                    // Default to minimum achievable (maximum compression)
                     settings.targetSizeMB = minAchievableMB
-                } else if currentTarget > maxAchievableMB {
-                    settings.targetSizeMB = maxAchievableMB
                 }
             }
         }

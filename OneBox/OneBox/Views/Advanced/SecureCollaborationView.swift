@@ -11,8 +11,18 @@ import JobEngine
 import CryptoKit
 import MessageUI
 import UniformTypeIdentifiers
-import MultipeerConnectivity
 import Network
+
+enum SecureCollaborationError: LocalizedError {
+    case encryptionFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .encryptionFailed:
+            return "Failed to encrypt document for secure sharing"
+        }
+    }
+}
 
 struct SecureCollaborationView: View {
     let pdfURL: URL
@@ -36,12 +46,7 @@ struct SecureCollaborationView: View {
     @State private var generatedLink: SecureLink?
     @State private var viewHistory: [ViewEvent] = []
     @State private var showQRCode = false
-    
-    // Multipeer Connectivity state
-    @StateObject private var multipeerService = MultipeerDocumentService.shared
-    @State private var showingPeerDiscovery = false
-    @State private var selectedPeer: MCPeerID?
-    
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -96,24 +101,6 @@ struct SecureCollaborationView: View {
             if let link = generatedLink {
                 QRCodeShareView(link: link)
             }
-        }
-        .sheet(isPresented: $showingPeerDiscovery) {
-            PeerDiscoveryView(
-                multipeerService: multipeerService,
-                pdfURL: pdfURL,
-                onDocumentShared: { shareURL in
-                    // Handle successful peer sharing
-                    let newLink = SecureLink(
-                        id: UUID(),
-                        url: shareURL,
-                        encryptionKey: "", // Key is handled internally by MultipeerService
-                        expiresAt: expirationDate,
-                        accessLevel: accessLevel
-                    )
-                    generatedLink = newLink
-                    showingPeerDiscovery = false
-                }
-            )
         }
         .onAppear {
             loadCollaborators()
@@ -621,12 +608,8 @@ struct SecureCollaborationView: View {
                             .foregroundColor(OneBoxColors.secondaryText)
                             .multilineTextAlignment(.center)
                         
-                        Button(shareMethod == .peerToPeer ? "Discover Devices" : "Generate Secure Link") {
-                            if shareMethod == .peerToPeer {
-                                showingPeerDiscovery = true
-                            } else {
-                                generateSecureLink()
-                            }
+                        Button("Generate Secure Link") {
+                            generateSecureLink()
                         }
                         .font(OneBoxTypography.body)
                         .foregroundColor(OneBoxColors.primaryGraphite)
@@ -763,59 +746,37 @@ struct SecureCollaborationView: View {
         let fileData = try Data(contentsOf: pdfURL)
         let encryptionKey = SymmetricKey(size: .bits256)
         let sealedBox = try AES.GCM.seal(fileData, using: encryptionKey)
-        
+
+        guard let combinedData = sealedBox.combined else {
+            throw SecureCollaborationError.encryptionFailed
+        }
+
         return SecureEncryptedDocument(
-            encryptedData: sealedBox.combined!,
+            encryptedData: combinedData,
             key: encryptionKey,
             originalFilename: pdfURL.lastPathComponent
         )
     }
     
     private func uploadSecureDocument(_ document: SecureEncryptedDocument) async throws -> UploadResult {
-        // ZERO CLOUD DEPENDENCIES - Real peer-to-peer sharing with Multipeer Connectivity
+        // ZERO CLOUD DEPENDENCIES - Store encrypted document locally for sharing
         let documentID = UUID().uuidString
-        
+
         // Store encrypted document in local secure storage
         let localStorage = LocalSecureStorage.shared
         try await localStorage.storeEncryptedDocument(document, withID: documentID)
-        
-        // Share via Multipeer Connectivity
-        let shareURL = try await shareViaMultipeerConnectivity(document: document, documentID: documentID)
-        
+
+        // Generate local share URL (for AirDrop/email sharing)
+        let deviceID = await getSecureDeviceIdentifier()
+        let shareURL = "vaultpdf://share/\(deviceID)/\(documentID)"
+
         let keyData = document.key.withUnsafeBytes { Data($0) }
-        
+
         return UploadResult(
             shareURL: shareURL,
             encryptionKey: keyData.base64EncodedString(),
             documentID: documentID
         )
-    }
-    
-    private func shareViaMultipeerConnectivity(document: SecureEncryptedDocument, documentID: String) async throws -> String {
-        // Get MultipeerDocumentService instance
-        let multipeerService = MultipeerDocumentService.shared
-        
-        // Start advertising if not already
-        if !multipeerService.isAdvertising {
-            multipeerService.startAdvertising()
-        }
-        
-        // Create shareable document from encrypted data
-        let shareableDoc = ShareableDocument(
-            name: document.originalFilename,
-            data: document.encryptedData,
-            accessLevel: accessLevel == .view ? .readOnly : .readWrite,
-            metadata: [
-                "documentID": documentID,
-                "encryption": "aes-gcm-256",
-                "created": ISO8601DateFormatter().string(from: Date())
-            ]
-        )
-        
-        // Share via multipeer and get peer URL
-        let shareURL = try await multipeerService.shareDocument(shareableDoc)
-        
-        return shareURL
     }
     
     private func getSecureDeviceIdentifier() async -> String {
@@ -952,35 +913,31 @@ enum ShareMethod: String, CaseIterable {
     case email = "email"
     case qrCode = "qr"
     case airdrop = "airdrop"
-    case peerToPeer = "multipeer"
-    
+
     var displayName: String {
         switch self {
         case .secureLink: return "Secure Link"
         case .email: return "Encrypted Email"
         case .qrCode: return "QR Code"
         case .airdrop: return "AirDrop"
-        case .peerToPeer: return "Direct Device Share"
         }
     }
-    
+
     var description: String {
         switch self {
         case .secureLink: return "Generate encrypted link with access controls"
         case .email: return "Send encrypted document via email"
         case .qrCode: return "Share via QR code for quick access"
         case .airdrop: return "Share directly to nearby devices"
-        case .peerToPeer: return "Direct device-to-device sharing with zero cloud storage"
         }
     }
-    
+
     var icon: String {
         switch self {
         case .secureLink: return "link"
         case .email: return "envelope.fill"
         case .qrCode: return "qrcode"
         case .airdrop: return "wifi"
-        case .peerToPeer: return "antenna.radiowaves.left.and.right"
         }
     }
 }
@@ -1330,214 +1287,9 @@ extension SecureLinkMetadata: Codable {
     }
 }
 
-// MARK: - Peer Discovery View
-
-struct PeerDiscoveryView: View {
-    @ObservedObject var multipeerService: MultipeerDocumentService
-    let pdfURL: URL
-    let onDocumentShared: (String) -> Void
-    
-    @Environment(\.dismiss) var dismiss
-    @State private var isSharing = false
-    
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                OneBoxColors.primaryGraphite.ignoresSafeArea()
-                
-                VStack(spacing: OneBoxSpacing.large) {
-                    // Header
-                    VStack(spacing: OneBoxSpacing.medium) {
-                        Image(systemName: "antenna.radiowaves.left.and.right")
-                            .font(.system(size: 48, weight: .medium))
-                            .foregroundColor(OneBoxColors.primaryGold)
-                        
-                        Text("Device-to-Device Sharing")
-                            .font(OneBoxTypography.sectionTitle)
-                            .foregroundColor(OneBoxColors.primaryText)
-                        
-                        Text("Share directly with nearby devices using encrypted peer-to-peer connection")
-                            .font(OneBoxTypography.body)
-                            .foregroundColor(OneBoxColors.secondaryText)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(OneBoxSpacing.large)
-                    
-                    // Discovered peers
-                    ScrollView {
-                        VStack(spacing: OneBoxSpacing.medium) {
-                            if multipeerService.discoveredPeers.isEmpty {
-                                OneBoxCard(style: .standard) {
-                                    VStack(spacing: OneBoxSpacing.medium) {
-                                        Image(systemName: "wifi.slash")
-                                            .font(.system(size: 32))
-                                            .foregroundColor(OneBoxColors.tertiaryText)
-                                        
-                                        Text("No Devices Found")
-                                            .font(OneBoxTypography.body)
-                                            .foregroundColor(OneBoxColors.primaryText)
-                                        
-                                        Text("Make sure the other device has OneBox open and is discoverable")
-                                            .font(OneBoxTypography.caption)
-                                            .foregroundColor(OneBoxColors.secondaryText)
-                                            .multilineTextAlignment(.center)
-                                    }
-                                    .padding(OneBoxSpacing.large)
-                                }
-                            } else {
-                                ForEach(multipeerService.discoveredPeers, id: \.self) { peer in
-                                    peerCard(peer)
-                                }
-                            }
-                        }
-                        .padding(OneBoxSpacing.medium)
-                    }
-                    
-                    // Connection status
-                    if !multipeerService.connectedPeers.isEmpty {
-                        OneBoxCard(style: .security) {
-                            VStack(spacing: OneBoxSpacing.small) {
-                                Text("Connected Devices")
-                                    .font(OneBoxTypography.cardTitle)
-                                    .foregroundColor(OneBoxColors.primaryText)
-                                
-                                ForEach(multipeerService.connectedPeers, id: \.self) { peer in
-                                    HStack {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(OneBoxColors.secureGreen)
-                                        
-                                        Text(peer.displayName)
-                                            .font(OneBoxTypography.body)
-                                            .foregroundColor(OneBoxColors.primaryText)
-                                        
-                                        Spacer()
-                                        
-                                        Button("Share Document") {
-                                            shareWithPeer(peer)
-                                        }
-                                        .font(OneBoxTypography.caption)
-                                        .foregroundColor(OneBoxColors.primaryGold)
-                                        .disabled(isSharing)
-                                    }
-                                }
-                            }
-                            .padding(OneBoxSpacing.medium)
-                        }
-                        .padding(.horizontal, OneBoxSpacing.medium)
-                    }
-                    
-                    Spacer()
-                }
-            }
-            .navigationTitle("Device Sharing")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        multipeerService.stopBrowsing()
-                        multipeerService.stopAdvertising()
-                        dismiss()
-                    }
-                    .foregroundColor(OneBoxColors.primaryText)
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack {
-                        if multipeerService.isBrowsing {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                                .tint(OneBoxColors.primaryGold)
-                        }
-                        
-                        Button(multipeerService.isBrowsing ? "Stop" : "Scan") {
-                            if multipeerService.isBrowsing {
-                                multipeerService.stopBrowsing()
-                            } else {
-                                multipeerService.startBrowsing()
-                            }
-                        }
-                        .foregroundColor(OneBoxColors.primaryGold)
-                    }
-                }
-            }
-        }
-        .onAppear {
-            multipeerService.startAdvertising()
-            multipeerService.startBrowsing()
-        }
-        .onDisappear {
-            multipeerService.stopBrowsing()
-        }
-    }
-    
-    private func peerCard(_ peer: MCPeerID) -> some View {
-        OneBoxCard(style: .interactive) {
-            HStack(spacing: OneBoxSpacing.medium) {
-                Image(systemName: "iphone")
-                    .font(.system(size: 24))
-                    .foregroundColor(OneBoxColors.primaryGold)
-                    .frame(width: 32)
-                
-                VStack(alignment: .leading, spacing: OneBoxSpacing.tiny) {
-                    Text(peer.displayName)
-                        .font(OneBoxTypography.body)
-                        .foregroundColor(OneBoxColors.primaryText)
-                    
-                    Text("OneBox Device")
-                        .font(OneBoxTypography.caption)
-                        .foregroundColor(OneBoxColors.secondaryText)
-                }
-                
-                Spacer()
-                
-                Button("Connect") {
-                    multipeerService.invitePeer(peer)
-                }
-                .font(OneBoxTypography.caption)
-                .foregroundColor(OneBoxColors.primaryGraphite)
-                .padding(.horizontal, OneBoxSpacing.medium)
-                .padding(.vertical, OneBoxSpacing.small)
-                .background(OneBoxColors.primaryGold)
-                .cornerRadius(OneBoxRadius.small)
-            }
-            .padding(OneBoxSpacing.medium)
-        }
-    }
-    
-    private func shareWithPeer(_ peer: MCPeerID) {
-        isSharing = true
-        
-        Task {
-            do {
-                // Create ShareableDocument from PDF
-                let pdfData = try Data(contentsOf: pdfURL)
-                let shareableDoc = ShareableDocument(
-                    name: pdfURL.lastPathComponent,
-                    data: pdfData,
-                    accessLevel: .readOnly,
-                    metadata: [
-                        "shared_at": ISO8601DateFormatter().string(from: Date()),
-                        "file_size": "\(pdfData.count)"
-                    ]
-                )
-                
-                // Share via multipeer service
-                let shareURL = try await multipeerService.shareDocument(shareableDoc)
-                
-                await MainActor.run {
-                    self.isSharing = false
-                    self.onDocumentShared(shareURL)
-                }
-                
-            } catch {
-                await MainActor.run {
-                    self.isSharing = false
-                    print("Failed to share document: \(error)")
-                }
-            }
-        }
-    }
-}
+// MARK: - Note: Device-to-Device Sharing (MultipeerConnectivity)
+// Peer-to-peer device sharing via MultipeerConnectivity is available in
+// MultipeerDocumentService.swift for future expansion. Not included in v1.0.
 
 #Preview {
     SecureCollaborationView(pdfURL: URL(fileURLWithPath: "/tmp/sample.pdf"))

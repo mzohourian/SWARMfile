@@ -149,8 +149,8 @@ struct PrivacyDashboardView: View {
             VStack(spacing: 12) {
                 PrivacyToggleRow(
                     title: "Secure Vault",
-                    description: "Encrypted temporary storage",
-                    icon: "vault.fill",
+                    description: "Encrypt files, biometric to access",
+                    icon: "lock.shield.fill",
                     isOn: $privacyManager.isSecureVaultEnabled,
                     color: .red
                 ) { enabled in
@@ -168,8 +168,8 @@ struct PrivacyDashboardView: View {
                 }
                 
                 PrivacyToggleRow(
-                    title: "Biometric Lock",
-                    description: "Face ID/Touch ID for processing",
+                    title: "App Lock",
+                    description: "Face ID/Touch ID to open the app",
                     icon: "faceid",
                     isOn: $privacyManager.isBiometricLockEnabled,
                     color: .blue
@@ -301,10 +301,10 @@ struct PrivacyDashboardView: View {
 
                 NavigationLink(destination: EncryptionCenterView().environmentObject(privacyManager)) {
                     FeatureCard(
-                        title: "Encryption Center",
-                        description: "Password-protect your files",
-                        icon: "key.fill",
-                        color: .green
+                        title: "Secure Vault",
+                        description: "Encrypt & decrypt files",
+                        icon: "lock.shield.fill",
+                        color: Color(red: 0.85, green: 0.65, blue: 0.13)
                     )
                 }
                 .buttonStyle(.plain)
@@ -576,7 +576,7 @@ struct AuditEntryRow: View {
             if entry.secureVaultActive || entry.zeroTraceActive {
                 HStack {
                     if entry.secureVaultActive {
-                        Label("Vault", systemImage: "vault.fill")
+                        Label("Vault", systemImage: "lock.shield.fill")
                             .font(.caption)
                             .foregroundColor(.red)
                     }
@@ -1066,22 +1066,41 @@ struct SanitizationItem: View {
 
 struct EncryptionCenterView: View {
     @EnvironmentObject var privacyManager: Privacy.PrivacyManager
-    @State private var showingFilePicker = false
-    @State private var selectedFileURL: URL?
-    @State private var password = ""
-    @State private var confirmPassword = ""
-    @State private var encryptedFileURL: URL?
+
+    // Mode selection
+    @State private var selectedMode: EncryptionMode = .encrypt
+
+    // Encrypt state
+    @State private var showingEncryptFilePicker = false
+    @State private var fileToEncrypt: URL?
+    @State private var encryptPassword = ""
+    @State private var confirmEncryptPassword = ""
+    @State private var encryptedResultURL: URL?
+
+    // Decrypt state
+    @State private var showingDecryptFilePicker = false
+    @State private var fileToDecrypt: URL?
+    @State private var decryptPassword = ""
+    @State private var decryptedResultURL: URL?
+
+    // Shared state
     @State private var isProcessing = false
     @State private var errorMessage: String?
     @State private var showingShareSheet = false
+    @State private var urlToShare: URL?
 
-    private var passwordsMatch: Bool {
-        !password.isEmpty && password == confirmPassword
+    enum EncryptionMode: String, CaseIterable {
+        case encrypt = "Encrypt"
+        case decrypt = "Decrypt"
+    }
+
+    private var encryptPasswordsMatch: Bool {
+        !encryptPassword.isEmpty && encryptPassword == confirmEncryptPassword
     }
 
     private var passwordStrength: PasswordStrength {
-        if password.count < 8 { return .weak }
-        if password.count < 12 { return .medium }
+        if encryptPassword.count < 8 { return .weak }
+        if encryptPassword.count < 12 { return .medium }
         return .strong
     }
 
@@ -1105,19 +1124,24 @@ struct EncryptionCenterView: View {
         }
     }
 
+    // OneBox colors
+    private let primaryGold = Color(red: 0.85, green: 0.65, blue: 0.13)
+    private let primaryGraphite = Color(red: 0.12, green: 0.12, blue: 0.13)
+    private let secondaryGraphite = Color(red: 0.16, green: 0.16, blue: 0.17)
+
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
                 // Header
                 VStack(spacing: 12) {
-                    Image(systemName: "key.fill")
+                    Image(systemName: "lock.shield.fill")
                         .font(.system(size: 48))
-                        .foregroundColor(.green)
+                        .foregroundColor(primaryGold)
 
-                    Text("Encryption Center")
+                    Text("Secure Vault")
                         .font(.title2.bold())
 
-                    Text("Password-protect your documents with AES-256 encryption. Files are encrypted locally on your device.")
+                    Text("Encrypt files with AES-256. Only you can decrypt them with your password.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -1125,186 +1149,311 @@ struct EncryptionCenterView: View {
                 }
                 .padding(.top)
 
-                // File Selection
-                VStack(spacing: 16) {
-                    if let url = selectedFileURL {
-                        HStack {
-                            Image(systemName: "doc.fill")
-                                .foregroundColor(.green)
-                            Text(url.lastPathComponent)
-                                .font(.subheadline)
-                                .lineLimit(1)
-                            Spacer()
-                            Button("Change") {
-                                showingFilePicker = true
-                            }
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                        }
-                        .padding()
-                        .background(Color(.secondarySystemGroupedBackground))
-                        .cornerRadius(12)
-                    } else {
-                        Button(action: { showingFilePicker = true }) {
-                            HStack {
-                                Image(systemName: "plus.circle.fill")
-                                Text("Select File to Encrypt")
-                            }
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.green)
-                            .cornerRadius(12)
-                        }
+                // Mode Picker
+                Picker("Mode", selection: $selectedMode) {
+                    ForEach(EncryptionMode.allCases, id: \.self) { mode in
+                        Text(mode.rawValue).tag(mode)
                     }
                 }
+                .pickerStyle(.segmented)
                 .padding(.horizontal)
 
-                // Password Entry
-                if selectedFileURL != nil && encryptedFileURL == nil {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Set Encryption Password")
-                            .font(.headline)
-
-                        SecureField("Password", text: $password)
-                            .textFieldStyle(.roundedBorder)
-
-                        // Password strength indicator
-                        if !password.isEmpty {
-                            HStack {
-                                Text("Strength:")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Text(passwordStrength.text)
-                                    .font(.caption.bold())
-                                    .foregroundColor(passwordStrength.color)
-                            }
-                        }
-
-                        SecureField("Confirm Password", text: $confirmPassword)
-                            .textFieldStyle(.roundedBorder)
-
-                        if !confirmPassword.isEmpty && !passwordsMatch {
-                            Text("Passwords do not match")
-                                .font(.caption)
-                                .foregroundColor(.red)
-                        }
-                    }
-                    .padding()
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .cornerRadius(12)
-                    .padding(.horizontal)
-
-                    // Encrypt Button
-                    Button(action: encryptFile) {
-                        HStack {
-                            if isProcessing {
-                                ProgressView()
-                                    .tint(.white)
-                            } else {
-                                Image(systemName: "lock.fill")
-                            }
-                            Text(isProcessing ? "Encrypting..." : "Encrypt File")
-                        }
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(passwordsMatch && !isProcessing ? Color.green : Color.gray)
-                        .cornerRadius(12)
-                    }
-                    .disabled(!passwordsMatch || isProcessing)
-                    .padding(.horizontal)
-                }
-
-                // Success Display
-                if let encryptedURL = encryptedFileURL {
-                    VStack(spacing: 16) {
-                        HStack {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.title2)
-                                .foregroundColor(.green)
-                            VStack(alignment: .leading) {
-                                Text("File Encrypted Successfully")
-                                    .font(.headline)
-                                Text(encryptedURL.lastPathComponent)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-
-                        // Warning
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.orange)
-                            Text("Remember your password! There's no way to recover it.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding()
-                        .background(Color.orange.opacity(0.1))
-                        .cornerRadius(8)
-
-                        Button(action: { showingShareSheet = true }) {
-                            HStack {
-                                Image(systemName: "square.and.arrow.up")
-                                Text("Share Encrypted File")
-                            }
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
-                            .cornerRadius(12)
-                        }
-                        .sheet(isPresented: $showingShareSheet) {
-                            ShareSheet(items: [encryptedURL])
-                        }
-                    }
-                    .padding()
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .cornerRadius(12)
-                    .padding(.horizontal)
-                }
-
-                // Error Display
-                if let error = errorMessage {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .padding()
+                if selectedMode == .encrypt {
+                    encryptSection
+                } else {
+                    decryptSection
                 }
 
                 Spacer(minLength: 50)
             }
         }
-        .navigationTitle("Encryption Center")
+        .navigationTitle("Secure Vault")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showingFilePicker) {
-            DocumentPickerView(selectedURL: $selectedFileURL)
+        .sheet(isPresented: $showingEncryptFilePicker) {
+            DocumentPickerView(selectedURL: $fileToEncrypt)
         }
-        .onChange(of: selectedFileURL) { _ in
-            encryptedFileURL = nil
+        .sheet(isPresented: $showingDecryptFilePicker) {
+            EncryptedFilePickerView(selectedURL: $fileToDecrypt)
+        }
+        .sheet(isPresented: $showingShareSheet) {
+            if let url = urlToShare {
+                ShareSheet(items: [url])
+            }
+        }
+        .onChange(of: fileToEncrypt) { _ in
+            encryptedResultURL = nil
             errorMessage = nil
-            password = ""
-            confirmPassword = ""
+            encryptPassword = ""
+            confirmEncryptPassword = ""
+        }
+        .onChange(of: fileToDecrypt) { _ in
+            decryptedResultURL = nil
+            errorMessage = nil
+            decryptPassword = ""
         }
     }
 
-    private func encryptFile() {
-        guard let url = selectedFileURL, passwordsMatch else { return }
+    // MARK: - Encrypt Section
+
+    private var encryptSection: some View {
+        VStack(spacing: 16) {
+            // File Selection
+            if let url = fileToEncrypt {
+                HStack {
+                    Image(systemName: "doc.fill")
+                        .foregroundColor(primaryGold)
+                    Text(url.lastPathComponent)
+                        .font(.subheadline)
+                        .lineLimit(1)
+                    Spacer()
+                    Button("Change") {
+                        showingEncryptFilePicker = true
+                    }
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(12)
+            } else {
+                Button(action: { showingEncryptFilePicker = true }) {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Select File to Encrypt")
+                    }
+                    .font(.headline)
+                    .foregroundColor(primaryGraphite)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(primaryGold)
+                    .cornerRadius(12)
+                }
+            }
+
+            // Password Entry for Encrypt
+            if fileToEncrypt != nil && encryptedResultURL == nil {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Set Encryption Password")
+                        .font(.headline)
+
+                    SecureField("Password", text: $encryptPassword)
+                        .textFieldStyle(.roundedBorder)
+
+                    if !encryptPassword.isEmpty {
+                        HStack {
+                            Text("Strength:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(passwordStrength.text)
+                                .font(.caption.bold())
+                                .foregroundColor(passwordStrength.color)
+                        }
+                    }
+
+                    SecureField("Confirm Password", text: $confirmEncryptPassword)
+                        .textFieldStyle(.roundedBorder)
+
+                    if !confirmEncryptPassword.isEmpty && !encryptPasswordsMatch {
+                        Text("Passwords do not match")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
+                // Encrypt Button
+                Button(action: performEncrypt) {
+                    HStack {
+                        if isProcessing {
+                            ProgressView()
+                                .tint(primaryGraphite)
+                        } else {
+                            Image(systemName: "lock.fill")
+                        }
+                        Text(isProcessing ? "Encrypting..." : "Encrypt File")
+                    }
+                    .font(.headline)
+                    .foregroundColor(primaryGraphite)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(encryptPasswordsMatch && !isProcessing ? primaryGold : Color.gray)
+                    .cornerRadius(12)
+                }
+                .disabled(!encryptPasswordsMatch || isProcessing)
+            }
+
+            // Encrypt Success
+            if let resultURL = encryptedResultURL {
+                successView(url: resultURL, isEncrypted: true)
+            }
+
+            // Error Display
+            if let error = errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .padding()
+            }
+        }
+        .padding(.horizontal)
+    }
+
+    // MARK: - Decrypt Section
+
+    private var decryptSection: some View {
+        VStack(spacing: 16) {
+            // File Selection
+            if let url = fileToDecrypt {
+                HStack {
+                    Image(systemName: "lock.doc.fill")
+                        .foregroundColor(primaryGold)
+                    Text(url.lastPathComponent)
+                        .font(.subheadline)
+                        .lineLimit(1)
+                    Spacer()
+                    Button("Change") {
+                        showingDecryptFilePicker = true
+                    }
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(12)
+            } else {
+                Button(action: { showingDecryptFilePicker = true }) {
+                    HStack {
+                        Image(systemName: "lock.open.fill")
+                        Text("Select Encrypted File")
+                    }
+                    .font(.headline)
+                    .foregroundColor(primaryGraphite)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(primaryGold)
+                    .cornerRadius(12)
+                }
+            }
+
+            // Password Entry for Decrypt
+            if fileToDecrypt != nil && decryptedResultURL == nil {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Enter Password")
+                        .font(.headline)
+
+                    SecureField("Password", text: $decryptPassword)
+                        .textFieldStyle(.roundedBorder)
+                }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
+                // Decrypt Button
+                Button(action: performDecrypt) {
+                    HStack {
+                        if isProcessing {
+                            ProgressView()
+                                .tint(primaryGraphite)
+                        } else {
+                            Image(systemName: "lock.open.fill")
+                        }
+                        Text(isProcessing ? "Decrypting..." : "Decrypt File")
+                    }
+                    .font(.headline)
+                    .foregroundColor(primaryGraphite)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(!decryptPassword.isEmpty && !isProcessing ? primaryGold : Color.gray)
+                    .cornerRadius(12)
+                }
+                .disabled(decryptPassword.isEmpty || isProcessing)
+            }
+
+            // Decrypt Success
+            if let resultURL = decryptedResultURL {
+                successView(url: resultURL, isEncrypted: false)
+            }
+
+            // Error Display
+            if let error = errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .padding()
+            }
+        }
+        .padding(.horizontal)
+    }
+
+    // MARK: - Success View
+
+    private func successView(url: URL, isEncrypted: Bool) -> some View {
+        VStack(spacing: 16) {
+            HStack {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.title2)
+                    .foregroundColor(Color(red: 0.20, green: 0.78, blue: 0.35))
+                VStack(alignment: .leading) {
+                    Text(isEncrypted ? "File Encrypted" : "File Decrypted")
+                        .font(.headline)
+                    Text(url.lastPathComponent)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+
+            if isEncrypted {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text("Remember your password! There's no way to recover it.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(8)
+            }
+
+            Button(action: {
+                urlToShare = url
+                showingShareSheet = true
+            }) {
+                HStack {
+                    Image(systemName: "square.and.arrow.up")
+                    Text("Share File")
+                }
+                .font(.headline)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.blue)
+                .cornerRadius(12)
+            }
+        }
+        .padding()
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(12)
+    }
+
+    // MARK: - Actions
+
+    private func performEncrypt() {
+        guard let url = fileToEncrypt, encryptPasswordsMatch else { return }
         isProcessing = true
         errorMessage = nil
 
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                let resultURL = try privacyManager.encryptFile(at: url, password: password)
+                let resultURL = try privacyManager.encryptFile(at: url, password: encryptPassword)
                 DispatchQueue.main.async {
-                    self.encryptedFileURL = resultURL
+                    self.encryptedResultURL = resultURL
                     self.isProcessing = false
-                    self.password = ""
-                    self.confirmPassword = ""
+                    self.encryptPassword = ""
+                    self.confirmEncryptPassword = ""
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -1312,6 +1461,78 @@ struct EncryptionCenterView: View {
                     self.isProcessing = false
                 }
             }
+        }
+    }
+
+    private func performDecrypt() {
+        guard let url = fileToDecrypt, !decryptPassword.isEmpty else { return }
+        isProcessing = true
+        errorMessage = nil
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let resultURL = try privacyManager.decryptFile(at: url, password: decryptPassword)
+                DispatchQueue.main.async {
+                    self.decryptedResultURL = resultURL
+                    self.isProcessing = false
+                    self.decryptPassword = ""
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.errorMessage = "Decryption failed. Check your password and try again."
+                    self.isProcessing = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Encrypted File Picker
+
+struct EncryptedFilePickerView: UIViewControllerRepresentable {
+    @Binding var selectedURL: URL?
+    @Environment(\.dismiss) var dismiss
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        // Allow picking any file, but we'll filter for .encrypted
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data, .item])
+        picker.allowsMultipleSelection = false
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, UIDocumentPickerDelegate {
+        let parent: EncryptedFilePickerView
+
+        init(_ parent: EncryptedFilePickerView) {
+            self.parent = parent
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            guard let url = urls.first else { return }
+
+            // Start accessing security-scoped resource
+            if url.startAccessingSecurityScopedResource() {
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(url.lastPathComponent)
+                try? FileManager.default.removeItem(at: tempURL)
+                try? FileManager.default.copyItem(at: url, to: tempURL)
+                url.stopAccessingSecurityScopedResource()
+                parent.selectedURL = tempURL
+            } else {
+                parent.selectedURL = url
+            }
+
+            parent.dismiss()
+        }
+
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            parent.dismiss()
         }
     }
 }

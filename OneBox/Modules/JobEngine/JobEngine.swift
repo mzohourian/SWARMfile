@@ -153,6 +153,7 @@ public struct JobSettings {
     public var pdfAuthor: String?
     public var targetSizeMB: Double?
     public var compressionQuality: CompressionQuality = .medium
+    public var convertToGrayscale: Bool = false
 
     // Image Settings
     public var imageFormat: ImageFormat = .jpeg
@@ -220,7 +221,7 @@ public struct JobSettings {
 extension JobSettings: Codable {
     enum CodingKeys: String, CodingKey {
         case pageSize, orientation, margins, backgroundColor, stripMetadata
-        case pdfTitle, pdfAuthor, targetSizeMB, compressionQuality
+        case pdfTitle, pdfAuthor, targetSizeMB, compressionQuality, convertToGrayscale
         case imageFormat, imageQuality, imageQualityPreset, maxDimension, resizePercentage, imageResolution
         case watermarkText, watermarkPosition, watermarkOpacity, watermarkSize, watermarkTileDensity
         case splitRanges, selectAllPages
@@ -246,7 +247,8 @@ extension JobSettings: Codable {
         pdfAuthor = try container.decodeIfPresent(String.self, forKey: .pdfAuthor)
         targetSizeMB = try container.decodeIfPresent(Double.self, forKey: .targetSizeMB)
         compressionQuality = try container.decodeIfPresent(CompressionQuality.self, forKey: .compressionQuality) ?? .medium
-        
+        convertToGrayscale = try container.decodeIfPresent(Bool.self, forKey: .convertToGrayscale) ?? false
+
         imageFormat = try container.decodeIfPresent(ImageFormat.self, forKey: .imageFormat) ?? .jpeg
         imageQuality = try container.decodeIfPresent(Double.self, forKey: .imageQuality) ?? 0.6
         imageQualityPreset = try container.decodeIfPresent(ImageQuality.self, forKey: .imageQualityPreset) ?? .medium
@@ -316,7 +318,8 @@ extension JobSettings: Codable {
         try container.encodeIfPresent(pdfAuthor, forKey: .pdfAuthor)
         try container.encodeIfPresent(targetSizeMB, forKey: .targetSizeMB)
         try container.encode(compressionQuality, forKey: .compressionQuality)
-        
+        try container.encode(convertToGrayscale, forKey: .convertToGrayscale)
+
         try container.encode(imageFormat, forKey: .imageFormat)
         try container.encode(imageQuality, forKey: .imageQuality)
         try container.encode(imageQualityPreset, forKey: .imageQualityPreset)
@@ -393,6 +396,7 @@ public class JobManager: ObservableObject {
     private let processingQueue = DispatchQueue(label: "com.onebox.jobengine", qos: .userInitiated)
     private var currentTask: Task<Void, Never>?
     private var privacyDelegate: Privacy.PrivacyManager?
+    private var cachedZeroTraceEnabled: Bool = false
 
     private let persistenceURL: URL = {
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -414,12 +418,26 @@ public class JobManager: ObservableObject {
         // Apply privacy settings from delegate if available
         var privacyJob = job
         if let delegate = privacyDelegate {
-            privacyJob.settings.enableSecureVault = delegate.getSecureVaultEnabled()
-            privacyJob.settings.enableZeroTrace = delegate.getZeroTraceEnabled()
-            privacyJob.settings.enableBiometricLock = delegate.getBiometricLockEnabled()
-            privacyJob.settings.enableStealthMode = delegate.getStealthModeEnabled()
-            privacyJob.settings.complianceMode = delegate.getSelectedComplianceMode()
-            
+            // Access @MainActor properties safely
+            let settings = await MainActor.run {
+                return (
+                    secureVault: delegate.getSecureVaultEnabled(),
+                    zeroTrace: delegate.getZeroTraceEnabled(),
+                    biometricLock: delegate.getBiometricLockEnabled(),
+                    stealthMode: delegate.getStealthModeEnabled(),
+                    complianceMode: delegate.getSelectedComplianceMode()
+                )
+            }
+
+            privacyJob.settings.enableSecureVault = settings.secureVault
+            privacyJob.settings.enableZeroTrace = settings.zeroTrace
+            privacyJob.settings.enableBiometricLock = settings.biometricLock
+            privacyJob.settings.enableStealthMode = settings.stealthMode
+            privacyJob.settings.complianceMode = settings.complianceMode
+
+            // Cache zero trace setting for saveJobs() to use safely
+            cachedZeroTraceEnabled = settings.zeroTrace
+
             // Authenticate if biometric lock is enabled
             if privacyJob.settings.enableBiometricLock {
                 do {
@@ -427,15 +445,19 @@ public class JobManager: ObservableObject {
                 } catch {
                     privacyJob.status = .failed
                     privacyJob.error = error.localizedDescription
-                    jobs.append(privacyJob)
-                    saveJobs()
+                    await MainActor.run {
+                        jobs.append(privacyJob)
+                        saveJobs()
+                    }
                     return
                 }
             }
         }
-        
-        jobs.append(privacyJob)
-        saveJobs()
+
+        await MainActor.run {
+            jobs.append(privacyJob)
+            saveJobs()
+        }
         processNextJob()
     }
 
@@ -457,8 +479,10 @@ public class JobManager: ObservableObject {
         }
         
         // Clean up secure files if secure vault was enabled
-        if job.settings.enableSecureVault {
-            privacyDelegate?.performSecureFilesCleanup()
+        if job.settings.enableSecureVault, let delegate = privacyDelegate {
+            Task { @MainActor in
+                delegate.performSecureFilesCleanup()
+            }
         }
     }
 
@@ -524,8 +548,10 @@ public class JobManager: ObservableObject {
             jobs[index].status = .success  // Set LAST so observers see complete data
 
             // Clean up secure files if secure vault was enabled
-            if job.settings.enableSecureVault {
-                privacyDelegate?.performSecureFilesCleanup()
+            if job.settings.enableSecureVault, let delegate = privacyDelegate {
+                await MainActor.run {
+                    delegate.performSecureFilesCleanup()
+                }
             }
         } catch {
             jobs[index].status = .failed
@@ -581,10 +607,10 @@ public class JobManager: ObservableObject {
 
     private func saveJobs() {
         // Don't save job history if zero-trace mode is enabled
-        if let delegate = privacyDelegate, delegate.getZeroTraceEnabled() {
+        if cachedZeroTraceEnabled {
             return
         }
-        
+
         guard let data = try? JSONEncoder().encode(jobs) else { return }
         try? data.write(to: persistenceURL)
     }
@@ -839,11 +865,12 @@ actor JobProcessor {
 
         // Use compression quality directly from CommonTypes
         let quality = job.settings.compressionQuality
-        
+
         let outputURL = try await processor.compressPDF(
             pdfURL,
             quality: quality,
             targetSizeMB: job.settings.targetSizeMB,
+            convertToGrayscale: job.settings.convertToGrayscale,
             progressHandler: progressHandler
         )
         return try await applyPostProcessing(job: job, urls: [outputURL])
@@ -1054,42 +1081,64 @@ actor JobProcessor {
     
     
     // MARK: - Privacy Post-Processing
-    
+
     private func applyPostProcessing(job: Job, urls: [URL]) async throws -> [URL] {
         var processedURLs = urls
-        
+
+        // Capture delegate once at the start to prevent nil during processing
+        guard let delegate = privacyDelegate else {
+            return processedURLs
+        }
+
         // Apply document sanitization if enabled
-        if job.settings.enableDocumentSanitization, let delegate = privacyDelegate {
+        if job.settings.enableDocumentSanitization {
             for url in processedURLs {
-                _ = try await MainActor.run {
-                    try delegate.performDocumentSanitization(at: url)
+                do {
+                    _ = try await MainActor.run {
+                        try delegate.performDocumentSanitization(at: url)
+                    }
+                    // Ensure file system sync before next operation
+                    try await Task.sleep(nanoseconds: 50_000_000) // 50ms
+                } catch {
+                    print("⚠️ Sanitization failed for \(url.lastPathComponent): \(error)")
+                    // Continue without sanitization rather than crash
                 }
             }
         }
-        
-        // Apply encryption if enabled
-        if job.settings.enableEncryption, 
+
+        // Apply encryption if enabled - validate password first
+        if job.settings.enableEncryption,
            let password = job.settings.encryptionPassword,
-           let delegate = privacyDelegate {
+           !password.isEmpty {
             var encryptedURLs: [URL] = []
             for url in processedURLs {
-                let encryptedURL = try await MainActor.run {
-                    try delegate.performFileEncryption(at: url, password: password)
+                // Verify file exists before encryption
+                guard FileManager.default.fileExists(atPath: url.path) else {
+                    print("⚠️ File not found for encryption: \(url.path)")
+                    encryptedURLs.append(url) // Keep original URL
+                    continue
                 }
-                encryptedURLs.append(encryptedURL)
+                do {
+                    let encryptedURL = try await MainActor.run {
+                        try delegate.performFileEncryption(at: url, password: password)
+                    }
+                    encryptedURLs.append(encryptedURL)
+                } catch {
+                    print("⚠️ Encryption failed for \(url.lastPathComponent): \(error)")
+                    encryptedURLs.append(url) // Keep original URL on failure
+                }
             }
             processedURLs = encryptedURLs
         }
-        
-        // Generate forensics report
-        if let inputURL = job.inputs.first, 
-           let outputURL = processedURLs.first,
-           let delegate = privacyDelegate {
+
+        // Generate forensics report on ORIGINAL output (not encrypted version)
+        if let inputURL = job.inputs.first,
+           let outputURL = urls.first { // Use original urls, not processedURLs
             _ = await MainActor.run {
                 delegate.performFileForensics(inputURL: inputURL, outputURL: outputURL)
             }
         }
-        
+
         return processedURLs
     }
 }

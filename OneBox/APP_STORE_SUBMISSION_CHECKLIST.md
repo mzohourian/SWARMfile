@@ -1,4 +1,4 @@
-# OneBox App Store Submission Checklist
+# Vault PDF App Store Submission Checklist
 
 ## Pre-Submission Requirements ✅ Complete
 
@@ -17,9 +17,9 @@
 
 ### 3. Permissions & Privacy
 - [x] **Photo Library Access**: `NSPhotoLibraryUsageDescription` 
-  - "OneBox needs access to your photos to convert them to PDF"
+  - "Vault PDF needs access to your photos to convert them to PDF"
 - [x] **Photo Library Add**: `NSPhotoLibraryAddUsageDescription`
-  - "OneBox needs permission to save processed files"
+  - "Vault PDF needs permission to save processed files"
 - [x] **Background Processing**: Enabled for long-running jobs
 - [x] **No other permissions**: Camera, Location, Contacts - NOT requested
 - [x] **Privacy Policy**: Available at [URL to be provided]
@@ -45,7 +45,7 @@
 ## App Store Connect Configuration
 
 ### 1. App Information
-- [x] **App Name**: OneBox
+- [x] **App Name**: Vault PDF
 - [x] **Subtitle**: Privacy-First File Tools
 - [x] **Category**: Productivity
 - [x] **Content Rating**: 4+ (No objectionable content)
@@ -71,7 +71,7 @@ Privacy-first PDF & image tools
 
 #### Full Description
 ```
-OneBox: Privacy-First File Tools
+Vault PDF: Privacy-First File Tools
 
 Transform your documents and images with complete privacy. Everything happens on your device—no cloud uploads, no tracking, just secure file processing.
 
@@ -109,14 +109,14 @@ Transform your documents and images with complete privacy. Everything happens on
 • Premium workflows
 
 PRIVACY BY DESIGN
-OneBox uses only Apple frameworks for maximum privacy. No external servers, no analytics, no tracking pixels. What happens on your device stays on your device.
+Vault PDF uses only Apple frameworks for maximum privacy. No external servers, no analytics, no tracking pixels. What happens on your device stays on your device.
 
 REQUIREMENTS
 • iOS 16.0 or later
 • Works offline
 • iPhone & iPad optimized
 
-Download OneBox and experience truly private file processing.
+Download Vault PDF and experience truly private file processing.
 ```
 
 #### Keywords (100 characters max)
@@ -147,7 +147,7 @@ PDF,privacy,converter,compress,merge,watermark,sign,HEIC,JPEG,secure,files,docum
 - [x] **Demo Account**: Not needed (no login required)
 - [x] **Review Notes**: 
 ```
-OneBox is a privacy-first file processing app with no data collection.
+Vault PDF is a privacy-first file processing app with no data collection.
 
 Key features to review:
 - 100% on-device processing (no network calls for core features)
@@ -247,7 +247,7 @@ fastlane release
 - [ ] **Conversion rates**: Free to Pro upgrades
 
 ### 3. Support Preparation
-- [ ] **Support email**: support@[domain].com
+- [ ] **Support email**: vaultpdf@spuud.com
 - [ ] **FAQ documentation**: Common questions
 - [ ] **Bug reporting**: Issue tracking system
 - [ ] **Feature requests**: Feedback collection

@@ -30,7 +30,7 @@ targets:
     info:
       path: OneBox/Info.plist
       properties:
-        CFBundleDisplayName: OneBox
+        CFBundleDisplayName: Vault PDF
         CFBundleShortVersionString: "1.0.0"
         CFBundleVersion: "1"
         UILaunchScreen: {}
@@ -43,8 +43,9 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        NSPhotoLibraryUsageDescription: "OneBox needs access to your photos to convert them to PDF"
-        NSPhotoLibraryAddUsageDescription: "OneBox needs permission to save processed files"
+        NSPhotoLibraryUsageDescription: "Vault PDF needs access to your photos to convert them to PDF"
+        NSPhotoLibraryAddUsageDescription: "Vault PDF needs permission to save processed files"
+        NSFaceIDUsageDescription: "Vault PDF uses Face ID to protect your documents and secure sensitive operations"
         UIBackgroundModes:
           - processing
         BGTaskSchedulerPermittedIdentifiers:

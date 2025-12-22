@@ -4,6 +4,50 @@
 
 ---
 
+## 2024-12-22: App Store Preparation - MultipeerConnectivity Removal & URL Updates
+
+**Focus:**
+Address App Store submission blockers identified in previous analysis.
+
+**Issues Addressed:**
+1. MultipeerConnectivity feature removed for v1.0 (requires Local Network permission)
+2. Placeholder URLs updated to real contact info (spuud.com, hello@spuud.com)
+3. Privacy policy date fixed to current date
+
+**Changes Made:**
+
+**MultipeerConnectivity Removal (SecureCollaborationView.swift):**
+- Removed `import MultipeerConnectivity`
+- Removed multipeerService StateObject and related state variables
+- Removed PeerDiscoveryView sheet and struct
+- Removed peerToPeer case from ShareMethod enum
+- Updated uploadSecureDocument to use local share URLs
+- Added comment noting MultipeerDocumentService.swift available for future expansion
+
+**URL Updates:**
+- SettingsView.swift: Report an Issue, Report a Bug, Request a Feature → hello@spuud.com
+- HelpCenterView.swift: Email Support → hello@spuud.com
+- PRIVACY_POLICY.md: Support email → hello@spuud.com, date → December 22, 2024
+- README.md: Support section → spuud.com, hello@spuud.com
+- CONTRIBUTING.md: Contact info → hello@spuud.com, title → Vault PDF
+- QUICKSTART.md: Support section → spuud.com, hello@spuud.com
+- APP_STORE_SUBMISSION_CHECKLIST.md: Support email → hello@spuud.com
+
+**Files Modified:**
+- `OneBox/OneBox/Views/Advanced/SecureCollaborationView.swift`
+- `OneBox/OneBox/Views/SettingsView.swift`
+- `OneBox/OneBox/Views/Help/HelpCenterView.swift`
+- `OneBox/PRIVACY_POLICY.md`
+- `OneBox/README.md`
+- `OneBox/CONTRIBUTING.md`
+- `OneBox/QUICKSTART.md`
+- `OneBox/APP_STORE_SUBMISSION_CHECKLIST.md`
+
+**Outstanding:**
+- App icon still needs 1024x1024 PNG (logo files not found in doc directory)
+
+---
+
 ## 2025-12-21: Pre-Launch Audit + Placeholder Cleanup (Continued Session)
 
 **Focus:**

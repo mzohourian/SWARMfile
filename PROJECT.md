@@ -1,9 +1,9 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-21
+**Last Updated:** 2024-12-22
 
 ## What This Is
-**OneBox** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
+**Vault PDF** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
 
 **Target Users:** Anyone who works with PDFs and images on iPhone/iPad and cares about privacy.
 
@@ -113,29 +113,36 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2025-12-21 (Continued Session - Biometric Repurposing)
+**Date:** 2024-12-22 (App Store Preparation)
 
 **What Was Done:**
-- **Repurposed Biometric Lock to provide real security:**
-  - App-level lock: Face ID/Touch ID required to open the app
-  - Lock screen shows when app launches if enabled
-  - App re-locks when going to background
-  - Removed pointless "before processing" authentication
-- **Vault biometric access**: Secure Vault now requires biometric to access encrypted files
-- **Fixed critical Face ID crash** - NSFaceIDUsageDescription was in Info.plist but missing from project.yml
-- **Fixed invalid SF Symbol** - "vault.fill" doesn't exist, replaced with "lock.shield.fill"
-- **Fixed MainActor isolation crashes** - Privacy delegate calls properly wrapped in MainActor.run
-- **Fixed PBKDF2 encryption crashes** - Fixed force unwraps and type mismatches
-- **Enforced dark-only aesthetic** - ThemeManager simplified for dark-only
+- **App Store blockers addressed:**
+  - Removed MultipeerConnectivity feature for v1.0 (kept in MultipeerDocumentService.swift for future expansion)
+  - Updated all URLs to use spuud.com and hello@spuud.com
+  - Fixed privacy policy date to December 22, 2024
+- **MultipeerConnectivity removal:**
+  - Removed from SecureCollaborationView.swift (import, state, sheet, UI)
+  - Removed peerToPeer from ShareMethod enum
+  - Updated uploadSecureDocument to use local share URLs instead
+  - Added note about future expansion in code
+- **URL updates across files:**
+  - SettingsView.swift - Report an Issue, Report a Bug, Request a Feature
+  - HelpCenterView.swift - Email Support
+  - PRIVACY_POLICY.md - Support email
+  - README.md, CONTRIBUTING.md, QUICKSTART.md, APP_STORE_SUBMISSION_CHECKLIST.md
 
 **What's Unfinished:**
-- None - all changes completed
+- App icon still needs 1024x1024 PNG (logo photos not found in doc directory)
 
 **Files Modified This Session:**
-- `OneBox/OneBox/OneBoxApp.swift` - Added AppLockContainer, LockScreenView, scenePhase handling
-- `OneBox/Modules/Privacy/Privacy.swift` - Added isAppUnlocked, authenticateToUnlockApp(), lockApp(), authenticateForVaultAccess()
-- `OneBox/OneBox/Views/PrivacyDashboardView.swift` - Updated toggle descriptions
-- `OneBox/project.yml` - Added NSFaceIDUsageDescription to XcodeGen config
+- `OneBox/OneBox/Views/Advanced/SecureCollaborationView.swift` - Removed MultipeerConnectivity
+- `OneBox/OneBox/Views/SettingsView.swift` - Updated contact URLs
+- `OneBox/OneBox/Views/Help/HelpCenterView.swift` - Updated support email
+- `OneBox/PRIVACY_POLICY.md` - Updated date and contact email
+- `OneBox/README.md` - Updated support section
+- `OneBox/CONTRIBUTING.md` - Updated contact info and name
+- `OneBox/QUICKSTART.md` - Updated support section
+- `OneBox/APP_STORE_SUBMISSION_CHECKLIST.md` - Updated support email
 
 ---
 

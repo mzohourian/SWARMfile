@@ -575,9 +575,8 @@ This app uses only Apple-provided frameworks:
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourcompany/onebox/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourcompany/onebox/discussions)
-- **Email**: support@yourcompany.com
+- **Website**: [spuud.com](https://spuud.com)
+- **Email**: hello@spuud.com
 
 ---
 

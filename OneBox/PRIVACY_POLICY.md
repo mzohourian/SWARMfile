@@ -1,6 +1,6 @@
 # Vault PDF Privacy Policy
 
-**Last Updated: December 2, 2025**
+**Last Updated: December 22, 2024**
 
 ## Our Privacy Commitment
 
@@ -121,7 +121,7 @@ If we ever change our privacy practices (which would only happen to become more 
 
 Since we collect no data, there are no privacy-related inquiries about data we hold. However, if you have questions about our privacy practices:
 
-- **Support Email**: [Your support email]
+- **Support Email**: hello@spuud.com
 - **Subject Line**: "Privacy Policy Question"
 
 ## Legal Basis (GDPR Compliance)

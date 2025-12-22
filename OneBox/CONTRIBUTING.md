@@ -1,6 +1,6 @@
-# Contributing to OneBox
+# Contributing to Vault PDF
 
-Thank you for your interest in contributing to OneBox! This document provides guidelines and instructions for contributing to the project.
+Thank you for your interest in contributing to Vault PDF! This document provides guidelines and instructions for contributing to the project.
 
 ## Table of Contents
 
@@ -322,9 +322,8 @@ public func compressPDF(
 
 ## Questions?
 
-- Open an [Issue](https://github.com/yourcompany/onebox/issues)
-- Start a [Discussion](https://github.com/yourcompany/onebox/discussions)
-- Email: dev@yourcompany.com
+- Website: [spuud.com](https://spuud.com)
+- Email: hello@spuud.com
 
 ## License
 
@@ -332,4 +331,4 @@ By contributing, you agree that your contributions will be licensed under the MI
 
 ---
 
-**Thank you for contributing to OneBox! 🙌**
+**Thank you for contributing to Vault PDF!**

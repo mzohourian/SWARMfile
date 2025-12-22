@@ -835,13 +835,13 @@ struct ContactSupportView: View {
                         .font(OneBoxTypography.heroTitle)
                         .foregroundColor(OneBoxColors.primaryText)
 
-                    Text("We're here to help! Since OneBox is a privacy-first app, we don't collect any usage data. Please describe your issue below.")
+                    Text("We're here to help! Since Vault PDF is a privacy-first app, we don't collect any usage data. Please describe your issue below.")
                         .font(OneBoxTypography.body)
                         .foregroundColor(OneBoxColors.secondaryText)
                         .multilineTextAlignment(.center)
 
                     VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
-                        supportOption("Email Support", "envelope.fill", "support@onebox.app")
+                        supportOption("Email Support", "envelope.fill", "hello@spuud.com")
                         supportOption("In-App Feedback", "bubble.left.fill", "Use the feedback form in Settings")
                         supportOption("FAQ", "questionmark.circle.fill", "Check our frequently asked questions")
                     }

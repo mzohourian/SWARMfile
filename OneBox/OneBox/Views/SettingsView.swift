@@ -55,7 +55,7 @@ struct SettingsView: View {
                     Button("Help & FAQ") {
                         showingSupport = true
                     }
-                    Link("Report an Issue", destination: URL(string: "https://github.com/yourcompany/onebox/issues")!)
+                    Link("Report an Issue", destination: URL(string: "mailto:hello@spuud.com")!)
                 }
 
                 // About
@@ -258,9 +258,9 @@ struct SupportView: View {
                 }
 
                 Section("Contact") {
-                    Link("Report a Bug", destination: URL(string: "mailto:support@onebox.app")!)
+                    Link("Report a Bug", destination: URL(string: "mailto:hello@spuud.com")!)
                         .foregroundColor(OneBoxColors.goldText)
-                    Link("Request a Feature", destination: URL(string: "mailto:feedback@onebox.app")!)
+                    Link("Request a Feature", destination: URL(string: "mailto:hello@spuud.com?subject=Feature%20Request")!)
                         .foregroundColor(OneBoxColors.goldText)
                 }
             }

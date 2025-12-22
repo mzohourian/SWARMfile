@@ -373,9 +373,8 @@ Then click "Resume" in the preview canvas.
 
 ### Support
 
-- GitHub Issues: [Report a bug]
-- Discussions: [Ask a question]
-- Email: support@yourcompany.com
+- Website: [spuud.com](https://spuud.com)
+- Email: hello@spuud.com
 
 ---
 

@@ -247,7 +247,7 @@ fastlane release
 - [ ] **Conversion rates**: Free to Pro upgrades
 
 ### 3. Support Preparation
-- [ ] **Support email**: hello@spuud.com
+- [ ] **Support email**: vaultpdf@spuud.com
 - [ ] **FAQ documentation**: Common questions
 - [ ] **Bug reporting**: Issue tracking system
 - [ ] **Feature requests**: Feedback collection

@@ -841,7 +841,7 @@ struct ContactSupportView: View {
                         .multilineTextAlignment(.center)
 
                     VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
-                        supportOption("Email Support", "envelope.fill", "hello@spuud.com")
+                        supportOption("Email Support", "envelope.fill", "vaultpdf@spuud.com")
                         supportOption("In-App Feedback", "bubble.left.fill", "Use the feedback form in Settings")
                         supportOption("FAQ", "questionmark.circle.fill", "Check our frequently asked questions")
                     }

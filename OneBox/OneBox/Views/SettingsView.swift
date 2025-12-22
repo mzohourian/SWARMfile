@@ -55,7 +55,7 @@ struct SettingsView: View {
                     Button("Help & FAQ") {
                         showingSupport = true
                     }
-                    Link("Report an Issue", destination: URL(string: "mailto:hello@spuud.com")!)
+                    Link("Report an Issue", destination: URL(string: "mailto:vaultpdf@spuud.com")!)
                 }
 
                 // About
@@ -281,9 +281,9 @@ struct SupportView: View {
                 }
 
                 Section("Contact") {
-                    Link("Report a Bug", destination: URL(string: "mailto:hello@spuud.com")!)
+                    Link("Report a Bug", destination: URL(string: "mailto:vaultpdf@spuud.com")!)
                         .foregroundColor(OneBoxColors.goldText)
-                    Link("Request a Feature", destination: URL(string: "mailto:hello@spuud.com?subject=Feature%20Request")!)
+                    Link("Request a Feature", destination: URL(string: "mailto:vaultpdf@spuud.com?subject=Feature%20Request")!)
                         .foregroundColor(OneBoxColors.goldText)
                 }
             }

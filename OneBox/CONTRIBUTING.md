@@ -323,7 +323,7 @@ public func compressPDF(
 ## Questions?
 
 - Website: [spuud.com](https://spuud.com)
-- Email: hello@spuud.com
+- Email: vaultpdf@spuud.com
 
 ## License
 

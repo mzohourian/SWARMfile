@@ -374,7 +374,7 @@ Then click "Resume" in the preview canvas.
 ### Support
 
 - Website: [spuud.com](https://spuud.com)
-- Email: hello@spuud.com
+- Email: vaultpdf@spuud.com
 
 ---
 

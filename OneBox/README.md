@@ -576,7 +576,7 @@ This app uses only Apple-provided frameworks:
 ## 📞 Support
 
 - **Website**: [spuud.com](https://spuud.com)
-- **Email**: hello@spuud.com
+- **Email**: vaultpdf@spuud.com
 
 ---
 

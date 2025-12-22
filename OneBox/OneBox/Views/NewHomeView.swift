@@ -108,8 +108,8 @@ struct HomeView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 320)
-                    .padding(.top, -32) // Aggressive pull up to minimize top margin
-                    .padding(.bottom, -20) // Reduce space below logo
+                    .padding(.top, -60) // Pull logo to top
+                    .padding(.bottom, -20)
 
                 // Single elegant badge - gold, on-brand
                 HStack(spacing: 6) {

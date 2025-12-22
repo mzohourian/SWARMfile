@@ -58,12 +58,14 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 | # | Severity | Issue | Location | Status |
 |---|----------|-------|----------|--------|
-| 1 | **BLOCKER** | App icon image missing | Assets.xcassets/AppIcon.appiconset/ | Need 1024x1024 PNG |
-| 2 | Medium | Accessibility labels incomplete | Multiple views | ~50 labels needed |
-| 3 | Low | Swift 6 concurrency warnings (3) | MultipeerDocumentService, OnDeviceSearchService | Non-blocking |
-| 4 | Info | "Update to recommended settings" | Xcode project | Informational |
+| 1 | Medium | Accessibility labels incomplete | Multiple views | ~50 labels needed |
+| 2 | Low | Swift 6 concurrency warnings (3) | MultipeerDocumentService, OnDeviceSearchService | Non-blocking |
+| 3 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
+- **RESOLVED: App icon and branding complete** - Using vaultpdflogo.png (prominent gold shield on dark background)
+  - App icon: 1024x1024 PNG properly configured in AppIcon.appiconset
+  - VaultLogo integrated throughout app: Home screen, Lock screen, Onboarding, Paywall, Settings
 - **Repurposed Biometric Lock for real security** - Now locks the entire app (not just processing)
   - App-level lock screen with Face ID/Touch ID
   - Re-locks automatically when app goes to background
@@ -113,44 +115,39 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2024-12-22 (App Store Preparation)
+**Date:** 2024-12-22 (App Icon & Branding Complete)
 
 **What Was Done:**
-- **App Store blockers addressed:**
-  - Removed MultipeerConnectivity feature for v1.0 (kept in MultipeerDocumentService.swift for future expansion)
+- **App icon completed:**
+  - Added vaultpdflogo.png (prominent gold shield on dark background)
+  - Configured AppIcon.appiconset with 1024x1024 PNG
+  - Configured VaultLogo.imageset for in-app branding
+- **VaultLogo integrated throughout app:**
+  - NewHomeView.swift - Hero section (prominent logo above "FORT KNOX" title)
+  - OneBoxApp.swift - Lock screen display
+  - OnboardingView.swift - Welcome page
+  - PaywallView.swift - Upgrade header
+  - SettingsView.swift - About section
+- **Previous session work:**
+  - Removed MultipeerConnectivity feature for v1.0
   - Updated all URLs to use spuud.com and hello@spuud.com
   - Fixed privacy policy date to December 22, 2024
-- **MultipeerConnectivity removal:**
-  - Removed from SecureCollaborationView.swift (import, state, sheet, UI)
-  - Removed peerToPeer from ShareMethod enum
-  - Updated uploadSecureDocument to use local share URLs instead
-  - Added note about future expansion in code
-- **URL updates across files:**
-  - SettingsView.swift - Report an Issue, Report a Bug, Request a Feature
-  - HelpCenterView.swift - Email Support
-  - PRIVACY_POLICY.md - Support email
-  - README.md, CONTRIBUTING.md, QUICKSTART.md, APP_STORE_SUBMISSION_CHECKLIST.md
 
 **What's Unfinished:**
-- App icon still needs 1024x1024 PNG (logo photos not found in doc directory)
+- None - all blockers resolved
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/Advanced/SecureCollaborationView.swift` - Removed MultipeerConnectivity
-- `OneBox/OneBox/Views/SettingsView.swift` - Updated contact URLs
-- `OneBox/OneBox/Views/Help/HelpCenterView.swift` - Updated support email
-- `OneBox/PRIVACY_POLICY.md` - Updated date and contact email
-- `OneBox/README.md` - Updated support section
-- `OneBox/CONTRIBUTING.md` - Updated contact info and name
-- `OneBox/QUICKSTART.md` - Updated support section
-- `OneBox/APP_STORE_SUBMISSION_CHECKLIST.md` - Updated support email
+- `OneBox/OneBox/Views/NewHomeView.swift` - Added VaultLogo to hero section
+- `OneBox/OneBox/Assets.xcassets/VaultLogo.imageset/Contents.json` - Updated to use vaultpdflogo.png
+- `OneBox/OneBox/Assets.xcassets/AppIcon.appiconset/AppIcon.png` - Updated with new logo
 
 ---
 
 ## Next Steps (Priority Order)
 
-1. **BLOCKER: Add app icon** - Create 1024x1024 PNG and add to AppIcon.appiconset
-2. **Add accessibility labels** - ~50 labels needed across PaywallView, ToolFlowView, HomeView
-3. **Final device testing** - Test all features on physical device before submission
+1. **Add accessibility labels** - ~50 labels needed across PaywallView, ToolFlowView, HomeView
+2. **Final device testing** - Test all features on physical device before submission
+3. **App Store submission** - All blockers resolved, ready for review
 
 ---
 

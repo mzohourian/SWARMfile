@@ -103,6 +103,14 @@ struct HomeView: View {
     private var privacyHeroSection: some View {
         OneBoxCard(style: .security) {
             VStack(spacing: OneBoxSpacing.large) {
+                // Brand Logo - prominent at top
+                Image("VaultLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 100, height: 100)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .shadow(color: OneBoxColors.primaryGold.opacity(0.4), radius: 12, x: 0, y: 4)
+
                 // Hero Statement
                 VStack(spacing: OneBoxSpacing.small) {
                     // Main title with dramatic emphasis
@@ -163,11 +171,11 @@ struct HomeView: View {
                 .frame(width: 120, height: 120)
                 .rotationEffect(.degrees(-90))
 
-            // Center icon
+            // Center content with security badge
             VStack(spacing: OneBoxSpacing.tiny) {
-                Image(systemName: "shield.checkered")
-                    .font(.system(size: 32, weight: .semibold))
-                    .foregroundColor(OneBoxColors.primaryGold)
+                Image(systemName: "checkmark.shield.fill")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundColor(OneBoxColors.secureGreen)
 
                 Text("100%")
                     .font(OneBoxTypography.caption)

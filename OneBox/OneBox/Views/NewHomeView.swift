@@ -116,6 +116,7 @@ struct HomeView: View {
                 // Safe Dial Animation
                 safeDial
             }
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -159,10 +160,13 @@ struct HomeView: View {
     }
 
     private var privacyGuarantees: some View {
-        HStack(spacing: OneBoxSpacing.large) {
+        HStack(spacing: 0) {
             privacyGuaranteeItem("shield.fill", "On-Device", "Processing")
+                .frame(maxWidth: .infinity)
             privacyGuaranteeItem("lock.fill", "Zero", "Cloud Calls")
+                .frame(maxWidth: .infinity)
             privacyGuaranteeItem("eye.slash.fill", "No", "Tracking")
+                .frame(maxWidth: .infinity)
         }
     }
 

@@ -102,12 +102,13 @@ struct HomeView: View {
     // MARK: - Privacy Hero Section
     private var privacyHeroSection: some View {
         OneBoxCard(style: .security) {
-            VStack(spacing: 2) {
-                // Brand Logo with embedded tagline
+            VStack(spacing: 10) {
+                // Brand Logo with embedded tagline - larger for legibility
                 Image("VaultLogoWithText")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(height: 200)
+                    .frame(height: 260)
+                    .padding(.top, -12) // Pull up to reduce top margin
 
                 // Single elegant badge - gold, on-brand
                 HStack(spacing: 6) {
@@ -124,7 +125,7 @@ struct HomeView: View {
                 .cornerRadius(16)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+            .padding(.bottom, 12)
         }
     }
 
@@ -246,19 +247,10 @@ struct HomeView: View {
 
                     Spacer()
 
-                    // Security indicator
-                    HStack(spacing: 4) {
-                        Image(systemName: "lock.shield.fill")
-                            .font(.system(size: 10, weight: .medium))
-                        Text("SECURE")
-                            .font(.system(size: 8, weight: .bold))
-                            .tracking(0.5)
-                    }
-                    .foregroundColor(OneBoxColors.secureGreen)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(OneBoxColors.secureGreen.opacity(0.1))
-                    .cornerRadius(4)
+                    // Security indicator - minimal gold shield
+                    Image(systemName: "shield.fill")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(OneBoxColors.primaryGold.opacity(0.6))
                 }
 
                 // Tool name - prominent

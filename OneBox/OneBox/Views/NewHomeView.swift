@@ -107,7 +107,7 @@ struct HomeView: View {
                 Image("VaultLogoWithText")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 180, height: 180)
+                    .frame(width: 240, height: 240)
 
                 // Single confident tagline
                 Text("Your documents never leave.")

@@ -3,16 +3,18 @@
 # https://docs.fastlane.tools/advanced/#appfile
 
 # Your Apple ID
-apple_id ENV['FASTLANE_USER'] || "your-apple-id@example.com"
+apple_id ENV['FASTLANE_USER'] || "m.zohourian@me.com"
 
-# App Identifier
-app_identifier "com.yourcompany.onebox"
+# App Identifier (Bundle ID)
+app_identifier "com.spuud.vaultpdf"
 
 # Team ID (find it at https://developer.apple.com/account/#/membership/)
-team_id ENV['FASTLANE_TEAM_ID'] || "YOUR_TEAM_ID"
+# For personal team: Mohammadreza Zohourianrad
+team_id ENV['FASTLANE_TEAM_ID'] || "CD2Q4DAMUM"
 
 # iTunes Connect Team ID (if different from Developer Portal)
-itc_team_id ENV['FASTLANE_ITC_TEAM_ID'] || "YOUR_ITC_TEAM_ID"
+# Usually same as team_id for personal teams
+itc_team_id ENV['FASTLANE_ITC_TEAM_ID'] || "CD2Q4DAMUM"
 
 # For more information about environment variables, see:
 # https://docs.fastlane.tools/advanced/#environment-variables

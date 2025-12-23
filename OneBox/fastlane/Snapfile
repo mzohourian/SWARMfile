@@ -1,0 +1,74 @@
+# Snapfile - Fastlane Screenshot Configuration for Vault PDF
+# https://docs.fastlane.tools/actions/snapshot/
+
+# Devices to screenshot (App Store required sizes)
+devices([
+  "iPhone 17 Pro Max",       # 6.7" - Required
+  "iPhone 17 Pro",           # 6.1" - Required
+  "iPad Pro 13-inch (M5)"    # If iPad supported
+])
+
+# Languages
+languages(["en-US"])
+
+# Xcode scheme
+scheme("OneBox")
+
+# Output location
+output_directory("./fastlane/screenshots")
+
+# Clear old screenshots before generating new ones
+clear_previous_screenshots(true)
+
+# Override status bar to show 9:41, full battery, full signal
+override_status_bar(true)
+
+# Use dark mode (matches Vault PDF premium aesthetic)
+dark_mode(true)
+
+# Skip taking app summary screen
+skip_open_summary(false)
+
+# Stop after first failure (useful for debugging)
+stop_after_first_error(false)
+
+# Number of concurrent simulators (adjust based on your Mac's RAM)
+concurrent_simulators(true)
+
+# Disable slide to type (can cause issues in UI tests)
+disable_slide_to_type(true)
+
+# Reinstall app before taking screenshots
+reinstall_app(true)
+
+# Erase simulator before running (clean state)
+erase_simulator(true)
+
+# Localize simulator (sets locale for device)
+localize_simulator(true)
+
+# UI test configuration
+launch_arguments([
+  "--screenshots",
+  "--uitesting",
+  "--skip-onboarding",
+  "--demo-mode"
+])
+
+# Workspace (if using workspace instead of project)
+# workspace("OneBox.xcworkspace")
+
+# Project file
+# project("OneBox.xcodeproj")
+
+# iOS version (optional - uses latest by default)
+# ios_version("17.0")
+
+# Number of retry attempts for failed screenshots
+number_of_retries(1)
+
+# HTML template for viewing screenshots
+# html_template("./fastlane/screenshots/screenshots.html")
+
+# Headless mode (no simulator window, faster)
+headless(false)

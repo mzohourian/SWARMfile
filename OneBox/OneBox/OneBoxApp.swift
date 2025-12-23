@@ -19,9 +19,32 @@ struct OneBoxApp: App {
     @StateObject private var privacyManager = Privacy.PrivacyManager.shared
     @Environment(\.scenePhase) private var scenePhase
 
+    /// Demo mode for App Store screenshots - disables lock, skips onboarding
+    static var isDemoMode: Bool {
+        CommandLine.arguments.contains("--demo-mode") ||
+        CommandLine.arguments.contains("--screenshots")
+    }
+
+    /// Skip onboarding for UI tests and screenshots
+    static var shouldSkipOnboarding: Bool {
+        CommandLine.arguments.contains("--skip-onboarding") ||
+        CommandLine.arguments.contains("--screenshots") ||
+        CommandLine.arguments.contains("--uitesting")
+    }
+
     init() {
         // Initialize app-level configuration
         configureAppearance()
+
+        // In demo mode, ensure clean state for screenshots
+        #if DEBUG
+        if Self.isDemoMode {
+            // Mark onboarding as complete
+            UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+            // Reset export count to show "3 free exports left"
+            UserDefaults.standard.set(0, forKey: "freeExportsUsed")
+        }
+        #endif
     }
 
     var body: some Scene {
@@ -160,7 +183,9 @@ struct AppLockContainer: View {
     }
 
     private var shouldShowLockScreen: Bool {
-        privacyManager.isBiometricLockEnabled && !privacyManager.isAppUnlocked
+        // Skip lock screen in demo/screenshot mode
+        guard !OneBoxApp.isDemoMode else { return false }
+        return privacyManager.isBiometricLockEnabled && !privacyManager.isAppUnlocked
     }
 }
 

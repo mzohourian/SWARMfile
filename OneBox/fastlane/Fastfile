@@ -178,21 +178,45 @@ platform :ios do
 
   # MARK: - Screenshots
 
-  desc "Generate App Store screenshots"
+  desc "Generate App Store screenshots (raw captures)"
   lane :screenshots do
+    # Uses Snapfile configuration
     snapshot(
-      devices: [
-        "iPhone 15 Pro Max",
-        "iPhone 15 Pro",
-        "iPhone SE (3rd generation)",
-        "iPad Pro (12.9-inch) (6th generation)"
-      ],
-      languages: ["en-US"],
+      scheme: "OneBox",
       output_directory: "./fastlane/screenshots",
       clear_previous_screenshots: true,
       override_status_bar: true,
-      dark_mode: false
+      dark_mode: true  # Match Vault PDF premium dark aesthetic
     )
+  end
+
+  desc "Generate screenshots with device frames and text overlays"
+  lane :screenshots_framed do
+    # First capture raw screenshots
+    screenshots
+
+    # Then add device frames and text overlays
+    frameit(
+      white: false,  # Use black frames to match dark aesthetic
+      path: "./fastlane/screenshots",
+      force_device_type: "iPhone 15 Pro Max"
+    )
+  end
+
+  desc "Upload screenshots to App Store Connect"
+  lane :upload_screenshots do
+    deliver(
+      skip_binary_upload: true,
+      skip_metadata: true,
+      overwrite_screenshots: true,
+      screenshots_path: "./fastlane/screenshots"
+    )
+  end
+
+  desc "Full screenshot workflow: capture, frame, and upload"
+  lane :screenshots_full do
+    screenshots_framed
+    upload_screenshots
   end
 
   # MARK: - Certificates & Provisioning

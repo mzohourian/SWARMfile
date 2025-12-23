@@ -265,15 +265,3 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 }
-
-// MARK: - Snapshot Helper
-
-/// This function is provided by fastlane snapshot
-/// It's defined here as a fallback if the SnapshotHelper.swift isn't auto-generated
-func setupSnapshot(_ app: XCUIApplication, waitForAnimations: Bool = true) {
-    Snapshot.setupSnapshot(app, waitForAnimations: waitForAnimations)
-}
-
-func snapshot(_ name: String, waitForLoadingIndicator: Bool = true) {
-    Snapshot.snapshot(name, waitForLoadingIndicator: waitForLoadingIndicator)
-}

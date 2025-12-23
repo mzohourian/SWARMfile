@@ -159,7 +159,9 @@ targets:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - Tests
+      - path: Tests
+        excludes:
+          - "OneBoxUITests/**"
     dependencies:
       - target: OneBox
       - target: CorePDF
@@ -170,16 +172,32 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.tests
       GENERATE_INFOPLIST_FILE: YES
 
+  # UI Test Target (separate for screenshots and UI testing)
+  OneBoxUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Tests/OneBoxUITests
+    dependencies:
+      - target: OneBox
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.uitests
+      GENERATE_INFOPLIST_FILE: YES
+      TEST_HOST: ""
+      BUNDLE_LOADER: ""
+
 schemes:
   OneBox:
     build:
       targets:
         OneBox: all
+        OneBoxUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
       targets:
         - OneBoxTests
+        - OneBoxUITests
     archive:
       config: Release

@@ -267,8 +267,9 @@ final class OneBoxUITests: XCTestCase {
             
             // Verify search results appear
             let searchResults = app.cells.matching(identifier: "SearchResult")
-            XCTAssertTrue(searchResults.count > 0 || 
-                         app.staticTexts["PDF"].count > 1) // At least one result
+            let pdfTexts = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'PDF'"))
+            XCTAssertTrue(searchResults.count > 0 ||
+                         pdfTexts.count > 1) // At least one result
             
             // Clear search
             if app.buttons["Clear"].exists {

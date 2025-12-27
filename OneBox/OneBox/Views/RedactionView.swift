@@ -40,8 +40,9 @@ struct RedactionView: View {
     @State private var drawStartPoint: CGPoint?
     @State private var currentDrawRect: CGRect?
 
-    // Mode toggle: View mode (scroll/select) vs Draw mode (create boxes)
-    @State private var isDrawModeEnabled = false
+    // Dragging state for moving boxes
+    @State private var draggingBoxId: UUID?
+    @State private var dragOffset: CGSize = .zero
 
     // Zoom state
     @State private var zoomScale: CGFloat = 1.0
@@ -160,72 +161,39 @@ struct RedactionView: View {
                     let finalWidth = baseWidth * zoomScale
                     let finalHeight = baseHeight * zoomScale
 
-                    ZStack {
-                        ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                            ZStack(alignment: .topLeading) {
-                                // PDF page rendering
-                                RedactionPDFPageView(page: page)
-                                    .frame(width: finalWidth, height: finalHeight)
-                                    .background(Color.white)
-                                    .cornerRadius(8)
-                                    .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
-
-                                // Redaction boxes overlay
-                                ForEach(boxesForCurrentPage()) { box in
-                                    redactionBoxView(box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
-                                }
-
-                                // Current drawing rectangle (while user is dragging)
-                                if let drawRect = currentDrawRect {
-                                    Rectangle()
-                                        .fill(Color.black.opacity(0.5))
-                                        .frame(width: drawRect.width, height: drawRect.height)
-                                        .position(x: drawRect.midX, y: drawRect.midY)
-                                        .overlay(
-                                            Rectangle()
-                                                .stroke(OneBoxColors.primaryGold, lineWidth: 2)
-                                                .frame(width: drawRect.width, height: drawRect.height)
-                                                .position(x: drawRect.midX, y: drawRect.midY)
-                                        )
-                                }
-                            }
-                            .frame(width: finalWidth, height: finalHeight)
-                            .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
-                        }
-                        .simultaneousGesture(
-                            MagnificationGesture()
-                                .onChanged { value in
-                                    let newScale = lastZoomScale * value
-                                    zoomScale = min(max(newScale, minZoom), maxZoom)
-                                }
-                                .onEnded { value in
-                                    lastZoomScale = zoomScale
-                                    HapticManager.shared.selection()
-                                }
-                        )
-
-                        // Drawing overlay - only shown when in draw mode
-                        if isDrawModeEnabled {
-                            Color.clear
+                    ScrollView([.horizontal, .vertical], showsIndicators: true) {
+                        ZStack(alignment: .topLeading) {
+                            // PDF page rendering with double-tap to add box
+                            RedactionPDFPageView(page: page)
+                                .frame(width: finalWidth, height: finalHeight)
+                                .background(Color.white)
+                                .cornerRadius(8)
+                                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
                                 .contentShape(Rectangle())
-                                .gesture(
-                                    DragGesture(minimumDistance: 5)
-                                        .onChanged { value in
-                                            handleDrawStart(value.startLocation, in: CGSize(width: finalWidth, height: finalHeight))
-                                            handleDrawUpdate(value.location, in: CGSize(width: finalWidth, height: finalHeight))
-                                        }
-                                        .onEnded { value in
-                                            handleDrawEnd(in: CGSize(width: finalWidth, height: finalHeight))
-                                        }
-                                )
-                                .overlay(
-                                    // Visual indicator that draw mode is active
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(OneBoxColors.primaryGold.opacity(0.5), lineWidth: 2)
-                                        .padding(4)
-                                )
+                                .onTapGesture(count: 2) { location in
+                                    // Double-tap to create a new redaction box
+                                    createBoxAtLocation(location, in: CGSize(width: finalWidth, height: finalHeight))
+                                }
+
+                            // Redaction boxes overlay
+                            ForEach(boxesForCurrentPage()) { box in
+                                redactionBoxView(box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
+                            }
                         }
+                        .frame(width: finalWidth, height: finalHeight)
+                        .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
                     }
+                    .simultaneousGesture(
+                        MagnificationGesture()
+                            .onChanged { value in
+                                let newScale = lastZoomScale * value
+                                zoomScale = min(max(newScale, minZoom), maxZoom)
+                            }
+                            .onEnded { value in
+                                lastZoomScale = zoomScale
+                                HapticManager.shared.selection()
+                            }
+                    )
                 }
             }
 
@@ -242,40 +210,37 @@ struct RedactionView: View {
     // MARK: - Instructions Header
     private var instructionsHeader: some View {
         VStack(spacing: OneBoxSpacing.small) {
-            // Mode toggle and hint
-            HStack {
-                // Draw Mode Toggle Button
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isDrawModeEnabled.toggle()
-                    }
-                    // Strong haptic feedback when entering draw mode
-                    if isDrawModeEnabled {
-                        HapticManager.shared.impact(.heavy)
-                    } else {
-                        HapticManager.shared.selection()
-                    }
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: isDrawModeEnabled ? "pencil.circle.fill" : "pencil.circle")
-                            .font(.system(size: 20))
-                        Text(isDrawModeEnabled ? "Drawing" : "Draw")
-                            .font(OneBoxTypography.caption)
-                    }
-                    .foregroundColor(isDrawModeEnabled ? OneBoxColors.primaryGraphite : OneBoxColors.primaryGold)
-                    .padding(.horizontal, OneBoxSpacing.small)
-                    .padding(.vertical, 6)
-                    .background(isDrawModeEnabled ? OneBoxColors.primaryGold : OneBoxColors.surfaceGraphite)
-                    .cornerRadius(OneBoxRadius.medium)
-                }
-
-                Spacer()
-
-                // Context-sensitive hint
+            // Gesture hints
+            HStack(spacing: OneBoxSpacing.medium) {
+                // Double-tap hint
                 HStack(spacing: 4) {
-                    Image(systemName: isDrawModeEnabled ? "hand.draw.fill" : "hand.tap.fill")
+                    Image(systemName: "hand.tap.fill")
                         .font(.system(size: 12))
-                    Text(isDrawModeEnabled ? "Drag to add box" : "Tap box to select")
+                    Text("Double-tap to add")
+                        .font(OneBoxTypography.micro)
+                }
+                .foregroundColor(OneBoxColors.secondaryText)
+
+                Divider()
+                    .frame(height: 12)
+
+                // Tap hint
+                HStack(spacing: 4) {
+                    Image(systemName: "hand.point.up.left.fill")
+                        .font(.system(size: 12))
+                    Text("Tap to select")
+                        .font(OneBoxTypography.micro)
+                }
+                .foregroundColor(OneBoxColors.secondaryText)
+
+                Divider()
+                    .frame(height: 12)
+
+                // Drag hint
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                        .font(.system(size: 12))
+                    Text("Drag to move")
                         .font(OneBoxTypography.micro)
                 }
                 .foregroundColor(OneBoxColors.secondaryText)
@@ -292,7 +257,7 @@ struct RedactionView: View {
                 }
             }
 
-            // Zoom controls and full-screen button
+            // Zoom controls, full-screen button, and delete
             HStack {
                 HStack(spacing: OneBoxSpacing.small) {
                     Button(action: {
@@ -328,7 +293,7 @@ struct RedactionView: View {
 
                     Button(action: {
                         isFullScreen = true
-                        HapticManager.shared.selection()
+                        HapticManager.shared.impact(.light)
                     }) {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
                             .font(.system(size: 16))
@@ -367,9 +332,13 @@ struct RedactionView: View {
         let width = box.normalizedRect.width * pageSize.width
         let height = box.normalizedRect.height * pageSize.height
 
+        // Calculate offset if this box is being dragged
+        let isDragging = draggingBoxId == box.id
+        let currentOffset = isDragging ? dragOffset : .zero
+
         return Group {
             if box.isSelected {
-                // Selected = will be redacted (solid black)
+                // Selected = will be redacted (solid black with gold border)
                 Rectangle()
                     .fill(Color.black)
                     .frame(width: max(width, 20), height: max(height, 8))
@@ -377,6 +346,7 @@ struct RedactionView: View {
                         RoundedRectangle(cornerRadius: 2)
                             .stroke(OneBoxColors.primaryGold, lineWidth: 2)
                     )
+                    .shadow(color: isDragging ? OneBoxColors.primaryGold.opacity(0.5) : .clear, radius: 4)
             } else {
                 // Deselected = won't be redacted (gray outline)
                 Rectangle()
@@ -388,17 +358,39 @@ struct RedactionView: View {
                     )
             }
         }
-        .position(x: x + width/2, y: y + height/2)
-        .onTapGesture {
-            // Single-tap to toggle selection (only when not in draw mode)
-            guard !isDrawModeEnabled else { return }
-            toggleBox(box)
-        }
+        .position(x: x + width/2 + currentOffset.width, y: y + height/2 + currentOffset.height)
+        .gesture(
+            DragGesture(minimumDistance: 5)
+                .onChanged { value in
+                    // Start dragging
+                    if draggingBoxId == nil {
+                        draggingBoxId = box.id
+                        HapticManager.shared.impact(.medium)
+                    }
+                    dragOffset = value.translation
+                }
+                .onEnded { value in
+                    // Commit the move
+                    moveBox(box, by: value.translation, in: pageSize)
+                    draggingBoxId = nil
+                    dragOffset = .zero
+                    HapticManager.shared.impact(.light)
+                }
+        )
+        .simultaneousGesture(
+            TapGesture()
+                .onEnded {
+                    // Single-tap to toggle selection
+                    toggleBox(box)
+                }
+        )
         .onLongPressGesture(minimumDuration: 0.5) {
             // Long-press to delete box directly
             deleteBox(box)
             HapticManager.shared.notification(.warning)
         }
+        .scaleEffect(isDragging ? 1.05 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: isDragging)
     }
 
     // MARK: - Page Navigation
@@ -541,28 +533,11 @@ struct RedactionView: View {
 
                     Spacer()
 
-                    // Draw Mode Toggle (same as main view)
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isDrawModeEnabled.toggle()
-                        }
-                        if isDrawModeEnabled {
-                            HapticManager.shared.impact(.heavy)
-                        } else {
-                            HapticManager.shared.selection()
-                        }
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: isDrawModeEnabled ? "pencil.circle.fill" : "pencil.circle")
-                                .font(.system(size: 20))
-                            Text(isDrawModeEnabled ? "Drawing" : "Draw")
-                                .font(OneBoxTypography.caption)
-                        }
-                        .foregroundColor(isDrawModeEnabled ? .black : OneBoxColors.primaryGold)
-                        .padding(.horizontal, OneBoxSpacing.small)
-                        .padding(.vertical, 6)
-                        .background(isDrawModeEnabled ? OneBoxColors.primaryGold : Color.white.opacity(0.2))
-                        .cornerRadius(OneBoxRadius.medium)
+                    // Page info
+                    if let document = pdfDocument {
+                        Text("Page \(currentPageIndex + 1) of \(document.pageCount)")
+                            .font(OneBoxTypography.body)
+                            .foregroundColor(.white)
                     }
 
                     Spacer()
@@ -592,69 +567,36 @@ struct RedactionView: View {
                         let finalWidth = baseWidth * fullScreenZoom
                         let finalHeight = baseHeight * fullScreenZoom
 
-                        ZStack {
-                            ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                                ZStack(alignment: .topLeading) {
-                                    // PDF page rendering
-                                    RedactionPDFPageView(page: page)
-                                        .frame(width: finalWidth, height: finalHeight)
-                                        .background(Color.white)
-
-                                    // Redaction boxes overlay
-                                    ForEach(boxesForCurrentPage()) { box in
-                                        redactionBoxView(box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
-                                    }
-
-                                    // Current drawing rectangle
-                                    if let drawRect = currentDrawRect {
-                                        Rectangle()
-                                            .fill(Color.black.opacity(0.5))
-                                            .frame(width: drawRect.width, height: drawRect.height)
-                                            .position(x: drawRect.midX, y: drawRect.midY)
-                                            .overlay(
-                                                Rectangle()
-                                                    .stroke(OneBoxColors.primaryGold, lineWidth: 2)
-                                                    .frame(width: drawRect.width, height: drawRect.height)
-                                                    .position(x: drawRect.midX, y: drawRect.midY)
-                                            )
-                                    }
-                                }
-                                .frame(width: finalWidth, height: finalHeight)
-                                .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
-                            }
-                            .simultaneousGesture(
-                                MagnificationGesture()
-                                    .onChanged { value in
-                                        let newScale = fullScreenLastZoom * value
-                                        fullScreenZoom = min(max(newScale, 1.0), 5.0)
-                                    }
-                                    .onEnded { value in
-                                        fullScreenLastZoom = fullScreenZoom
-                                        HapticManager.shared.selection()
-                                    }
-                            )
-
-                            // Drawing overlay - only shown when in draw mode
-                            if isDrawModeEnabled {
-                                Color.clear
+                        ScrollView([.horizontal, .vertical], showsIndicators: false) {
+                            ZStack(alignment: .topLeading) {
+                                // PDF page rendering with double-tap to add box
+                                RedactionPDFPageView(page: page)
+                                    .frame(width: finalWidth, height: finalHeight)
+                                    .background(Color.white)
                                     .contentShape(Rectangle())
-                                    .gesture(
-                                        DragGesture(minimumDistance: 5)
-                                            .onChanged { value in
-                                                handleDrawStart(value.startLocation, in: CGSize(width: finalWidth, height: finalHeight))
-                                                handleDrawUpdate(value.location, in: CGSize(width: finalWidth, height: finalHeight))
-                                            }
-                                            .onEnded { value in
-                                                handleDrawEnd(in: CGSize(width: finalWidth, height: finalHeight))
-                                            }
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(OneBoxColors.primaryGold.opacity(0.5), lineWidth: 2)
-                                            .padding(4)
-                                    )
+                                    .onTapGesture(count: 2) { location in
+                                        createBoxAtLocation(location, in: CGSize(width: finalWidth, height: finalHeight))
+                                    }
+
+                                // Redaction boxes overlay
+                                ForEach(boxesForCurrentPage()) { box in
+                                    redactionBoxView(box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
+                                }
                             }
+                            .frame(width: finalWidth, height: finalHeight)
+                            .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
                         }
+                        .simultaneousGesture(
+                            MagnificationGesture()
+                                .onChanged { value in
+                                    let newScale = fullScreenLastZoom * value
+                                    fullScreenZoom = min(max(newScale, 1.0), 5.0)
+                                }
+                                .onEnded { value in
+                                    fullScreenLastZoom = fullScreenZoom
+                                    HapticManager.shared.selection()
+                                }
+                        )
                     }
                 }
 
@@ -677,13 +619,13 @@ struct RedactionView: View {
 
                     Spacer()
 
-                    // Stats and hint
+                    // Stats and hints
                     let selectedCount = redactionBoxes.filter { $0.isSelected }.count
                     VStack(spacing: 2) {
-                        Text("\(selectedCount) redactions")
+                        Text("\(selectedCount) selected")
                             .font(OneBoxTypography.body)
                             .foregroundColor(OneBoxColors.primaryGold)
-                        Text(isDrawModeEnabled ? "Drag to add box" : "Tap box to select")
+                        Text("Double-tap to add • Tap to select • Drag to move")
                             .font(OneBoxTypography.micro)
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -764,6 +706,68 @@ struct RedactionView: View {
         if countToDelete > 0 {
             HapticManager.shared.notification(.warning)
         }
+    }
+
+    /// Creates a new redaction box at the double-tap location
+    private func createBoxAtLocation(_ location: CGPoint, in pageSize: CGSize) {
+        // Create a default-sized box centered at the tap location
+        let defaultWidth: CGFloat = 100
+        let defaultHeight: CGFloat = 24
+
+        // Calculate the box position (centered on tap)
+        let boxX = max(0, min(location.x - defaultWidth/2, pageSize.width - defaultWidth))
+        let boxY = max(0, min(location.y - defaultHeight/2, pageSize.height - defaultHeight))
+
+        // Convert view coordinates to normalized coordinates
+        let normalizedX = boxX / pageSize.width
+        let normalizedY = 1.0 - ((boxY + defaultHeight) / pageSize.height)
+        let normalizedWidth = defaultWidth / pageSize.width
+        let normalizedHeight = defaultHeight / pageSize.height
+
+        let normalizedRect = CGRect(
+            x: normalizedX,
+            y: normalizedY,
+            width: normalizedWidth,
+            height: normalizedHeight
+        )
+
+        let newBox = RedactionBox(
+            pageIndex: currentPageIndex,
+            normalizedRect: normalizedRect,
+            source: .manual,
+            detectedText: nil,
+            isSelected: true
+        )
+
+        redactionBoxes.append(newBox)
+        HapticManager.shared.impact(.heavy)
+    }
+
+    /// Moves a box by the given translation
+    private func moveBox(_ box: RedactionBox, by translation: CGSize, in pageSize: CGSize) {
+        guard let index = redactionBoxes.firstIndex(where: { $0.id == box.id }) else { return }
+
+        // Convert translation to normalized coordinates
+        let normalizedDX = translation.width / pageSize.width
+        let normalizedDY = -translation.height / pageSize.height // Inverted because of coordinate system
+
+        // Calculate new position
+        var newRect = box.normalizedRect
+        newRect.origin.x += normalizedDX
+        newRect.origin.y += normalizedDY
+
+        // Clamp to page bounds
+        newRect.origin.x = max(0, min(newRect.origin.x, 1.0 - newRect.width))
+        newRect.origin.y = max(0, min(newRect.origin.y, 1.0 - newRect.height))
+
+        // Update the box
+        redactionBoxes[index] = RedactionBox(
+            pageIndex: box.pageIndex,
+            normalizedRect: newRect,
+            source: box.source,
+            detectedText: box.detectedText,
+            isSelected: box.isSelected
+        )
     }
 
     // MARK: - Drawing Handlers

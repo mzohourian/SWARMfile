@@ -184,7 +184,7 @@ struct RedactionView: View {
                             .overlay(alignment: .topLeading) {
                                 // Redaction boxes overlay - shares PDF coordinate system
                                 ZStack(alignment: .topLeading) {
-                                    // Tap anywhere on PDF to unfocus current box or create new box
+                                    // Background tap layer - lowest z-index, only captures taps on empty areas
                                     Color.clear
                                         .contentShape(Rectangle())
                                         .onTapGesture(count: 2) { location in
@@ -194,9 +194,11 @@ struct RedactionView: View {
                                             // Single tap on empty area unfocuses
                                             focusedBoxId = nil
                                         }
+                                        .zIndex(0)
 
                                     ForEach(boxesForCurrentPage()) { box in
                                         redactionBoxView(box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
+                                            .zIndex(1) // Ensure boxes are above the background tap layer
                                     }
                                 }
                                 .frame(width: finalWidth, height: finalHeight)
@@ -365,8 +367,12 @@ struct RedactionView: View {
         let displayX = x + resizeAdjustment.dx + currentOffset.width
         let displayY = y + resizeAdjustment.dy + currentOffset.height
 
-        return ZStack(alignment: .topLeading) {
-            // Main box - using offset from top-leading corner for accurate placement
+        // Use position to place box center, which properly handles hit testing
+        let centerX = displayX + displayWidth / 2
+        let centerY = displayY + displayHeight / 2
+
+        return Group {
+            // Main box
             Group {
                 if box.isSelected {
                     // Selected = will be redacted (black fill)
@@ -389,7 +395,6 @@ struct RedactionView: View {
                 }
             }
             .frame(width: displayWidth, height: displayHeight)
-            .offset(x: displayX, y: displayY)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 5)
@@ -427,29 +432,29 @@ struct RedactionView: View {
                 deleteBox(box)
                 HapticManager.shared.notification(.warning)
             }
+            .position(x: centerX, y: centerY)
+            .scaleEffect((isDragging || isResizing) ? 1.01 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: isDragging || isResizing)
 
             // Resize handles (only shown when focused)
             if isFocused {
                 // Top-left handle
                 resizeHandle(for: box, corner: .topLeft, pageSize: pageSize)
-                    .offset(x: displayX - 10, y: displayY - 10)
+                    .position(x: displayX, y: displayY)
 
                 // Top-right handle
                 resizeHandle(for: box, corner: .topRight, pageSize: pageSize)
-                    .offset(x: displayX + displayWidth - 10, y: displayY - 10)
+                    .position(x: displayX + displayWidth, y: displayY)
 
                 // Bottom-left handle
                 resizeHandle(for: box, corner: .bottomLeft, pageSize: pageSize)
-                    .offset(x: displayX - 10, y: displayY + displayHeight - 10)
+                    .position(x: displayX, y: displayY + displayHeight)
 
                 // Bottom-right handle
                 resizeHandle(for: box, corner: .bottomRight, pageSize: pageSize)
-                    .offset(x: displayX + displayWidth - 10, y: displayY + displayHeight - 10)
+                    .position(x: displayX + displayWidth, y: displayY + displayHeight)
             }
         }
-        .frame(width: pageSize.width, height: pageSize.height, alignment: .topLeading)
-        .scaleEffect((isDragging || isResizing) ? 1.01 : 1.0)
-        .animation(.easeInOut(duration: 0.1), value: isDragging || isResizing)
     }
 
     private func resizeHandle(for box: RedactionBox, corner: ResizeCorner, pageSize: CGSize) -> some View {
@@ -703,7 +708,7 @@ struct RedactionView: View {
                                 .overlay(alignment: .topLeading) {
                                     // Redaction boxes overlay - shares PDF coordinate system
                                     ZStack(alignment: .topLeading) {
-                                        // Tap anywhere on PDF to unfocus or create box
+                                        // Background tap layer - lowest z-index
                                         Color.clear
                                             .contentShape(Rectangle())
                                             .onTapGesture(count: 2) { location in
@@ -712,9 +717,11 @@ struct RedactionView: View {
                                             .onTapGesture(count: 1) {
                                                 focusedBoxId = nil
                                             }
+                                            .zIndex(0)
 
                                         ForEach(boxesForCurrentPage()) { box in
                                             redactionBoxView(box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
+                                                .zIndex(1)
                                         }
                                     }
                                     .frame(width: finalWidth, height: finalHeight)

@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2024-12-22
+**Last Updated:** 2024-12-27
 
 ## What This Is
 **Vault PDF** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -115,33 +115,29 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2024-12-22 (Premium UI Redesign - Home Screen)
+**Date:** 2024-12-27 (Redaction UX Improvements)
 
 **What Was Done:**
-- **Home screen hero section completely redesigned:**
-  - Removed cluttered elements (100% SECURE dial, 3 green privacy badges)
-  - Added premium branded logo with embedded tagline (vaultpdf_sub_transparent2.png)
-  - Single gold "100% Offline" badge - elegant, on-brand
-  - Minimal luxury aesthetic with optimized spacing
-- **Tool cards refined:**
-  - Replaced green "SECURE" text badges with subtle gold shield icons
-  - Cleaner, on-brand appearance matching gold/black palette
-- **Usage section redesigned:**
-  - Changed from "X of 3 used" to "X free exports left" (positive framing)
-  - Added elegant gold dot indicators
-  - Premium gold gradient "Unlock Unlimited" CTA button
-- **Multiple logo iterations:**
-  - Started with separate logo + text, evolved to logo with embedded tagline
-  - Fine-tuned sizing (280pt) and positioning (-50pt top padding)
-  - Fixed overlap issues between logo tagline and badge
+- **Redaction UX completely redesigned to fix accidental drawing:**
+  - Added **Draw Mode toggle** - prevents accidental box drawing when scrolling
+  - **View Mode (default):** Scroll/zoom works normally, single-tap to select/deselect boxes
+  - **Draw Mode:** Enabled only when user taps "Draw" button, visual gold border shows mode active
+  - Strong haptic feedback when entering draw mode
+- **Improved box selection/deletion:**
+  - Changed from double-tap to **single-tap** for selecting boxes (more discoverable)
+  - Added **"Delete (N)"** button in header when boxes are selected
+  - Added **long-press to delete** individual boxes directly
+- **Visual improvements:**
+  - Clear mode indicator (pencil icon changes state)
+  - Context-sensitive hints ("Tap box to select" vs "Drag to add box")
+  - Gold border overlay when in draw mode to make it obvious
+- **Full-screen editor updated** with same improvements
 
 **What's Unfinished:**
-- None - UI polish complete
+- None - redaction UX improvements complete
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/NewHomeView.swift` - Complete hero and usage section redesign
-- `OneBox/OneBox/Assets.xcassets/VaultLogoWithText.imageset/Contents.json` - Updated to vaultpdf_sub_transparent2.png
-- Multiple logo files added to VaultLogoWithText.imageset
+- `OneBox/OneBox/Views/RedactionView.swift` - Complete UX redesign for mode-based editing
 
 ---
 

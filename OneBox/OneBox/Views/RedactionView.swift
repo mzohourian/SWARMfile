@@ -54,6 +54,9 @@ struct RedactionView: View {
     @State private var resizingCorner: ResizeCorner?
     @State private var resizeOffset: CGSize = .zero
 
+    // Focused box for editing (separate from isSelected which means "will be redacted")
+    @State private var focusedBoxId: UUID?
+
     // Zoom state
     @State private var zoomScale: CGFloat = 1.0
     @State private var lastZoomScale: CGFloat = 1.0
@@ -172,26 +175,33 @@ struct RedactionView: View {
                     let finalHeight = baseHeight * zoomScale
 
                     ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                        ZStack(alignment: .topLeading) {
-                            // PDF page rendering with double-tap to add box
-                            RedactionPDFPageView(page: page)
-                                .frame(width: finalWidth, height: finalHeight)
-                                .background(Color.white)
-                                .cornerRadius(8)
-                                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
-                                .contentShape(Rectangle())
-                                .onTapGesture(count: 2) { location in
-                                    // Double-tap to create a new redaction box
-                                    createBoxAtLocation(location, in: CGSize(width: finalWidth, height: finalHeight))
-                                }
+                        // PDF page with boxes as overlay (ensures same coordinate system)
+                        RedactionPDFPageView(page: page)
+                            .frame(width: finalWidth, height: finalHeight)
+                            .background(Color.white)
+                            .cornerRadius(8)
+                            .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                            .overlay(alignment: .topLeading) {
+                                // Redaction boxes overlay - shares PDF coordinate system
+                                ZStack(alignment: .topLeading) {
+                                    // Tap anywhere on PDF to unfocus current box or create new box
+                                    Color.clear
+                                        .contentShape(Rectangle())
+                                        .onTapGesture(count: 2) { location in
+                                            createBoxAtLocation(location, in: CGSize(width: finalWidth, height: finalHeight))
+                                        }
+                                        .onTapGesture(count: 1) {
+                                            // Single tap on empty area unfocuses
+                                            focusedBoxId = nil
+                                        }
 
-                            // Redaction boxes overlay
-                            ForEach(boxesForCurrentPage()) { box in
-                                redactionBoxView(box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
+                                    ForEach(boxesForCurrentPage()) { box in
+                                        redactionBoxView(box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
+                                    }
+                                }
+                                .frame(width: finalWidth, height: finalHeight)
                             }
-                        }
-                        .frame(width: finalWidth, height: finalHeight)
-                        .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
+                            .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
                     }
                     .simultaneousGesture(
                         MagnificationGesture()
@@ -313,16 +323,15 @@ struct RedactionView: View {
 
                 Spacer()
 
-                // Delete Selected button (only shown when boxes are selected)
-                let selectedBoxes = redactionBoxes.filter { $0.isSelected }
-                if !selectedBoxes.isEmpty {
+                // Delete button (only shown when a box is focused for editing)
+                if let focusedId = focusedBoxId {
                     Button(action: {
-                        deleteSelectedBoxes()
+                        deleteFocusedBox()
                     }) {
                         HStack(spacing: 4) {
                             Image(systemName: "trash")
                                 .font(.system(size: 14))
-                            Text("Delete (\(selectedBoxes.count))")
+                            Text("Delete")
                                 .font(OneBoxTypography.micro)
                         }
                         .foregroundColor(.red)
@@ -342,9 +351,10 @@ struct RedactionView: View {
         let width = box.normalizedRect.width * pageSize.width
         let height = box.normalizedRect.height * pageSize.height
 
-        // Calculate offset if this box is being dragged or resized
+        // Check states
         let isDragging = draggingBoxId == box.id
         let isResizing = resizingBoxId == box.id
+        let isFocused = focusedBoxId == box.id
         let currentOffset = isDragging ? dragOffset : .zero
 
         // Calculate resize adjustments
@@ -352,39 +362,41 @@ struct RedactionView: View {
 
         let displayWidth = max(width + resizeAdjustment.dw, 20)
         let displayHeight = max(height + resizeAdjustment.dh, 8)
-        let displayX = x + resizeAdjustment.dx
-        let displayY = y + resizeAdjustment.dy
+        let displayX = x + resizeAdjustment.dx + currentOffset.width
+        let displayY = y + resizeAdjustment.dy + currentOffset.height
 
-        let handleSize: CGFloat = 16
-
-        return ZStack {
-            // Main box
+        return ZStack(alignment: .topLeading) {
+            // Main box - using offset from top-leading corner for accurate placement
             Group {
                 if box.isSelected {
+                    // Selected = will be redacted (black fill)
                     Rectangle()
                         .fill(Color.black)
-                        .frame(width: displayWidth, height: displayHeight)
                         .overlay(
                             RoundedRectangle(cornerRadius: 2)
-                                .stroke(OneBoxColors.primaryGold, lineWidth: 2)
+                                .stroke(isFocused ? OneBoxColors.primaryGold : Color.black, lineWidth: isFocused ? 3 : 1)
                         )
                         .shadow(color: (isDragging || isResizing) ? OneBoxColors.primaryGold.opacity(0.5) : .clear, radius: 4)
                 } else {
+                    // Not selected = won't be redacted (gray dashed)
                     Rectangle()
                         .fill(Color.gray.opacity(0.2))
-                        .frame(width: displayWidth, height: displayHeight)
                         .overlay(
                             RoundedRectangle(cornerRadius: 2)
-                                .stroke(Color.gray, style: StrokeStyle(lineWidth: 1, dash: [4, 2]))
+                                .stroke(isFocused ? OneBoxColors.primaryGold : Color.gray,
+                                       style: isFocused ? StrokeStyle(lineWidth: 3) : StrokeStyle(lineWidth: 1, dash: [4, 2]))
                         )
                 }
             }
-            .position(x: displayX + displayWidth/2 + currentOffset.width, y: displayY + displayHeight/2 + currentOffset.height)
+            .frame(width: displayWidth, height: displayHeight)
+            .offset(x: displayX, y: displayY)
+            .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 5)
                     .onChanged { value in
                         if draggingBoxId == nil && resizingBoxId == nil {
                             draggingBoxId = box.id
+                            focusedBoxId = box.id
                             HapticManager.shared.impact(.medium)
                         }
                         if draggingBoxId == box.id {
@@ -400,38 +412,44 @@ struct RedactionView: View {
                         }
                     }
             )
-            .simultaneousGesture(
-                TapGesture()
-                    .onEnded {
-                        toggleBox(box)
-                    }
-            )
+            .onTapGesture {
+                // Single tap to focus the box and toggle redaction state
+                if focusedBoxId == box.id {
+                    // Already focused - toggle selection (redaction state)
+                    toggleBox(box)
+                } else {
+                    // Focus this box
+                    focusedBoxId = box.id
+                    HapticManager.shared.selection()
+                }
+            }
             .onLongPressGesture(minimumDuration: 0.5) {
                 deleteBox(box)
                 HapticManager.shared.notification(.warning)
             }
 
-            // Resize handles (only shown when selected)
-            if box.isSelected {
+            // Resize handles (only shown when focused)
+            if isFocused {
                 // Top-left handle
                 resizeHandle(for: box, corner: .topLeft, pageSize: pageSize)
-                    .position(x: displayX + currentOffset.width, y: displayY + currentOffset.height)
+                    .offset(x: displayX - 10, y: displayY - 10)
 
                 // Top-right handle
                 resizeHandle(for: box, corner: .topRight, pageSize: pageSize)
-                    .position(x: displayX + displayWidth + currentOffset.width, y: displayY + currentOffset.height)
+                    .offset(x: displayX + displayWidth - 10, y: displayY - 10)
 
                 // Bottom-left handle
                 resizeHandle(for: box, corner: .bottomLeft, pageSize: pageSize)
-                    .position(x: displayX + currentOffset.width, y: displayY + displayHeight + currentOffset.height)
+                    .offset(x: displayX - 10, y: displayY + displayHeight - 10)
 
                 // Bottom-right handle
                 resizeHandle(for: box, corner: .bottomRight, pageSize: pageSize)
-                    .position(x: displayX + displayWidth + currentOffset.width, y: displayY + displayHeight + currentOffset.height)
+                    .offset(x: displayX + displayWidth - 10, y: displayY + displayHeight - 10)
             }
         }
-        .scaleEffect((isDragging || isResizing) ? 1.02 : 1.0)
-        .animation(.easeInOut(duration: 0.15), value: isDragging || isResizing)
+        .frame(width: pageSize.width, height: pageSize.height, alignment: .topLeading)
+        .scaleEffect((isDragging || isResizing) ? 1.01 : 1.0)
+        .animation(.easeInOut(duration: 0.1), value: isDragging || isResizing)
     }
 
     private func resizeHandle(for box: RedactionBox, corner: ResizeCorner, pageSize: CGSize) -> some View {
@@ -611,7 +629,7 @@ struct RedactionView: View {
             Color.black.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Top bar with close button, draw mode toggle, and page info
+                // Top bar with close button, delete, and page info
                 HStack {
                     Button(action: {
                         isFullScreen = false
@@ -620,6 +638,25 @@ struct RedactionView: View {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 28))
                             .foregroundColor(.white.opacity(0.8))
+                    }
+
+                    // Delete button (only when box is focused)
+                    if focusedBoxId != nil {
+                        Button(action: {
+                            deleteFocusedBox()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 16))
+                                Text("Delete")
+                                    .font(OneBoxTypography.caption)
+                            }
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.white.opacity(0.15))
+                            .cornerRadius(8)
+                        }
                     }
 
                     Spacer()
@@ -659,23 +696,30 @@ struct RedactionView: View {
                         let finalHeight = baseHeight * fullScreenZoom
 
                         ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                            ZStack(alignment: .topLeading) {
-                                // PDF page rendering with double-tap to add box
-                                RedactionPDFPageView(page: page)
-                                    .frame(width: finalWidth, height: finalHeight)
-                                    .background(Color.white)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture(count: 2) { location in
-                                        createBoxAtLocation(location, in: CGSize(width: finalWidth, height: finalHeight))
-                                    }
+                            // PDF page with boxes as overlay (same structure as main editor)
+                            RedactionPDFPageView(page: page)
+                                .frame(width: finalWidth, height: finalHeight)
+                                .background(Color.white)
+                                .overlay(alignment: .topLeading) {
+                                    // Redaction boxes overlay - shares PDF coordinate system
+                                    ZStack(alignment: .topLeading) {
+                                        // Tap anywhere on PDF to unfocus or create box
+                                        Color.clear
+                                            .contentShape(Rectangle())
+                                            .onTapGesture(count: 2) { location in
+                                                createBoxAtLocation(location, in: CGSize(width: finalWidth, height: finalHeight))
+                                            }
+                                            .onTapGesture(count: 1) {
+                                                focusedBoxId = nil
+                                            }
 
-                                // Redaction boxes overlay
-                                ForEach(boxesForCurrentPage()) { box in
-                                    redactionBoxView(box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
+                                        ForEach(boxesForCurrentPage()) { box in
+                                            redactionBoxView(box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
+                                        }
+                                    }
+                                    .frame(width: finalWidth, height: finalHeight)
                                 }
-                            }
-                            .frame(width: finalWidth, height: finalHeight)
-                            .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
+                                .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
                         }
                         .simultaneousGesture(
                             MagnificationGesture()
@@ -797,6 +841,13 @@ struct RedactionView: View {
         if countToDelete > 0 {
             HapticManager.shared.notification(.warning)
         }
+    }
+
+    private func deleteFocusedBox() {
+        guard let focusedId = focusedBoxId else { return }
+        redactionBoxes.removeAll { $0.id == focusedId }
+        focusedBoxId = nil
+        HapticManager.shared.notification(.warning)
     }
 
     /// Creates a new redaction box at the double-tap location

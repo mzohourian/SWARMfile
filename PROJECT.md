@@ -115,29 +115,35 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2024-12-27 (Redaction UX Improvements)
+**Date:** 2024-12-27 (Redaction Bug Fixes)
 
 **What Was Done:**
-- **Redaction UX completely redesigned to fix accidental drawing:**
-  - Added **Draw Mode toggle** - prevents accidental box drawing when scrolling
-  - **View Mode (default):** Scroll/zoom works normally, single-tap to select/deselect boxes
-  - **Draw Mode:** Enabled only when user taps "Draw" button, visual gold border shows mode active
-  - Strong haptic feedback when entering draw mode
-- **Improved box selection/deletion:**
-  - Changed from double-tap to **single-tap** for selecting boxes (more discoverable)
-  - Added **"Delete (N)"** button in header when boxes are selected
-  - Added **long-press to delete** individual boxes directly
-- **Visual improvements:**
-  - Clear mode indicator (pencil icon changes state)
-  - Context-sensitive hints ("Tap box to select" vs "Drag to add box")
-  - Gold border overlay when in draw mode to make it obvious
-- **Full-screen editor updated** with same improvements
+- **Fixed delete button deleting all boxes:**
+  - Added `focusedBoxId` state to separate "focused for editing" from "selected for redaction"
+  - Delete button now only appears when a box is focused (tapped/dragged)
+  - Delete action only removes the focused box, not all selected boxes
+  - Users can still bulk-select boxes for redaction without accidentally deleting them
+- **Fixed coordinate system for box placement:**
+  - Changed from ZStack siblings to overlay on PDF view for shared coordinate system
+  - Both main editor and full-screen editor now use consistent overlay approach
+  - Boxes positioned using `.offset()` from top-leading for accurate placement
+- **Improved full-screen editor:**
+  - Now uses same overlay structure as main editor
+  - Added delete button to top bar when box is focused
+  - Added single-tap on empty area to unfocus boxes
+- **Gesture behavior:**
+  - Double-tap anywhere to create new redaction box
+  - Single tap on box to focus it
+  - Second tap on focused box toggles redaction selection
+  - Drag to move boxes (auto-focuses the box)
+  - Corner handles to resize focused box
+  - Long-press to delete a box
 
 **What's Unfinished:**
-- None - redaction UX improvements complete
+- Device testing needed to verify coordinate fixes work correctly
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/RedactionView.swift` - Complete UX redesign for mode-based editing
+- `OneBox/OneBox/Views/RedactionView.swift` - Fixed delete behavior and coordinate system
 
 ---
 

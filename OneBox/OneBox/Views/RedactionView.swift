@@ -45,14 +45,14 @@ struct RedactionView: View {
     @State private var drawStartPoint: CGPoint?
     @State private var currentDrawRect: CGRect?
 
-    // Dragging state for moving boxes
+    // Dragging state for moving boxes - store last position for delta calculation
     @State private var draggingBoxId: UUID?
-    @State private var dragOffset: CGSize = .zero
+    @State private var lastDragLocation: CGPoint?
 
-    // Resizing state
+    // Resizing state - store last position for delta calculation
     @State private var resizingBoxId: UUID?
     @State private var resizingCorner: ResizeCorner?
-    @State private var resizeOffset: CGSize = .zero
+    @State private var lastResizeLocation: CGPoint?
 
     // Focused box for editing (separate from isSelected which means "will be redacted")
     @State private var focusedBoxId: UUID?
@@ -357,15 +357,12 @@ struct RedactionView: View {
         let isDragging = draggingBoxId == box.id
         let isResizing = resizingBoxId == box.id
         let isFocused = focusedBoxId == box.id
-        let currentOffset = isDragging ? dragOffset : .zero
 
-        // Calculate resize adjustments
-        let resizeAdjustment = isResizing ? calculateResizeAdjustment(for: resizingCorner, offset: resizeOffset) : (dx: CGFloat(0), dy: CGFloat(0), dw: CGFloat(0), dh: CGFloat(0))
-
-        let displayWidth = max(width + resizeAdjustment.dw, 20)
-        let displayHeight = max(height + resizeAdjustment.dh, 8)
-        let displayX = x + resizeAdjustment.dx + currentOffset.width
-        let displayY = y + resizeAdjustment.dy + currentOffset.height
+        // Display dimensions (no temporary offsets - position is always in normalizedRect)
+        let displayWidth = max(width, 20)
+        let displayHeight = max(height, 8)
+        let displayX = x
+        let displayY = y
 
         // Use position to place box center, which properly handles hit testing
         let centerX = displayX + displayWidth / 2
@@ -400,19 +397,25 @@ struct RedactionView: View {
                 DragGesture(minimumDistance: 5)
                     .onChanged { value in
                         if draggingBoxId == nil && resizingBoxId == nil {
+                            // Start dragging
                             draggingBoxId = box.id
                             focusedBoxId = box.id
+                            lastDragLocation = value.location
                             HapticManager.shared.impact(.medium)
-                        }
-                        if draggingBoxId == box.id {
-                            dragOffset = value.translation
+                        } else if draggingBoxId == box.id, let lastLocation = lastDragLocation {
+                            // Continue dragging - calculate delta and move directly
+                            let delta = CGSize(
+                                width: value.location.x - lastLocation.x,
+                                height: value.location.y - lastLocation.y
+                            )
+                            moveBoxDirectly(box, by: delta, in: pageSize)
+                            lastDragLocation = value.location
                         }
                     }
-                    .onEnded { value in
+                    .onEnded { _ in
                         if draggingBoxId == box.id {
-                            moveBox(box, by: value.translation, in: pageSize)
                             draggingBoxId = nil
-                            dragOffset = .zero
+                            lastDragLocation = nil
                             HapticManager.shared.impact(.light)
                         }
                     }
@@ -433,8 +436,6 @@ struct RedactionView: View {
                 HapticManager.shared.notification(.warning)
             }
             .position(x: centerX, y: centerY)
-            .scaleEffect((isDragging || isResizing) ? 1.01 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: isDragging || isResizing)
 
             // Resize handles (only shown when focused)
             if isFocused {
@@ -468,30 +469,38 @@ struct RedactionView: View {
                     .stroke(Color.white, lineWidth: 2)
             )
             .shadow(color: .black.opacity(0.3), radius: 2)
+            .contentShape(Circle())
             .gesture(
                 DragGesture(minimumDistance: 1)
                     .onChanged { value in
-                        if resizingBoxId == nil {
+                        if resizingBoxId == nil && draggingBoxId == nil {
+                            // Start resizing
                             resizingBoxId = box.id
                             resizingCorner = corner
+                            lastResizeLocation = value.location
                             HapticManager.shared.impact(.light)
-                        }
-                        if resizingBoxId == box.id {
-                            resizeOffset = value.translation
+                        } else if resizingBoxId == box.id, let lastLocation = lastResizeLocation {
+                            // Continue resizing - calculate delta and resize directly
+                            let delta = CGSize(
+                                width: value.location.x - lastLocation.x,
+                                height: value.location.y - lastLocation.y
+                            )
+                            resizeBoxDirectly(box, corner: corner, by: delta, in: pageSize)
+                            lastResizeLocation = value.location
                         }
                     }
-                    .onEnded { value in
+                    .onEnded { _ in
                         if resizingBoxId == box.id {
-                            resizeBox(box, corner: corner, by: value.translation, in: pageSize)
                             resizingBoxId = nil
                             resizingCorner = nil
-                            resizeOffset = .zero
+                            lastResizeLocation = nil
                             HapticManager.shared.impact(.light)
                         }
                     }
             )
     }
 
+    // No longer needed - was used for temporary offset display
     private func calculateResizeAdjustment(for corner: ResizeCorner?, offset: CGSize) -> (dx: CGFloat, dy: CGFloat, dw: CGFloat, dh: CGFloat) {
         guard let corner = corner else { return (0, 0, 0, 0) }
 
@@ -913,7 +922,81 @@ struct RedactionView: View {
         redactionBoxes[index].normalizedRect = newRect
     }
 
-    /// Resizes a box by adjusting from a corner
+    /// Moves a box directly by a delta (called during drag for real-time updates)
+    private func moveBoxDirectly(_ box: RedactionBox, by delta: CGSize, in pageSize: CGSize) {
+        guard let index = redactionBoxes.firstIndex(where: { $0.id == box.id }) else { return }
+
+        // Convert delta to normalized coordinates
+        let normalizedDX = delta.width / pageSize.width
+        let normalizedDY = -delta.height / pageSize.height // Inverted because of coordinate system
+
+        // Calculate new position
+        var newRect = redactionBoxes[index].normalizedRect
+        newRect.origin.x += normalizedDX
+        newRect.origin.y += normalizedDY
+
+        // Clamp to page bounds
+        newRect.origin.x = max(0, min(newRect.origin.x, 1.0 - newRect.width))
+        newRect.origin.y = max(0, min(newRect.origin.y, 1.0 - newRect.height))
+
+        // Update the box in place (preserves ID)
+        redactionBoxes[index].normalizedRect = newRect
+    }
+
+    /// Resizes a box directly by a delta (called during drag for real-time updates)
+    private func resizeBoxDirectly(_ box: RedactionBox, corner: ResizeCorner, by delta: CGSize, in pageSize: CGSize) {
+        guard let index = redactionBoxes.firstIndex(where: { $0.id == box.id }) else { return }
+
+        // Convert delta to normalized coordinates
+        let normalizedDX = delta.width / pageSize.width
+        let normalizedDY = -delta.height / pageSize.height // Inverted
+
+        var rect = redactionBoxes[index].normalizedRect
+        let minSize: CGFloat = 0.02 // Minimum 2% of page
+
+        switch corner {
+        case .topLeft:
+            let newX = rect.origin.x + normalizedDX
+            let newWidth = rect.width - normalizedDX
+            let newHeight = rect.height + normalizedDY
+            let newY = rect.origin.y - normalizedDY
+            if newWidth >= minSize && newHeight >= minSize {
+                rect.origin.x = max(0, newX)
+                rect.size.width = max(minSize, newWidth)
+                rect.origin.y = max(0, newY)
+                rect.size.height = max(minSize, newHeight)
+            }
+        case .topRight:
+            let newWidth = rect.width + normalizedDX
+            let newHeight = rect.height + normalizedDY
+            let newY = rect.origin.y - normalizedDY
+            if newWidth >= minSize && newHeight >= minSize {
+                rect.size.width = min(1.0 - rect.origin.x, max(minSize, newWidth))
+                rect.origin.y = max(0, newY)
+                rect.size.height = max(minSize, newHeight)
+            }
+        case .bottomLeft:
+            let newX = rect.origin.x + normalizedDX
+            let newWidth = rect.width - normalizedDX
+            let newHeight = rect.height - normalizedDY
+            if newWidth >= minSize && newHeight >= minSize {
+                rect.origin.x = max(0, newX)
+                rect.size.width = max(minSize, newWidth)
+                rect.size.height = max(minSize, newHeight)
+            }
+        case .bottomRight:
+            let newWidth = rect.width + normalizedDX
+            let newHeight = rect.height - normalizedDY
+            if newWidth >= minSize && newHeight >= minSize {
+                rect.size.width = min(1.0 - rect.origin.x, max(minSize, newWidth))
+                rect.size.height = min(1.0 - rect.origin.y, max(minSize, newHeight))
+            }
+        }
+
+        redactionBoxes[index].normalizedRect = rect
+    }
+
+    /// Resizes a box by adjusting from a corner (legacy - used for cumulative translation)
     private func resizeBox(_ box: RedactionBox, corner: ResizeCorner, by translation: CGSize, in pageSize: CGSize) {
         guard let index = redactionBoxes.firstIndex(where: { $0.id == box.id }) else { return }
 

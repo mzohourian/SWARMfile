@@ -212,7 +212,6 @@ public struct JobSettings {
     public var enableDocumentSanitization: Bool = false
     public var enableEncryption: Bool = false
     public var encryptionPassword: String?
-    public var complianceMode: Privacy.ComplianceMode = .none
 
     public init() {}
 }
@@ -232,7 +231,7 @@ extension JobSettings: Codable {
         case isDateStamp
         case flattenFormFields, flattenAnnotations
         case enableSecureVault, enableZeroTrace, enableBiometricLock, enableStealthMode
-        case enableDocumentSanitization, enableEncryption, encryptionPassword, complianceMode
+        case enableDocumentSanitization, enableEncryption, encryptionPassword
     }
     
     public init(from decoder: Decoder) throws {
@@ -303,7 +302,6 @@ extension JobSettings: Codable {
         enableDocumentSanitization = try container.decodeIfPresent(Bool.self, forKey: .enableDocumentSanitization) ?? false
         enableEncryption = try container.decodeIfPresent(Bool.self, forKey: .enableEncryption) ?? false
         encryptionPassword = try container.decodeIfPresent(String.self, forKey: .encryptionPassword)
-        complianceMode = try container.decodeIfPresent(Privacy.ComplianceMode.self, forKey: .complianceMode) ?? .none
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -371,7 +369,6 @@ extension JobSettings: Codable {
         try container.encode(enableDocumentSanitization, forKey: .enableDocumentSanitization)
         try container.encode(enableEncryption, forKey: .enableEncryption)
         try container.encodeIfPresent(encryptionPassword, forKey: .encryptionPassword)
-        try container.encode(complianceMode, forKey: .complianceMode)
     }
 }
 
@@ -424,8 +421,7 @@ public class JobManager: ObservableObject {
                     secureVault: delegate.getSecureVaultEnabled(),
                     zeroTrace: delegate.getZeroTraceEnabled(),
                     biometricLock: delegate.getBiometricLockEnabled(),
-                    stealthMode: delegate.getStealthModeEnabled(),
-                    complianceMode: delegate.getSelectedComplianceMode()
+                    stealthMode: delegate.getStealthModeEnabled()
                 )
             }
 
@@ -433,7 +429,6 @@ public class JobManager: ObservableObject {
             privacyJob.settings.enableZeroTrace = settings.zeroTrace
             privacyJob.settings.enableBiometricLock = settings.biometricLock
             privacyJob.settings.enableStealthMode = settings.stealthMode
-            privacyJob.settings.complianceMode = settings.complianceMode
 
             // Cache zero trace setting for saveJobs() to use safely
             cachedZeroTraceEnabled = settings.zeroTrace

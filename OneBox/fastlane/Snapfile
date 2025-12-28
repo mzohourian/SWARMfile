@@ -1,20 +1,20 @@
 # Snapfile - Fastlane Screenshot Configuration for Vault PDF
 # https://docs.fastlane.tools/actions/snapshot/
 
-# Devices to screenshot (App Store required sizes)
+# Devices to screenshot (App Store required sizes - use valid simulator names)
 devices([
-  "iPhone 17 Pro Max",       # 6.7" - Required
-  "iPhone 17 Pro",           # 6.1" - Required
-  "iPad Pro 13-inch (M5)"    # If iPad supported
+  "iPhone 15 Pro Max",       # 6.7" display - Required for App Store
+  "iPhone 15 Pro"            # 6.1" display - Required for App Store
 ])
 
 # Languages
 languages(["en-US"])
 
-# Xcode scheme
+# Xcode scheme - must match your Xcode project scheme name
 scheme("OneBox")
 
-# Only run UI tests for screenshots (skip failing unit tests)
+# Run only screenshot tests (comment out if you want to run all UI tests)
+# Make sure this matches your actual test target name in Xcode
 only_testing(["OneBoxUITests/ScreenshotTests"])
 
 # Output location
@@ -29,49 +29,35 @@ override_status_bar(true)
 # Use dark mode (matches Vault PDF premium aesthetic)
 dark_mode(true)
 
-# Skip taking app summary screen
+# Skip HTML summary (set to true if you just want images)
 skip_open_summary(false)
 
-# Stop after first failure (useful for debugging)
+# Stop after first failure (set to true for debugging)
 stop_after_first_error(false)
 
-# Number of concurrent simulators (adjust based on your Mac's RAM)
-concurrent_simulators(true)
+# Concurrent simulators (faster but uses more RAM)
+concurrent_simulators(false)
 
-# Disable slide to type (can cause issues in UI tests)
-disable_slide_to_type(true)
-
-# Reinstall app before taking screenshots
+# Reinstall app before taking screenshots (clean state)
 reinstall_app(true)
 
-# Erase simulator before running (clean state)
-erase_simulator(true)
+# Erase simulator before running (fresh state - slower but more reliable)
+erase_simulator(false)
 
-# Localize simulator (sets locale for device)
-localize_simulator(true)
-
-# UI test configuration
+# Launch arguments passed to the app
 launch_arguments([
-  "--screenshots",
-  "--uitesting",
-  "--skip-onboarding",
-  "--demo-mode"
+  "-screenshots",
+  "-uitesting"
 ])
 
-# Workspace (if using workspace instead of project)
-# workspace("OneBox.xcworkspace")
+# Number of retry attempts for failed screenshots
+number_of_retries(2)
 
-# Project file
+# Don't run headless - show simulator window (helps with debugging)
+headless(false)
+
+# Xcode project (uncomment and adjust if needed)
 # project("OneBox.xcodeproj")
 
-# iOS version (optional - uses latest by default)
-# ios_version("17.0")
-
-# Number of retry attempts for failed screenshots
-number_of_retries(1)
-
-# HTML template for viewing screenshots
-# html_template("./fastlane/screenshots/screenshots.html")
-
-# Headless mode (no simulator window, faster)
-headless(false)
+# Or use workspace
+# workspace("OneBox.xcworkspace")

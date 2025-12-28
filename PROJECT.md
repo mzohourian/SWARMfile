@@ -115,35 +115,34 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2024-12-27 (Redaction Bug Fixes)
+**Date:** 2024-12-28 (Redaction Gesture & Flickering Fixes)
 
 **What Was Done:**
 - **Fixed delete button deleting all boxes:**
   - Added `focusedBoxId` state to separate "focused for editing" from "selected for redaction"
   - Delete button now only appears when a box is focused (tapped/dragged)
   - Delete action only removes the focused box, not all selected boxes
-  - Users can still bulk-select boxes for redaction without accidentally deleting them
-- **Fixed coordinate system for box placement:**
-  - Changed from ZStack siblings to overlay on PDF view for shared coordinate system
-  - Both main editor and full-screen editor now use consistent overlay approach
-  - Boxes positioned using `.offset()` from top-leading for accurate placement
-- **Improved full-screen editor:**
-  - Now uses same overlay structure as main editor
-  - Added delete button to top bar when box is focused
-  - Added single-tap on empty area to unfocus boxes
-- **Gesture behavior:**
-  - Double-tap anywhere to create new redaction box
-  - Single tap on box to focus it
-  - Second tap on focused box toggles redaction selection
-  - Drag to move boxes (auto-focuses the box)
-  - Corner handles to resize focused box
-  - Long-press to delete a box
+- **Fixed box selection and resize gestures:**
+  - Added explicit zIndex ordering (background=0, boxes=1) so boxes receive taps
+  - Restructured `redactionBoxView` to use `.position()` instead of `.offset()`
+  - Removed full-page frame wrapper that was blocking hit testing
+  - Added `.contentShape()` before gestures for proper tap detection
+- **Fixed flickering during move and resize:**
+  - Replaced temporary offset accumulation with delta-based direct updates
+  - Store `lastDragLocation`/`lastResizeLocation` to calculate movement delta
+  - Update `normalizedRect` directly during drag (no temporary state to reset)
+  - Added `moveBoxDirectly` and `resizeBoxDirectly` functions for real-time updates
+  - Eliminates flicker caused by resetting offset state at drag end
+- **Full-screen editor improvements:**
+  - Uses same overlay structure as main editor
+  - Delete button in top bar when box is focused
+  - Consistent gesture handling
 
 **What's Unfinished:**
-- Device testing needed to verify coordinate fixes work correctly
+- Device testing still needed to verify all fixes
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/RedactionView.swift` - Fixed delete behavior and coordinate system
+- `OneBox/OneBox/Views/RedactionView.swift` - Major gesture and positioning overhaul
 
 ---
 

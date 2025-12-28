@@ -69,9 +69,8 @@ open class Snapshot: NSObject {
     }
 
     class func setLanguage(_ app: XCUIApplication) {
-        let path = getCacheDirectory()?.appendingPathComponent("language.txt")
-
         do {
+            let path = try getCacheDirectory()?.appendingPathComponent("language.txt")
             if let path = path {
                 let trimCharacterSet = CharacterSet.whitespacesAndNewlines
                 deviceLanguage = try String(contentsOf: path, encoding: .utf8).trimmingCharacters(in: trimCharacterSet)
@@ -83,9 +82,8 @@ open class Snapshot: NSObject {
     }
 
     class func setLocale(_ app: XCUIApplication) {
-        let path = getCacheDirectory()?.appendingPathComponent("locale.txt")
-
         do {
+            let path = try getCacheDirectory()?.appendingPathComponent("locale.txt")
             if let path = path {
                 let trimCharacterSet = CharacterSet.whitespacesAndNewlines
                 locale = try String(contentsOf: path, encoding: .utf8).trimmingCharacters(in: trimCharacterSet)
@@ -97,7 +95,9 @@ open class Snapshot: NSObject {
     }
 
     class func setLaunchArguments(_ app: XCUIApplication) {
-        let path = getCacheDirectory()?.appendingPathComponent("snapshot-launch_arguments.txt")
+        guard let path = try? getCacheDirectory()?.appendingPathComponent("snapshot-launch_arguments.txt") else {
+            return
+        }
 
         if let path = path, let launchArguments = try? String(contentsOf: path, encoding: .utf8) {
             let trimCharacterSet = CharacterSet.whitespacesAndNewlines

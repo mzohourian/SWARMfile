@@ -44,7 +44,7 @@ xcodebuild build -scheme OneBox SWIFT_VERSION=6
 ### 2. Version Configuration ✅
 - **MARKETING_VERSION**: `1.0.0`
 - **CURRENT_PROJECT_VERSION**: `1` (increment for each build)
-- **Bundle ID**: `com.yourcompany.onebox`
+- **Bundle ID**: `com.spuud.vaultpdf`
 - **Deployment Target**: `16.0`
 
 ### 3. App Store Connect Configuration ✅

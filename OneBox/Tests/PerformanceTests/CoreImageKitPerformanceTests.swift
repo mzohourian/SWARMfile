@@ -8,8 +8,9 @@ import XCTest
 @testable import CommonTypes
 import UIKit
 
+@MainActor
 final class CoreImageKitPerformanceTests: XCTestCase {
-    
+
     var processor: ImageProcessor!
     var testImageURLs: [URL]!
     
@@ -158,7 +159,7 @@ final class CoreImageKitPerformanceTests: XCTestCase {
         // Process 10 iPhone resolution images
         let iphoneImages = testImageURLs.filter { $0.lastPathComponent.contains("3024x4032") }
         
-        measureMetrics([.wallClockTime, .cpu], automaticallyStartMeasuring: false) {
+        measureMetrics([.wallClockTime], automaticallyStartMeasuring: false) {
             let expectation = expectation(description: "Large batch resize")
             
             let startTime = CFAbsoluteTimeGetCurrent()
@@ -211,9 +212,9 @@ final class CoreImageKitPerformanceTests: XCTestCase {
                         format: .jpeg,
                         quality: 0.7,
                         maxDimension: 1024,
-                        progressHandler: { progress in
+                        progressHandler: { [self] progress in
                             if Int(progress * 100) % 10 == 0 {
-                                let currentMemory = getMemoryUsage()
+                                let currentMemory = self.getMemoryUsage()
                                 let memoryIncrease = currentMemory - startMemory
                                 print("🧠 Memory at \(Int(progress * 100))%: \(currentMemory)MB (+\(memoryIncrease)MB)")
                             }
@@ -331,7 +332,7 @@ final class CoreImageKitPerformanceTests: XCTestCase {
         // Compare percentage vs max dimension resize strategies
         let largeImages = testImageURLs.filter { $0.lastPathComponent.contains("3024x4032") }
         
-        let resizeTests = [
+        let resizeTests: [(type: String, maxDim: Int?, percentage: Double?)] = [
             (type: "maxDimension", maxDim: 1024, percentage: nil),
             (type: "percentage", maxDim: nil, percentage: 50.0),
             (type: "maxDimension", maxDim: 2048, percentage: nil),

@@ -18,7 +18,7 @@ final class JobEngineIntegrationTests: XCTestCase {
     var testPDFURLs: [URL]!
     
     override func setUp() async throws {
-        jobManager = JobManager()
+        jobManager = JobManager.shared
         testImageURLs = try createTestImages()
         testPDFURLs = try createTestPDFs()
     }
@@ -99,15 +99,16 @@ final class JobEngineIntegrationTests: XCTestCase {
     
     func testImagesToPDFIntegration() async throws {
         // Given
+        var settings = JobSettings()
+        settings.pageSize = .a4
+        settings.orientation = .portrait
+        settings.margins = 20
+        settings.stripMetadata = true
+
         let job = Job(
             type: .imagesToPDF,
             inputs: testImageURLs,
-            settings: JobSettings(
-                pageSize: .a4,
-                orientation: .portrait,
-                imageMargins: 20,
-                stripMetadata: true
-            )
+            settings: settings
         )
         
         // When
@@ -193,13 +194,13 @@ final class JobEngineIntegrationTests: XCTestCase {
         let largePDF = try createLargePDF()
         let originalSize = try FileManager.default.attributesOfItem(atPath: largePDF.path)[.size] as! Int
         
+        var compressSettings = JobSettings()
+        compressSettings.compressionQuality = .medium
+
         let job = Job(
             type: .pdfCompress,
             inputs: [largePDF],
-            settings: JobSettings(
-                compressionQuality: .medium,
-                targetSizeMB: nil
-            )
+            settings: compressSettings
         )
         
         // When
@@ -240,14 +241,15 @@ final class JobEngineIntegrationTests: XCTestCase {
     
     func testImageResizeIntegration() async throws {
         // Given
+        var resizeSettings = JobSettings()
+        resizeSettings.imageFormat = .jpeg
+        resizeSettings.imageQualityPreset = .medium
+        resizeSettings.maxDimension = 200
+
         let job = Job(
             type: .imageResize,
             inputs: testImageURLs,
-            settings: JobSettings(
-                imageFormat: .jpeg,
-                imageQuality: .medium,
-                maxDimension: 200
-            )
+            settings: resizeSettings
         )
         
         // When
@@ -355,8 +357,11 @@ final class JobEngineIntegrationTests: XCTestCase {
     
     func testConcurrentJobExecution() async throws {
         // Given - multiple jobs
+        var job2Settings = JobSettings()
+        job2Settings.maxDimension = 100
+
         let job1 = Job(type: .imagesToPDF, inputs: Array(testImageURLs.prefix(2)), settings: JobSettings())
-        let job2 = Job(type: .imageResize, inputs: Array(testImageURLs.suffix(1)), settings: JobSettings(maxDimension: 100))
+        let job2 = Job(type: .imageResize, inputs: Array(testImageURLs.suffix(1)), settings: job2Settings)
         
         // When - submit both jobs
         await jobManager.submitJob(job1)

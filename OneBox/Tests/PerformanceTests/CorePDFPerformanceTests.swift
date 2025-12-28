@@ -8,8 +8,9 @@ import XCTest
 @testable import CommonTypes
 import UIKit
 
+@MainActor
 final class CorePDFPerformanceTests: XCTestCase {
-    
+
     var processor: PDFProcessor!
     var testImageURLs: [URL]!
     var testPDFURLs: [URL]!

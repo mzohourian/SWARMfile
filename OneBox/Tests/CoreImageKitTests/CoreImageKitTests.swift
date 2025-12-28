@@ -8,8 +8,9 @@ import UIKit
 @testable import CoreImageKit
 @testable import CommonTypes
 
+@MainActor
 final class CoreImageKitTests: XCTestCase {
-    
+
     var processor: ImageProcessor!
     var testImageURLs: [URL]!
     

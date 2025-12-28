@@ -8,176 +8,125 @@
 import XCTest
 @testable import Privacy
 
+@MainActor
 final class PrivacyTests: XCTestCase {
     var privacyManager: PrivacyManager!
-    
-    override func setUp() {
-        super.setUp()
+
+    override func setUp() async throws {
         privacyManager = PrivacyManager.shared
     }
-    
-    override func tearDown() {
+
+    override func tearDown() async throws {
         // Reset privacy settings
         privacyManager.enableSecureVault(false)
         privacyManager.enableZeroTrace(false)
         privacyManager.enableBiometricLock(false)
         privacyManager.enableStealthMode(false)
-        privacyManager.setComplianceMode(.none)
-        super.tearDown()
     }
-    
+
     // MARK: - Privacy Settings Tests
-    
-    func testSecureVaultToggle() {
+
+    func testSecureVaultToggle() async {
         // Given
         XCTAssertFalse(privacyManager.isSecureVaultEnabled)
-        
+
         // When
         privacyManager.enableSecureVault(true)
-        
+
         // Then
         XCTAssertTrue(privacyManager.isSecureVaultEnabled)
     }
-    
-    func testZeroTraceToggle() {
+
+    func testZeroTraceToggle() async {
         // Given
         XCTAssertFalse(privacyManager.isZeroTraceEnabled)
-        
+
         // When
         privacyManager.enableZeroTrace(true)
-        
+
         // Then
         XCTAssertTrue(privacyManager.isZeroTraceEnabled)
     }
-    
-    func testBiometricLockToggle() {
+
+    func testBiometricLockToggle() async {
         // Given
         XCTAssertFalse(privacyManager.isBiometricLockEnabled)
-        
+
         // When
         privacyManager.enableBiometricLock(true)
-        
+
         // Then
         XCTAssertTrue(privacyManager.isBiometricLockEnabled)
     }
-    
-    func testStealthModeToggle() {
+
+    func testStealthModeToggle() async {
         // Given
         XCTAssertFalse(privacyManager.isStealthModeEnabled)
-        
+
         // When
         privacyManager.enableStealthMode(true)
-        
+
         // Then
         XCTAssertTrue(privacyManager.isStealthModeEnabled)
     }
-    
-    // MARK: - Compliance Mode Tests
-    
-    func testComplianceModeNone() {
-        // Given
-        XCTAssertEqual(privacyManager.selectedComplianceMode, .none)
-        
-        // When
-        privacyManager.setComplianceMode(.none)
-        
-        // Then
-        XCTAssertEqual(privacyManager.selectedComplianceMode, .none)
-        XCTAssertFalse(privacyManager.isSecureVaultEnabled)
-        XCTAssertFalse(privacyManager.isZeroTraceEnabled)
-        XCTAssertFalse(privacyManager.isBiometricLockEnabled)
-    }
-    
-    func testComplianceModeHealthcare() {
-        // When
-        privacyManager.setComplianceMode(.healthcare)
-        
-        // Then
-        XCTAssertEqual(privacyManager.selectedComplianceMode, .healthcare)
-        XCTAssertTrue(privacyManager.isSecureVaultEnabled)
-        XCTAssertTrue(privacyManager.isZeroTraceEnabled)
-        XCTAssertTrue(privacyManager.isBiometricLockEnabled)
-    }
-    
-    func testComplianceModeFinance() {
-        // When
-        privacyManager.setComplianceMode(.finance)
-        
-        // Then
-        XCTAssertEqual(privacyManager.selectedComplianceMode, .finance)
-        XCTAssertTrue(privacyManager.isSecureVaultEnabled)
-        XCTAssertTrue(privacyManager.isZeroTraceEnabled)
-        XCTAssertTrue(privacyManager.isBiometricLockEnabled)
-        XCTAssertTrue(privacyManager.isStealthModeEnabled)
-    }
-    
-    func testComplianceModeLegal() {
-        // When
-        privacyManager.setComplianceMode(.legal)
-        
-        // Then
-        XCTAssertEqual(privacyManager.selectedComplianceMode, .legal)
-        XCTAssertTrue(privacyManager.isSecureVaultEnabled)
-        XCTAssertTrue(privacyManager.isBiometricLockEnabled)
-    }
-    
+
     // MARK: - Secure File Management Tests
-    
-    func testCreateSecureTemporaryURL() {
+
+    func testCreateSecureTemporaryURL() async {
         // When
         let secureURL = privacyManager.createSecureTemporaryURL()
-        
+
         // Then
         XCTAssertTrue(secureURL.path.contains("SecureVault"))
         XCTAssertTrue(secureURL.pathExtension == "tmp")
     }
-    
-    func testCleanupSecureFiles() {
+
+    func testCleanupSecureFiles() async {
         // Given
         let secureURL = privacyManager.createSecureTemporaryURL()
         try? "test data".write(to: secureURL, atomically: true, encoding: .utf8)
         XCTAssertTrue(FileManager.default.fileExists(atPath: secureURL.path))
-        
+
         // When
         privacyManager.cleanupSecureFiles()
-        
+
         // Then
         XCTAssertFalse(FileManager.default.fileExists(atPath: secureURL.path))
     }
-    
+
     // MARK: - Document Sanitization Tests
-    
-    func testDocumentSanitization() throws {
+
+    func testDocumentSanitization() async throws {
         // Given
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("test.txt")
         try "test content".write(to: tempURL, atomically: true, encoding: .utf8)
-        
+
         // When
         let report = try privacyManager.sanitizeDocument(at: tempURL)
-        
+
         // Then
         XCTAssertEqual(report.originalURL, tempURL)
         XCTAssertTrue(report.metadataRemoved)
         XCTAssertTrue(report.hiddenContentRemoved)
         XCTAssertTrue(report.commentsRemoved)
-        
+
         // Cleanup
         try? FileManager.default.removeItem(at: tempURL)
     }
-    
+
     // MARK: - File Forensics Tests
-    
-    func testFileForensicsReportGeneration() throws {
+
+    func testFileForensicsReportGeneration() async throws {
         // Given
         let inputURL = FileManager.default.temporaryDirectory.appendingPathComponent("input.txt")
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent("output.txt")
-        
+
         try "input content".write(to: inputURL, atomically: true, encoding: .utf8)
         try "output content".write(to: outputURL, atomically: true, encoding: .utf8)
-        
+
         // When
         let report = privacyManager.generateFileForensics(inputURL: inputURL, outputURL: outputURL)
-        
+
         // Then
         XCTAssertEqual(report.inputURL, inputURL)
         XCTAssertEqual(report.outputURL, outputURL)
@@ -186,53 +135,53 @@ final class PrivacyTests: XCTestCase {
         XCTAssertNotEqual(report.inputHash, report.outputHash) // Different content = different hashes
         XCTAssertTrue(report.processedOnDevice)
         XCTAssertTrue(report.isValid)
-        
+
         // Cleanup
         try? FileManager.default.removeItem(at: inputURL)
         try? FileManager.default.removeItem(at: outputURL)
     }
-    
+
     // MARK: - Encryption Tests
-    
-    func testFileEncryption() throws {
+
+    func testFileEncryption() async throws {
         // Given
         let sourceURL = FileManager.default.temporaryDirectory.appendingPathComponent("source.txt")
         let testContent = "sensitive content"
         let password = "testPassword123"
-        
+
         try testContent.write(to: sourceURL, atomically: true, encoding: .utf8)
-        
+
         // When
         let encryptedURL = try privacyManager.encryptFile(at: sourceURL, password: password)
-        
+
         // Then
         XCTAssertTrue(FileManager.default.fileExists(atPath: encryptedURL.path))
         XCTAssertTrue(encryptedURL.pathExtension == "encrypted")
-        
+
         // Verify content is different (encrypted)
         let encryptedData = try Data(contentsOf: encryptedURL)
         let originalData = testContent.data(using: .utf8)!
         XCTAssertNotEqual(encryptedData, originalData)
-        
+
         // Cleanup
         try? FileManager.default.removeItem(at: sourceURL)
         try? FileManager.default.removeItem(at: encryptedURL)
     }
-    
+
     // MARK: - Audit Trail Tests
-    
-    func testAuditTrailLogging() {
+
+    func testAuditTrailLogging() async {
         // Given
         let initialCount = privacyManager.getAuditTrail().count
-        
+
         // When
         privacyManager.enableSecureVault(true)
         privacyManager.enableZeroTrace(true)
-        
+
         // Then
         let finalCount = privacyManager.getAuditTrail().count
         XCTAssertEqual(finalCount, initialCount + 2)
-        
+
         let latestEntries = privacyManager.getAuditTrail().suffix(2)
         XCTAssertTrue(latestEntries.contains { entry in
             if case .secureVaultToggled(true) = entry.event {
@@ -247,15 +196,15 @@ final class PrivacyTests: XCTestCase {
             return false
         })
     }
-    
-    func testAuditTrailClear() {
+
+    func testAuditTrailClear() async {
         // Given
         privacyManager.enableSecureVault(true) // Generate an audit entry
         XCTAssertFalse(privacyManager.getAuditTrail().isEmpty)
-        
+
         // When
         privacyManager.clearAuditTrail()
-        
+
         // Then
         // Should have one entry (the clear operation itself)
         XCTAssertEqual(privacyManager.getAuditTrail().count, 1)
@@ -265,46 +214,43 @@ final class PrivacyTests: XCTestCase {
             XCTFail("Expected audit trail cleared event")
         }
     }
-    
-    // MARK: - Compliance Mode Display Names Tests
-    
-    func testComplianceModeDisplayNames() {
-        XCTAssertEqual(ComplianceMode.none.displayName, "Standard")
-        XCTAssertEqual(ComplianceMode.healthcare.displayName, "Healthcare (HIPAA)")
-        XCTAssertEqual(ComplianceMode.legal.displayName, "Legal")
-        XCTAssertEqual(ComplianceMode.finance.displayName, "Finance (SOX)")
-    }
-    
+
     // MARK: - Error Handling Tests
-    
-    func testEncryptionWithEmptyPassword() {
+
+    func testEncryptionWithEmptyPassword() async {
         // Given
         let sourceURL = FileManager.default.temporaryDirectory.appendingPathComponent("source.txt")
         try? "test".write(to: sourceURL, atomically: true, encoding: .utf8)
-        
+
         // When/Then
         XCTAssertThrowsError(try privacyManager.encryptFile(at: sourceURL, password: "")) { error in
-            if let privacyError = error as? PrivacyError {
-                XCTAssertEqual(privacyError, .encryptionFailed)
+            guard let privacyError = error as? PrivacyError else {
+                XCTFail("Expected PrivacyError but got \(type(of: error))")
+                return
+            }
+            if case .encryptionFailed = privacyError {
+                // Expected error type
+            } else {
+                XCTFail("Expected encryptionFailed but got \(privacyError)")
             }
         }
-        
+
         // Cleanup
         try? FileManager.default.removeItem(at: sourceURL)
     }
-    
-    func testDocumentSanitizationReport() throws {
+
+    func testDocumentSanitizationReport() async throws {
         // Given
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("test.pdf")
         try "test pdf content".write(to: tempURL, atomically: true, encoding: .utf8)
-        
+
         // When
         let report = try privacyManager.sanitizeDocument(at: tempURL)
-        
+
         // Then
         XCTAssertFalse(report.summary.isEmpty)
         XCTAssertTrue(report.summary.contains("Removed:") || report.summary.contains("No sensitive data found"))
-        
+
         // Cleanup
         try? FileManager.default.removeItem(at: tempURL)
     }

@@ -15,7 +15,7 @@ final class JobEnginePerformanceTests: XCTestCase {
     var testFiles: [URL]!
     
     override func setUp() async throws {
-        jobManager = JobManager()
+        jobManager = JobManager.shared
         testFiles = try createTestFiles()
     }
     
@@ -101,11 +101,13 @@ final class JobEnginePerformanceTests: XCTestCase {
     
     func testJobSubmissionPerformance() async throws {
         // Test rapid job submission
+        var settings = JobSettings()
+        settings.maxDimension = 400
         let jobs = Array(0..<100).map { index in
             Job(
                 type: .imageResize,
                 inputs: [testFiles[index % testFiles.count]],
-                settings: JobSettings(maxDimension: 400)
+                settings: settings
             )
         }
         
@@ -138,12 +140,13 @@ final class JobEnginePerformanceTests: XCTestCase {
         // Test job processing throughput
         let imageFiles = testFiles.filter { $0.pathExtension == "jpg" }
         let batchSize = 20
-        
+        var settings = JobSettings()
+        settings.maxDimension = 800
         let jobs = Array(0..<batchSize).map { index in
             Job(
                 type: .imageResize,
                 inputs: [imageFiles[index % imageFiles.count]],
-                settings: JobSettings(maxDimension: 800)
+                settings: settings
             )
         }
         
@@ -355,7 +358,7 @@ final class JobEnginePerformanceTests: XCTestCase {
             
             // Concurrent job deletion
             Task {
-                await Task.sleep(nanoseconds: 100_000_000) // 0.1s delay
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s delay
                 for job in Array(jobManager.jobs.suffix(10)) {
                     jobManager.deleteJob(job)
                 }
@@ -380,7 +383,7 @@ final class JobEnginePerformanceTests: XCTestCase {
                         lastCount = currentCount
                         print("📊 Job count: \(currentCount)")
                     }
-                    await Task.sleep(nanoseconds: 50_000_000) // 0.05s
+                    try? await Task.sleep(nanoseconds: 50_000_000) // 0.05s
                 }
                 expectation.fulfill()
             }
@@ -416,7 +419,7 @@ final class JobEnginePerformanceTests: XCTestCase {
                 }
                 
                 // Simulate background processing
-                await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
                 
                 // Check progress
                 let progressSum = jobManager.jobs.reduce(0.0) { sum, job in
@@ -459,7 +462,7 @@ final class JobEnginePerformanceTests: XCTestCase {
                 
                 // Cancel all jobs rapidly
                 for job in jobs {
-                    await jobManager.cancelJob(job.id)
+                    await jobManager.cancelJob(job)
                 }
                 
                 let duration = CFAbsoluteTimeGetCurrent() - startTime

@@ -14,33 +14,6 @@ import CommonCrypto
 import PDFKit
 import UIKit
 
-// MARK: - Compliance Mode
-
-public enum ComplianceMode: String, Codable, CaseIterable {
-    case none = "none"
-    case healthcare = "healthcare"
-    case legal = "legal"
-    case finance = "finance"
-    
-    public var displayName: String {
-        switch self {
-        case .none: return "Standard"
-        case .healthcare: return "Healthcare"
-        case .legal: return "Legal"
-        case .finance: return "Finance"
-        }
-    }
-    
-    public var description: String {
-        switch self {
-        case .none: return "Basic privacy protection"
-        case .healthcare: return "Maximum security for medical records"
-        case .legal: return "Enhanced protection for legal documents"
-        case .finance: return "Strict controls for financial data"
-        }
-    }
-}
-
 // MARK: - Privacy Delegate Protocol
 
 @MainActor
@@ -49,7 +22,6 @@ public protocol JobPrivacyDelegate {
     func getZeroTraceEnabled() -> Bool
     func getBiometricLockEnabled() -> Bool
     func getStealthModeEnabled() -> Bool
-    func getSelectedComplianceMode() -> ComplianceMode
     @MainActor func performAuthenticationForProcessing() async throws
     func makeSecureTemporaryURL() -> URL
     func performSecureFilesCleanup()
@@ -68,7 +40,6 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
     @Published public var isZeroTraceEnabled = false
     @Published public var isBiometricLockEnabled = false
     @Published public var isStealthModeEnabled = false
-    @Published public var selectedComplianceMode: ComplianceMode = .none
     @Published public var airplaneModeStatus: AirplaneModeStatus = .unknown
     @Published public var memoryStatus = MemoryStatus()
     @Published public var networkStatus = NetworkStatus()
@@ -122,32 +93,7 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
         saveSettings()
         logAuditEvent(.stealthModeToggled(enabled))
     }
-    
-    public func setComplianceMode(_ mode: ComplianceMode) {
-        selectedComplianceMode = mode
-        
-        // Auto-configure settings based on compliance mode
-        switch mode {
-        case .healthcare:
-            isSecureVaultEnabled = true
-            isZeroTraceEnabled = true
-            isBiometricLockEnabled = true
-        case .legal:
-            isSecureVaultEnabled = true
-            isBiometricLockEnabled = true
-        case .finance:
-            isSecureVaultEnabled = true
-            isZeroTraceEnabled = true
-            isBiometricLockEnabled = true
-            isStealthModeEnabled = true
-        case .none:
-            break
-        }
-        
-        saveSettings()
-        logAuditEvent(.complianceModeChanged(mode))
-    }
-    
+
     // MARK: - App-Level Biometric Lock
 
     /// Authenticate to unlock the app. Returns true if successful or if biometric lock is disabled.
@@ -611,11 +557,6 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
         isZeroTraceEnabled = defaults.bool(forKey: "privacy.zeroTrace")
         isBiometricLockEnabled = defaults.bool(forKey: "privacy.biometricLock")
         isStealthModeEnabled = defaults.bool(forKey: "privacy.stealthMode")
-        
-        if let modeString = defaults.string(forKey: "privacy.complianceMode"),
-           let mode = ComplianceMode(rawValue: modeString) {
-            selectedComplianceMode = mode
-        }
     }
     
     private func saveSettings() {
@@ -624,7 +565,6 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
         defaults.set(isZeroTraceEnabled, forKey: "privacy.zeroTrace")
         defaults.set(isBiometricLockEnabled, forKey: "privacy.biometricLock")
         defaults.set(isStealthModeEnabled, forKey: "privacy.stealthMode")
-        defaults.set(selectedComplianceMode.rawValue, forKey: "privacy.complianceMode")
     }
     
     private func loadAuditTrail() {
@@ -660,11 +600,7 @@ public class PrivacyManager: ObservableObject, JobPrivacyDelegate {
     public func getStealthModeEnabled() -> Bool {
         return isStealthModeEnabled
     }
-    
-    public func getSelectedComplianceMode() -> ComplianceMode {
-        return selectedComplianceMode
-    }
-    
+
     @MainActor
     public func performAuthenticationForProcessing() async throws {
         try await authenticateForProcessing()
@@ -807,7 +743,6 @@ public enum PrivacyAuditEvent: Codable {
     case zeroTraceToggled(Bool)
     case biometricLockToggled(Bool)
     case stealthModeToggled(Bool)
-    case complianceModeChanged(ComplianceMode)
     case biometricAuthenticationSucceeded
     case biometricAuthenticationFailed
     case secureFileCreated(String)
@@ -845,12 +780,6 @@ public enum PrivacyAuditEvent: Codable {
         case "stealthModeToggled":
             let enabled = try container.decode(Bool.self, forKey: .value1)
             self = .stealthModeToggled(enabled)
-        case "complianceModeChanged":
-            let modeRawValue = try container.decode(String.self, forKey: .value1)
-            guard let mode = ComplianceMode(rawValue: modeRawValue) else {
-                throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Invalid compliance mode: \(modeRawValue)"))
-            }
-            self = .complianceModeChanged(mode)
         case "biometricAuthenticationSucceeded":
             self = .biometricAuthenticationSucceeded
         case "biometricAuthenticationFailed":
@@ -902,9 +831,6 @@ public enum PrivacyAuditEvent: Codable {
         case .stealthModeToggled(let enabled):
             try container.encode("stealthModeToggled", forKey: .type)
             try container.encode(enabled, forKey: .value1)
-        case .complianceModeChanged(let mode):
-            try container.encode("complianceModeChanged", forKey: .type)
-            try container.encode(mode.rawValue, forKey: .value1)
         case .biometricAuthenticationSucceeded:
             try container.encode("biometricAuthenticationSucceeded", forKey: .type)
         case .biometricAuthenticationFailed:
@@ -948,8 +874,6 @@ public enum PrivacyAuditEvent: Codable {
             return "Biometric lock \(enabled ? "enabled" : "disabled")"
         case .stealthModeToggled(let enabled):
             return "Stealth mode \(enabled ? "enabled" : "disabled")"
-        case .complianceModeChanged(let mode):
-            return "Compliance mode changed to \(mode.displayName)"
         case .biometricAuthenticationSucceeded:
             return "Biometric authentication successful"
         case .biometricAuthenticationFailed:

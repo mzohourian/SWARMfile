@@ -3,7 +3,7 @@
 ## Pre-Submission Requirements ✅ Complete
 
 ### 1. App Configuration
-- [x] **Bundle ID configured**: `com.yourcompany.onebox`
+- [x] **Bundle ID configured**: `com.spuud.vaultpdf`
 - [x] **App version set**: `1.0.0` (MARKETING_VERSION)
 - [x] **Build number set**: `1` (CURRENT_PROJECT_VERSION)
 - [x] **Deployment target**: iOS 16.0+
@@ -26,9 +26,9 @@
 
 ### 4. In-App Purchases (IAP)
 - [x] **Products configured in App Store Connect**:
-  - `com.onebox.pro.monthly` - $4.99/month
-  - `com.onebox.pro.yearly` - $29.99/year  
-  - `com.onebox.pro.lifetime` - $49.99 one-time
+  - `com.spuud.vaultpdf.pro.monthly` - $4.99/month
+  - `com.spuud.vaultpdf.pro.yearly` - $29.99/year
+  - `com.spuud.vaultpdf.pro.lifetime` - $49.99 one-time
 - [x] **StoreKit 2 integration**: Real purchase validation
 - [x] **Restore purchases**: Functional
 - [x] **Free tier**: 3 exports/day limit implemented

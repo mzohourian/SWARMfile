@@ -27,12 +27,12 @@ By participating in this project, you agree to:
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/onebox.git
-   cd onebox/OneBox
+   git clone https://github.com/YOUR-USERNAME/vault-pdf.git
+   cd vault-pdf/OneBox
    ```
 3. **Add upstream remote**:
    ```bash
-   git remote add upstream https://github.com/yourcompany/onebox.git
+   git remote add upstream https://github.com/mzohourian/vault-pdf.git
    ```
 4. **Create a branch** for your feature:
    ```bash
@@ -83,7 +83,7 @@ xcodebuild -scheme OneBox \
 
 ### Finding Issues to Work On
 
-- Check the [Issues](https://github.com/yourcompany/onebox/issues) page
+- Check the [Issues](https://github.com/mzohourian/vault-pdf/issues) page
 - Look for issues labeled `good first issue` or `help wanted`
 - Ask in the issue comments if you want to work on something
 

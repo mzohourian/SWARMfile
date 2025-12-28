@@ -51,8 +51,8 @@ xcodebuild build -scheme OneBox SWIFT_VERSION=6
 - App listing created with all metadata
 - In-app purchase products configured:
   - `com.onebox.pro.monthly` - $4.99/month
-  - `com.onebox.pro.yearly` - $29.99/year  
-  - `com.onebox.pro.lifetime` - $49.99
+  - `com.onebox.pro.yearly` - $29.99/year
+  - `com.onebox.pro.lifetime` - $69.99
 - Privacy information set to "Data Not Collected"
 
 ## Build Process

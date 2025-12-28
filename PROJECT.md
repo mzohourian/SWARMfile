@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2024-12-27
+**Last Updated:** 2024-12-28
 
 ## What This Is
 **Vault PDF** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -115,34 +115,37 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2024-12-28 (Redaction Gesture & Flickering Fixes)
+**Date:** 2024-12-28 (Pricing & Payment Completion)
 
 **What Was Done:**
-- **Fixed delete button deleting all boxes:**
-  - Added `focusedBoxId` state to separate "focused for editing" from "selected for redaction"
-  - Delete button now only appears when a box is focused (tapped/dragged)
-  - Delete action only removes the focused box, not all selected boxes
-- **Fixed box selection and resize gestures:**
-  - Added explicit zIndex ordering (background=0, boxes=1) so boxes receive taps
-  - Restructured `redactionBoxView` to use `.position()` instead of `.offset()`
-  - Removed full-page frame wrapper that was blocking hit testing
-  - Added `.contentShape()` before gestures for proper tap detection
-- **Fixed flickering during move and resize:**
-  - Replaced temporary offset accumulation with delta-based direct updates
-  - Store `lastDragLocation`/`lastResizeLocation` to calculate movement delta
-  - Update `normalizedRect` directly during drag (no temporary state to reset)
-  - Added `moveBoxDirectly` and `resizeBoxDirectly` functions for real-time updates
-  - Eliminates flicker caused by resetting offset state at drag end
-- **Full-screen editor improvements:**
-  - Uses same overlay structure as main editor
-  - Delete button in top bar when box is focused
-  - Consistent gesture handling
+- **Completed pricing configuration:**
+  - Pricing: $4.99/mo, $29.99/yr, $69.99 lifetime
+  - Updated SUBMISSION_BUILD_GUIDE.md with correct lifetime price ($69.99)
+  - Created Products.storekit configuration file for local testing
+- **Fixed Payments module:**
+  - Added missing `resetDailyExports()` method required by integration tests
+  - Verified PaywallView correctly uses StoreKit for real-time pricing
+- **Cleaned up deprecated code:**
+  - Marked UpgradeFlowView.swift as deprecated (unused, has wrong pricing)
+  - PaywallView.swift is the active paywall - uses StoreKit correctly
+
+**Payment System Status:**
+- ✅ PaymentsManager fully implemented with StoreKit 2
+- ✅ Free tier: 3 exports/day with midnight reset
+- ✅ Monthly, Yearly, Lifetime products configured
+- ✅ PaywallView displays correct pricing from App Store
+- ✅ Restore purchases implemented
+- ✅ Transaction verification working
 
 **What's Unfinished:**
-- Device testing still needed to verify all fixes
+- Device testing with sandbox account to verify purchases
+- App Store screenshot automation (fastlane) had compilation errors in unit tests
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/RedactionView.swift` - Major gesture and positioning overhaul
+- `OneBox/SUBMISSION_BUILD_GUIDE.md` - Fixed lifetime price to $69.99
+- `OneBox/Modules/Payments/Payments.swift` - Added resetDailyExports()
+- `OneBox/OneBox/Views/Upgrade/UpgradeFlowView.swift` - Marked as deprecated
+- `OneBox/OneBox/Products.storekit` - NEW: StoreKit test configuration
 
 ---
 

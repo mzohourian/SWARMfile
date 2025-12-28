@@ -2,6 +2,13 @@
 //  UpgradeFlowView.swift
 //  OneBox
 //
+//  DEPRECATED: This view is NOT currently used in the app.
+//  Use PaywallView.swift instead - it correctly fetches prices from StoreKit.
+//
+//  This file contains hardcoded pricing that does not match App Store Connect:
+//  - Actual pricing: $4.99/mo, $29.99/yr, $69.99 lifetime
+//  - This file has wrong prices and an "Enterprise" tier that doesn't exist
+//
 //  Enhanced upgrade flow with Face ID checkout and contextual monetization
 //
 

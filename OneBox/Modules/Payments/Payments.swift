@@ -225,6 +225,14 @@ public class PaymentsManager: ObservableObject {
         defaults.set(dailyExportsUsed, forKey: "daily_exports_used")
     }
 
+    /// Resets the daily export counter (for testing or manual reset)
+    public func resetDailyExports() {
+        dailyExportsUsed = 0
+        let defaults = UserDefaults.standard
+        defaults.set(Date(), forKey: "last_export_reset")
+        defaults.set(0, forKey: "daily_exports_used")
+    }
+
     // MARK: - Product Helpers
     public func product(for id: ProductID) -> Product? {
         products.first { $0.id == id.rawValue }

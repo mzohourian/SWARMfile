@@ -18,7 +18,7 @@ final class JobEngineIntegrationTests: XCTestCase {
     var testPDFURLs: [URL]!
     
     override func setUp() async throws {
-        jobManager = JobManager()
+        jobManager = JobManager.shared
         testImageURLs = try createTestImages()
         testPDFURLs = try createTestPDFs()
     }

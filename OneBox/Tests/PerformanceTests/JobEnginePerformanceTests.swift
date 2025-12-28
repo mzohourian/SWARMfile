@@ -15,7 +15,7 @@ final class JobEnginePerformanceTests: XCTestCase {
     var testFiles: [URL]!
     
     override func setUp() async throws {
-        jobManager = JobManager()
+        jobManager = JobManager.shared
         testFiles = try createTestFiles()
     }
     

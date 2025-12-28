@@ -8,8 +8,9 @@ import XCTest
 @testable import CommonTypes
 import UIKit
 
+@MainActor
 final class CoreImageKitPerformanceTests: XCTestCase {
-    
+
     var processor: ImageProcessor!
     var testImageURLs: [URL]!
     
@@ -158,7 +159,7 @@ final class CoreImageKitPerformanceTests: XCTestCase {
         // Process 10 iPhone resolution images
         let iphoneImages = testImageURLs.filter { $0.lastPathComponent.contains("3024x4032") }
         
-        measureMetrics([.wallClockTime, .cpu], automaticallyStartMeasuring: false) {
+        measureMetrics([.wallClockTime], automaticallyStartMeasuring: false) {
             let expectation = expectation(description: "Large batch resize")
             
             let startTime = CFAbsoluteTimeGetCurrent()

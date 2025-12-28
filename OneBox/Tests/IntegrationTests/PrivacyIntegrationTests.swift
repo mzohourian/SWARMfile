@@ -20,7 +20,7 @@ final class PrivacyIntegrationTests: XCTestCase {
     
     override func setUp() async throws {
         privacyManager = Privacy.PrivacyManager.shared
-        jobManager = JobManager()
+        jobManager = JobManager.shared
         
         // Set up privacy delegate
         jobManager.setPrivacyDelegate(privacyManager)

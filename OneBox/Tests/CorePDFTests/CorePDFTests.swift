@@ -7,6 +7,7 @@ import XCTest
 import PDFKit
 @testable import CorePDF
 
+@MainActor
 final class CorePDFTests: XCTestCase {
 
     var processor: PDFProcessor!

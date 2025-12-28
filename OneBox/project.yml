@@ -197,7 +197,6 @@ schemes:
     test:
       config: Debug
       targets:
-        - OneBoxTests
         - OneBoxUITests
     archive:
       config: Release

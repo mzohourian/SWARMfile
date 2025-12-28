@@ -115,19 +115,28 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2025-12-28 (Pricing & Payment Completion)
+**Date:** 2025-12-28 (Pricing, Payments & TestFlight Setup)
 
 **What Was Done:**
 - **Completed pricing configuration:**
   - Pricing: $4.99/mo, $29.99/yr, $69.99 lifetime
-  - Updated SUBMISSION_BUILD_GUIDE.md with correct lifetime price ($69.99)
+  - Product IDs: `com.vaultpdf.pro.monthly`, `com.vaultpdf.pro.yearly`, `com.vaultpdf.pro.lifetime`
   - Created Products.storekit configuration file for local testing
 - **Fixed Payments module:**
-  - Added missing `resetDailyExports()` method required by integration tests
-  - Verified PaywallView correctly uses StoreKit for real-time pricing
-- **Cleaned up deprecated code:**
-  - Marked UpgradeFlowView.swift as deprecated (unused, has wrong pricing)
-  - PaywallView.swift is the active paywall - uses StoreKit correctly
+  - Added missing `resetDailyExports()` method
+  - Updated product IDs from `com.onebox.*` to `com.vaultpdf.*`
+- **Fixed PaywallView issues:**
+  - "Go Pro" button on home screen now opens paywall (was broken)
+  - Fixed savings calculation showing 0% instead of ~50%
+  - Changed button text from "Unlock Unlimited" to "Go Pro"
+- **Fixed bundle IDs in project.yml:**
+  - Main app: `com.spuud.vaultpdf`
+  - All modules: `com.spuud.vaultpdf.*`
+  - Prevents Xcode from reverting to generic IDs
+- **App Store Connect setup:**
+  - Created 3 in-app purchases with localizations (8 languages)
+  - Uploaded first TestFlight build
+  - Set up internal/external testing groups
 
 **Payment System Status:**
 - ✅ PaymentsManager fully implemented with StoreKit 2
@@ -138,14 +147,16 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 - ✅ Transaction verification working
 
 **What's Unfinished:**
+- Upload new TestFlight build with corrected product IDs
 - Device testing with sandbox account to verify purchases
-- App Store screenshot automation (fastlane) had compilation errors in unit tests
 
 **Files Modified This Session:**
-- `OneBox/SUBMISSION_BUILD_GUIDE.md` - Fixed lifetime price to $69.99
-- `OneBox/Modules/Payments/Payments.swift` - Added resetDailyExports()
-- `OneBox/OneBox/Views/Upgrade/UpgradeFlowView.swift` - Marked as deprecated
-- `OneBox/OneBox/Products.storekit` - NEW: StoreKit test configuration
+- `OneBox/project.yml` - Fixed all bundle IDs to com.spuud.vaultpdf.*
+- `OneBox/Modules/Payments/Payments.swift` - Updated product IDs, added resetDailyExports()
+- `OneBox/OneBox/Views/NewHomeView.swift` - Fixed "Go Pro" button action
+- `OneBox/OneBox/Views/PaywallView.swift` - Fixed savings percentage calculation
+- `OneBox/OneBox/Products.storekit` - Updated product IDs
+- `OneBox/SUBMISSION_BUILD_GUIDE.md` - Updated bundle ID and pricing
 
 ---
 

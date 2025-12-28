@@ -283,8 +283,14 @@ final class PrivacyTests: XCTestCase {
 
         // When/Then
         XCTAssertThrowsError(try privacyManager.encryptFile(at: sourceURL, password: "")) { error in
-            if let privacyError = error as? PrivacyError {
-                XCTAssertEqual(privacyError, .encryptionFailed)
+            guard let privacyError = error as? PrivacyError else {
+                XCTFail("Expected PrivacyError but got \(type(of: error))")
+                return
+            }
+            if case .encryptionFailed = privacyError {
+                // Expected error type
+            } else {
+                XCTFail("Expected encryptionFailed but got \(privacyError)")
             }
         }
 

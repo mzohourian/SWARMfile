@@ -17,9 +17,9 @@ public class PaymentsManager: ObservableObject {
 
     // Product IDs
     public enum ProductID: String, CaseIterable {
-        case monthly = "com.onebox.pro.monthly"
-        case yearly = "com.onebox.pro.yearly"
-        case lifetime = "com.onebox.pro.lifetime"
+        case monthly = "com.vaultpdf.pro.monthly"
+        case yearly = "com.vaultpdf.pro.yearly"
+        case lifetime = "com.vaultpdf.pro.lifetime"
 
         var displayName: String {
             switch self {

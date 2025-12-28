@@ -15,7 +15,7 @@
           "locale" : "en_US"
         }
       ],
-      "productID" : "com.onebox.pro.lifetime",
+      "productID" : "com.vaultpdf.pro.lifetime",
       "referenceName" : "Pro Lifetime",
       "type" : "NonConsumable"
     }
@@ -106,7 +106,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.onebox.pro.monthly",
+          "productID" : "com.vaultpdf.pro.monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "Pro Monthly",
           "subscriptionGroupID" : "vault_pdf_pro",
@@ -134,7 +134,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.onebox.pro.yearly",
+          "productID" : "com.vaultpdf.pro.yearly",
           "recurringSubscriptionPeriod" : "P1Y",
           "referenceName" : "Pro Yearly",
           "subscriptionGroupID" : "vault_pdf_pro",

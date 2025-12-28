@@ -50,9 +50,9 @@ xcodebuild build -scheme OneBox SWIFT_VERSION=6
 ### 3. App Store Connect Configuration ✅
 - App listing created with all metadata
 - In-app purchase products configured:
-  - `com.onebox.pro.monthly` - $4.99/month
-  - `com.onebox.pro.yearly` - $29.99/year
-  - `com.onebox.pro.lifetime` - $69.99
+  - `com.vaultpdf.pro.monthly` - $4.99/month
+  - `com.vaultpdf.pro.yearly` - $29.99/year
+  - `com.vaultpdf.pro.lifetime` - $69.99
 - Privacy information set to "Data Not Collected"
 
 ## Build Process

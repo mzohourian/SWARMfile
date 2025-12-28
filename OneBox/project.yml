@@ -5,7 +5,7 @@
 
 name: OneBox
 options:
-  bundleIdPrefix: com.yourcompany
+  bundleIdPrefix: com.spuud
   deploymentTarget:
     iOS: "16.0"
   developmentLanguage: en
@@ -51,7 +51,7 @@ targets:
         BGTaskSchedulerPermittedIdentifiers:
           - com.onebox.process
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox
+      PRODUCT_BUNDLE_IDENTIFIER: com.spuud.vaultpdf
       INFOPLIST_FILE: OneBox/Info.plist
       CODE_SIGN_STYLE: Automatic
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -79,7 +79,7 @@ targets:
     sources:
       - Modules/CommonTypes
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.commontypes
+      PRODUCT_BUNDLE_IDENTIFIER: com.spuud.vaultpdf.commontypes
       GENERATE_INFOPLIST_FILE: YES
 
   CorePDF:
@@ -90,7 +90,7 @@ targets:
     dependencies:
       - target: CommonTypes
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.corepdf
+      PRODUCT_BUNDLE_IDENTIFIER: com.spuud.vaultpdf.corepdf
       GENERATE_INFOPLIST_FILE: YES
 
   CoreImageKit:
@@ -101,7 +101,7 @@ targets:
     dependencies:
       - target: CommonTypes
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.coreimagekit
+      PRODUCT_BUNDLE_IDENTIFIER: com.spuud.vaultpdf.coreimagekit
       GENERATE_INFOPLIST_FILE: YES
 
   JobEngine:
@@ -115,7 +115,7 @@ targets:
       - target: CoreImageKit
       - target: Privacy
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.jobengine
+      PRODUCT_BUNDLE_IDENTIFIER: com.spuud.vaultpdf.jobengine
       GENERATE_INFOPLIST_FILE: YES
 
   Payments:
@@ -124,7 +124,7 @@ targets:
     sources:
       - Modules/Payments
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.payments
+      PRODUCT_BUNDLE_IDENTIFIER: com.spuud.vaultpdf.payments
       GENERATE_INFOPLIST_FILE: YES
 
   Ads:
@@ -133,7 +133,7 @@ targets:
     sources:
       - Modules/Ads
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.ads
+      PRODUCT_BUNDLE_IDENTIFIER: com.spuud.vaultpdf.ads
       GENERATE_INFOPLIST_FILE: YES
 
   UIComponents:
@@ -142,7 +142,7 @@ targets:
     sources:
       - Modules/UIComponents
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.uicomponents
+      PRODUCT_BUNDLE_IDENTIFIER: com.spuud.vaultpdf.uicomponents
       GENERATE_INFOPLIST_FILE: YES
 
   Privacy:
@@ -151,7 +151,7 @@ targets:
     sources:
       - Modules/Privacy
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.privacy
+      PRODUCT_BUNDLE_IDENTIFIER: com.spuud.vaultpdf.privacy
       GENERATE_INFOPLIST_FILE: YES
 
   # Test Targets
@@ -169,7 +169,7 @@ targets:
       - target: Payments
       - target: Privacy
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.tests
+      PRODUCT_BUNDLE_IDENTIFIER: com.spuud.vaultpdf.tests
       GENERATE_INFOPLIST_FILE: YES
 
   # UI Test Target (separate for screenshots and UI testing)
@@ -181,7 +181,7 @@ targets:
     dependencies:
       - target: OneBox
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.onebox.uitests
+      PRODUCT_BUNDLE_IDENTIFIER: com.spuud.vaultpdf.uitests
       GENERATE_INFOPLIST_FILE: YES
       TEST_HOST: ""
       BUNDLE_LOADER: ""

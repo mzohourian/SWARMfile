@@ -234,7 +234,7 @@ final class PrivacyIntegrationTests: XCTestCase {
         // When - process sensitive document
         var settings = JobSettings()
         settings.signatureText = "Approved"
-        settings.signaturePosition = CGPoint(x: 100, y: 700)
+        settings.signaturePosition = .bottomRight
 
         let job = Job(
             type: .pdfSign,

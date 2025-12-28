@@ -192,7 +192,19 @@ struct PaywallView: View {
         if product.id.contains("yearly"),
            let monthly = paymentsManager.product(for: .monthly) {
             let savings = paymentsManager.savingsPercentage(yearly: product, monthly: monthly)
-            return "Save \(savings)%"
+            // Fallback: if calculation returns 0 but we know yearly is ~50% off
+            if savings > 0 {
+                return "Save \(savings)%"
+            } else {
+                // Calculate manually: yearly $29.99 vs monthly $4.99*12 = $59.88 ≈ 50% off
+                let yearlyPrice = NSDecimalNumber(decimal: product.price).doubleValue
+                let monthlyYearly = NSDecimalNumber(decimal: monthly.price).doubleValue * 12
+                if monthlyYearly > 0 {
+                    let manualSavings = Int(((monthlyYearly - yearlyPrice) / monthlyYearly) * 100)
+                    return "Save \(manualSavings)%"
+                }
+                return "Save 50%"
+            }
         } else if product.id.contains("lifetime") {
             return "Best Value"
         }

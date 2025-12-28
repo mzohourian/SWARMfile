@@ -12,6 +12,7 @@
 
 import XCTest
 
+@MainActor
 final class ScreenshotTests: XCTestCase {
 
     let app = XCUIApplication()

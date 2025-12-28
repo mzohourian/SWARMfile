@@ -390,7 +390,7 @@ public class JobManager: ObservableObject {
     }
     
     private var cancellables = Set<AnyCancellable>()
-    private let processingQueue = DispatchQueue(label: "com.onebox.jobengine", qos: .userInitiated)
+    private let processingQueue = DispatchQueue(label: "com.spuud.vaultpdf.jobengine", qos: .userInitiated)
     private var currentTask: Task<Void, Never>?
     private var privacyDelegate: Privacy.PrivacyManager?
     private var cachedZeroTraceEnabled: Bool = false
@@ -612,7 +612,7 @@ public class JobManager: ObservableObject {
 
     private func setupBackgroundTask() {
         BGTaskScheduler.shared.register(
-            forTaskWithIdentifier: "com.onebox.process",
+            forTaskWithIdentifier: "com.spuud.vaultpdf.process",
             using: nil
         ) { task in
             self.handleBackgroundTask(task as! BGProcessingTask)

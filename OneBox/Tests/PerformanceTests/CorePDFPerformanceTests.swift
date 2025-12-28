@@ -196,7 +196,7 @@ final class CorePDFPerformanceTests: XCTestCase {
         // Target: 50 mixed-resolution images in <12 seconds (as per README)
         let largeImages = Array(testImageURLs.prefix(50))
         
-        measureMetrics([.wallClockTime, .cpu], automaticallyStartMeasuring: false) {
+        measureMetrics([.wallClockTime], automaticallyStartMeasuring: false) {
             let expectation = expectation(description: "Large batch conversion")
             
             let startTime = CFAbsoluteTimeGetCurrent()
@@ -390,7 +390,7 @@ final class CorePDFPerformanceTests: XCTestCase {
                     
                     _ = try await processor.splitPDF(
                         largePDF,
-                        pageRanges: [1...50], // All pages individually
+                        ranges: [1...50], // All pages individually
                         progressHandler: { progress in
                             if Int(progress * 100) % 25 == 0 {
                                 let elapsed = CFAbsoluteTimeGetCurrent() - startTime

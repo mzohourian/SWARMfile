@@ -1,4 +1,4 @@
-# Fastfile for OneBox
+# Fastfile for Vault PDF (OneBox)
 # CI/CD automation for iOS app
 
 default_platform(:ios)
@@ -6,9 +6,9 @@ default_platform(:ios)
 platform :ios do
 
   # Environment variables
-  APP_IDENTIFIER = "com.yourcompany.onebox"
+  APP_IDENTIFIER = "com.spuud.vaultpdf"
   SCHEME = "OneBox"
-  WORKSPACE = "OneBox.xcworkspace"
+  PROJECT = "OneBox.xcodeproj"
 
   before_all do
     ensure_git_status_clean unless ENV['SKIP_GIT_CHECK']
@@ -19,7 +19,7 @@ platform :ios do
   desc "Run all unit and UI tests"
   lane :tests do
     run_tests(
-      workspace: WORKSPACE,
+      project: PROJECT,
       scheme: SCHEME,
       devices: ["iPhone 15 Pro", "iPad Pro (12.9-inch) (6th generation)"],
       code_coverage: true,
@@ -29,7 +29,7 @@ platform :ios do
 
     # Generate code coverage report
     xcov(
-      workspace: WORKSPACE,
+      project: PROJECT,
       scheme: SCHEME,
       output_directory: "./fastlane/coverage",
       minimum_coverage_percentage: 70.0
@@ -39,7 +39,7 @@ platform :ios do
   desc "Run quick tests (unit tests only)"
   lane :quick_test do
     scan(
-      workspace: WORKSPACE,
+      project: PROJECT,
       scheme: SCHEME,
       skip_slack: true,
       code_coverage: true,
@@ -52,7 +52,7 @@ platform :ios do
   desc "Build app for testing"
   lane :build do
     gym(
-      workspace: WORKSPACE,
+      project: PROJECT,
       scheme: SCHEME,
       configuration: "Debug",
       skip_archive: true,
@@ -64,7 +64,7 @@ platform :ios do
   desc "Build release version"
   lane :build_release do
     gym(
-      workspace: WORKSPACE,
+      project: PROJECT,
       scheme: SCHEME,
       configuration: "Release",
       export_method: "app-store",
@@ -76,16 +76,14 @@ platform :ios do
 
   desc "Upload to TestFlight (Internal Testing)"
   lane :beta do
-    ensure_git_branch(branch: 'main')
-
     # Increment build number
     increment_build_number(
-      xcodeproj: "OneBox.xcodeproj"
+      xcodeproj: PROJECT
     )
 
     # Build the app
     build_app(
-      workspace: WORKSPACE,
+      project: PROJECT,
       scheme: SCHEME,
       configuration: "Release",
       export_method: "app-store",
@@ -106,7 +104,7 @@ platform :ios do
     # Commit version bump
     commit_version_bump(
       message: "Bump build number [skip ci]",
-      xcodeproj: "OneBox.xcodeproj"
+      xcodeproj: PROJECT
     )
 
     push_to_git_remote
@@ -121,8 +119,6 @@ platform :ios do
 
   desc "Deploy to App Store"
   lane :release do
-    ensure_git_branch(branch: 'main')
-
     # Validate metadata
     validate_app_store_metadata
 
@@ -132,12 +128,12 @@ platform :ios do
     )
 
     increment_build_number(
-      xcodeproj: "OneBox.xcodeproj"
+      xcodeproj: PROJECT
     )
 
     # Build
     build_app(
-      workspace: WORKSPACE,
+      project: PROJECT,
       scheme: SCHEME,
       configuration: "Release",
       export_method: "app-store",
@@ -160,7 +156,7 @@ platform :ios do
     # Commit version bump
     commit_version_bump(
       message: "Version bump to #{lane_context[SharedValues::VERSION_NUMBER]} [skip ci]",
-      xcodeproj: "OneBox.xcodeproj"
+      xcodeproj: PROJECT
     )
 
     # Create git tag

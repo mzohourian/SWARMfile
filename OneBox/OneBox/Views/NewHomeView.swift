@@ -24,6 +24,7 @@ struct HomeView: View {
     @State private var showingWorkflowConcierge = false
     @State private var showingRecentFiles = false
     @State private var showingPrivacyInfo = false
+    @State private var showingPaywall = false
     @State private var privacyInfoTool: ToolType?
     @State private var documentPreviewURL: URL?
     @StateObject private var searchService = OnDeviceSearchService.shared
@@ -96,6 +97,10 @@ struct HomeView: View {
                 ToolPrivacyInfoView(tool: tool)
             }
         }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView()
+                .environmentObject(paymentsManager)
+        }
         .quickLookPreview($documentPreviewURL)
     }
 
@@ -152,12 +157,12 @@ struct HomeView: View {
 
                 // Upgrade CTA
                 Button(action: {
-                    // Show upgrade flow
+                    showingPaywall = true
                 }) {
                     HStack(spacing: 6) {
-                        Image(systemName: "sparkles")
+                        Image(systemName: "crown.fill")
                             .font(.system(size: 12, weight: .semibold))
-                        Text("Unlock Unlimited")
+                        Text("Go Pro")
                             .font(.system(size: 13, weight: .semibold))
                     }
                     .foregroundColor(OneBoxColors.primaryGraphite)

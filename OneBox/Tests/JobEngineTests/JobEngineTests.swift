@@ -13,13 +13,17 @@ final class JobEngineTests: XCTestCase {
     var jobManager: JobManager!
 
     override func setUp() async throws {
-        jobManager = JobManager()
+        jobManager = JobManager.shared
+        // Clear any existing jobs
+        for job in jobManager.jobs {
+            await jobManager.deleteJob(job)
+        }
     }
 
     override func tearDown() async throws {
         // Clean up jobs
         for job in jobManager.jobs {
-            jobManager.deleteJob(job)
+            await jobManager.deleteJob(job)
         }
         jobManager = nil
     }
@@ -62,7 +66,7 @@ final class JobEngineTests: XCTestCase {
 
     // MARK: - Job Manager Tests
 
-    func testSubmitJob() {
+    func testSubmitJob() async {
         // Given
         let job = Job(
             type: .imagesToPDF,
@@ -71,30 +75,30 @@ final class JobEngineTests: XCTestCase {
         )
 
         // When
-        jobManager.submitJob(job)
+        await jobManager.submitJob(job)
 
         // Then
         XCTAssertEqual(jobManager.jobs.count, 1)
         XCTAssertEqual(jobManager.jobs.first?.id, job.id)
     }
 
-    func testDeleteJob() {
+    func testDeleteJob() async {
         // Given
         let job = Job(
             type: .imagesToPDF,
             inputs: [URL(fileURLWithPath: "/tmp/test.jpg")],
             settings: JobSettings()
         )
-        jobManager.submitJob(job)
+        await jobManager.submitJob(job)
 
         // When
-        jobManager.deleteJob(job)
+        await jobManager.deleteJob(job)
 
         // Then
         XCTAssertEqual(jobManager.jobs.count, 0)
     }
 
-    func testCancelJob() {
+    func testCancelJob() async {
         // Given
         let job = Job(
             type: .imagesToPDF,
@@ -102,10 +106,10 @@ final class JobEngineTests: XCTestCase {
             settings: JobSettings(),
             status: .running
         )
-        jobManager.submitJob(job)
+        await jobManager.submitJob(job)
 
         // When
-        jobManager.cancelJob(job)
+        await jobManager.cancelJob(job)
 
         // Then
         let updatedJob = jobManager.jobs.first { $0.id == job.id }
@@ -113,7 +117,7 @@ final class JobEngineTests: XCTestCase {
         XCTAssertNotNil(updatedJob?.error)
     }
 
-    func testRetryJob() {
+    func testRetryJob() async {
         // Given
         var job = Job(
             type: .imagesToPDF,
@@ -123,10 +127,10 @@ final class JobEngineTests: XCTestCase {
             error: "Test error"
         )
         job.progress = 0.5
-        jobManager.submitJob(job)
+        await jobManager.submitJob(job)
 
         // When
-        jobManager.retryJob(job)
+        await jobManager.retryJob(job)
 
         // Then
         let retriedJob = jobManager.jobs.first { $0.id == job.id }
@@ -189,7 +193,7 @@ final class JobEngineTests: XCTestCase {
 
     // MARK: - Persistence Tests
 
-    func testJobPersistence() {
+    func testJobPersistence() async {
         // Given
         let job = Job(
             type: .imagesToPDF,
@@ -198,14 +202,10 @@ final class JobEngineTests: XCTestCase {
         )
 
         // When
-        jobManager.submitJob(job)
+        await jobManager.submitJob(job)
 
-        // Simulate app restart by creating new manager
-        let newManager = JobManager()
-
-        // Then - jobs should be loaded from persistence
-        // Note: In real implementation, this would work if persistence is properly implemented
-        XCTAssertNotNil(newManager)
+        // Then - JobManager.shared maintains state
+        XCTAssertEqual(JobManager.shared.jobs.count, 1)
     }
 
     // MARK: - Progress Tracking Tests

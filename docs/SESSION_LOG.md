@@ -4,7 +4,64 @@
 
 ---
 
-## 2024-12-28: Redaction Gesture & Flickering Fixes
+## 2025-12-28: Pricing, Payments & TestFlight Setup
+
+**Focus:**
+Complete pricing configuration, fix payment UI issues, and set up TestFlight for beta testing.
+
+**Issues Addressed:**
+1. Product IDs using old `com.onebox.*` pattern
+2. "Go Pro" button on home screen not working
+3. Savings percentage showing 0% instead of ~50%
+4. Bundle IDs reverting to generic values on rebuild
+
+**Changes Made:**
+
+**Pricing Configuration:**
+- Set up 3 in-app purchases in App Store Connect
+- Monthly: $4.99, Yearly: $29.99, Lifetime: $69.99
+- Added localizations in 8 languages (EN-US, EN-UK, EN-AU, ES, FR, FR-CA, DE, ZH)
+- Created Products.storekit for local testing
+
+**Product ID Updates:**
+- Changed from `com.onebox.pro.*` to `com.vaultpdf.pro.*`
+- Updated Payments.swift, Products.storekit, SUBMISSION_BUILD_GUIDE.md
+
+**PaywallView Fixes:**
+- Fixed "Go Pro" button action (was empty, now shows PaywallView)
+- Changed icon from sparkles to crown
+- Added fallback calculation for savings percentage
+
+**Bundle ID Fixes:**
+- Updated project.yml with correct bundle IDs
+- Main app: `com.spuud.vaultpdf`
+- All modules: `com.spuud.vaultpdf.*`
+- Prefix: `com.spuud`
+
+**TestFlight Setup:**
+- Uploaded first build to TestFlight
+- Configured encryption compliance (None)
+- Provided step-by-step guide for internal/external testing
+
+**Files Modified:**
+- `OneBox/project.yml` - All bundle IDs
+- `OneBox/Modules/Payments/Payments.swift` - Product IDs, resetDailyExports()
+- `OneBox/OneBox/Views/NewHomeView.swift` - "Go Pro" button action
+- `OneBox/OneBox/Views/PaywallView.swift` - Savings calculation
+- `OneBox/OneBox/Products.storekit` - Product IDs
+- `OneBox/SUBMISSION_BUILD_GUIDE.md` - Bundle ID, pricing
+
+**Commits:**
+- Complete pricing configuration and payment system fixes
+- Update product IDs from onebox to vaultpdf
+- Fix paywall button and savings calculation
+- Fix bundle IDs in project.yml
+
+**Status:** Ready for new TestFlight build with corrected product IDs
+
+---
+
+## 2025-12-27: Redaction Gesture & Flickering Fixes
 
 **Focus:**
 Fix multiple issues with redaction box interaction - delete button behavior, gesture recognition, and flickering during move/resize.
@@ -46,7 +103,7 @@ Fix multiple issues with redaction box interaction - delete button behavior, ges
 
 ---
 
-## 2024-12-22: Premium UI Redesign - Home Screen Hero & Usage Sections
+## 2025-12-22: Premium UI Redesign - Home Screen Hero & Usage Sections
 
 **Focus:**
 Complete redesign of home screen for premium, minimal, luxury aesthetic.

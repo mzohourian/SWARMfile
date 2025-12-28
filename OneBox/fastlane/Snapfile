@@ -3,8 +3,8 @@
 
 # Devices to screenshot (App Store required sizes - use valid simulator names)
 devices([
-  "iPhone 15 Pro Max",       # 6.7" display - Required for App Store
-  "iPhone 15 Pro"            # 6.1" display - Required for App Store
+  "iPhone 17 Pro Max",       # 6.7" display - Required for App Store
+  "iPhone 17 Pro"            # 6.1" display - Required for App Store
 ])
 
 # Languages

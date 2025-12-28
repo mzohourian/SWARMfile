@@ -35,10 +35,10 @@ public class MultipeerDocumentService: NSObject, ObservableObject {
     
     // Local document storage
     private var sharedDocuments: [String: SharedDocument] = [:]
-    private let documentsQueue = DispatchQueue(label: "com.onebox.multipeer.documents", qos: .utility)
-    
+    private let documentsQueue = DispatchQueue(label: "com.spuud.vaultpdf.multipeer.documents", qos: .utility)
+
     // Security and encryption
-    private let encryptionQueue = DispatchQueue(label: "com.onebox.multipeer.encryption", qos: .userInitiated)
+    private let encryptionQueue = DispatchQueue(label: "com.spuud.vaultpdf.multipeer.encryption", qos: .userInitiated)
     
     private override init() {
         // Create unique peer ID based on device characteristics

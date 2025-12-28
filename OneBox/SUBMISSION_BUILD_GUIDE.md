@@ -28,7 +28,7 @@ xcodebuild -version
 ### Certificates and Provisioning Profiles
 - ✅ iOS Distribution Certificate in Keychain
 - ✅ App Store Distribution Provisioning Profile
-- ✅ Bundle ID registered: `com.yourcompany.onebox`
+- ✅ Bundle ID registered: `com.spuud.vaultpdf`
 
 ## Pre-Submission Checklist
 

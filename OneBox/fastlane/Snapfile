@@ -3,8 +3,9 @@
 
 # Devices to screenshot (App Store required sizes - use valid simulator names)
 devices([
-  "iPhone 17 Pro Max",       # 6.7" display - Required for App Store
-  "iPhone 17 Pro"            # 6.1" display - Required for App Store
+  "iPhone 15 Pro Max",       # 6.7" display - Required for App Store
+  "iPhone 15 Pro",           # 6.1" display - Required for App Store
+  "iPad Pro 13-inch (M4)"    # iPad screenshots
 ])
 
 # Languages
@@ -56,8 +57,5 @@ number_of_retries(2)
 # Don't run headless - show simulator window (helps with debugging)
 headless(false)
 
-# Xcode project (uncomment and adjust if needed)
-# project("OneBox.xcodeproj")
-
-# Or use workspace
-# workspace("OneBox.xcworkspace")
+# Xcode project
+project("OneBox.xcodeproj")

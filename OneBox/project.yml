@@ -49,7 +49,7 @@ targets:
         UIBackgroundModes:
           - processing
         BGTaskSchedulerPermittedIdentifiers:
-          - com.onebox.process
+          - com.spuud.vaultpdf.process
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.spuud.vaultpdf
       INFOPLIST_FILE: OneBox/Info.plist

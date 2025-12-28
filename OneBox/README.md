@@ -7,7 +7,7 @@
 [![iOS](https://img.shields.io/badge/iOS-16.0+-blue.svg)](https://www.apple.com/ios/)
 [![Swift](https://img.shields.io/badge/Swift-5.9+-orange.svg)](https://swift.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![CI](https://github.com/yourcompany/onebox/workflows/CI/badge.svg)](https://github.com/yourcompany/onebox/actions)
+[![CI](https://github.com/mzohourian/vault-pdf/workflows/CI/badge.svg)](https://github.com/mzohourian/vault-pdf/actions)
 
 </div>
 
@@ -182,8 +182,8 @@ OneBox/
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/yourcompany/onebox.git
-   cd onebox/OneBox
+   git clone https://github.com/mzohourian/vault-pdf.git
+   cd vault-pdf/OneBox
    ```
 
 2. **Open the project**:
@@ -450,9 +450,9 @@ Unlocks:
 
 ### IAP Product IDs
 
-- `com.onebox.pro.monthly` – $4.99/month
-- `com.onebox.pro.yearly` – $29.99/year (save 50%)
-- `com.onebox.pro.lifetime` – $49.99 (one-time)
+- `com.spuud.vaultpdf.pro.monthly` – $4.99/month
+- `com.spuud.vaultpdf.pro.yearly` – $29.99/year (save 50%)
+- `com.spuud.vaultpdf.pro.lifetime` – $69.99 (one-time)
 
 *(Prices are placeholders; set in App Store Connect)*
 
@@ -462,7 +462,7 @@ Unlocks:
 
 ### Pre-Submission Checklist
 
-- [ ] Bundle ID reserved: `com.yourcompany.onebox`
+- [x] Bundle ID reserved: `com.spuud.vaultpdf`
 - [ ] IAP products created in App Store Connect
 - [ ] App icon (1024x1024) added to asset catalog
 - [ ] Screenshots generated (6.7", 6.1", 5.5", iPad 12.9")

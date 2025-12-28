@@ -18,7 +18,7 @@ class OnDeviceSearchService: ObservableObject {
     @Published var isIndexing = false
     
     private let documentsURL: URL
-    private let indexQueue = DispatchQueue(label: "com.onebox.search.index", qos: .utility)
+    private let indexQueue = DispatchQueue(label: "com.spuud.vaultpdf.search.index", qos: .utility)
     
     private init() {
         documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -76,7 +76,7 @@ class OnDeviceSearchService: ObservableObject {
         }
         
         let identifier = fileURL.absoluteString
-        let domainIdentifier = "com.onebox.documents"
+        let domainIdentifier = "com.spuud.vaultpdf.documents"
         
         let attributeSet = CSSearchableItemAttributeSet(contentType: UTType.data)
         attributeSet.title = fileURL.lastPathComponent
@@ -160,7 +160,7 @@ class OnDeviceSearchService: ObservableObject {
             attributeSet.displayName = "Workflow: \(workflow.name)"
             attributeSet.keywords = ["workflow", "automation"] + workflow.steps.map { $0.title }
             
-            return CSSearchableItem(uniqueIdentifier: identifier, domainIdentifier: "com.onebox.workflows", attributeSet: attributeSet)
+            return CSSearchableItem(uniqueIdentifier: identifier, domainIdentifier: "com.spuud.vaultpdf.workflows", attributeSet: attributeSet)
         }
     }
     

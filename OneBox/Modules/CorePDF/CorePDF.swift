@@ -69,9 +69,9 @@ public actor PDFProcessor {
         let outputURL = temporaryOutputURL(prefix: "images_to_pdf")
 
         UIGraphicsBeginPDFContextToFile(outputURL.path, .zero, [
-            kCGPDFContextTitle as String: title ?? "OneBox Document",
-            kCGPDFContextAuthor as String: author ?? "OneBox",
-            kCGPDFContextCreator as String: "OneBox"
+            kCGPDFContextTitle as String: title ?? "Vault PDF Document",
+            kCGPDFContextAuthor as String: author ?? "Vault PDF",
+            kCGPDFContextCreator as String: "Vault PDF"
         ])
 
         for (index, imageURL) in images.enumerated() {
@@ -2291,7 +2291,7 @@ public enum PDFError: LocalizedError {
         case .invalidRotationAngle:
             return "Rotation angle must be a multiple of 90 degrees"
         case .passwordProtected(let name):
-            return "This PDF (\(name)) is password-protected. OneBox cannot process encrypted files. Please unlock it first."
+            return "This PDF (\(name)) is password-protected. Vault PDF cannot process encrypted files. Please unlock it first."
         case .corruptedPDF(let name):
             return "This file (\(name)) appears to be corrupted or is not a valid PDF. Try re-downloading it."
         case .fileNotFound(let name):

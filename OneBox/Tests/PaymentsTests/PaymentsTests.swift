@@ -23,9 +23,9 @@ final class PaymentsTests: XCTestCase {
     // MARK: - Product ID Tests
 
     func testProductIDs() {
-        XCTAssertEqual(PaymentsManager.ProductID.monthly.rawValue, "com.onebox.pro.monthly")
-        XCTAssertEqual(PaymentsManager.ProductID.yearly.rawValue, "com.onebox.pro.yearly")
-        XCTAssertEqual(PaymentsManager.ProductID.lifetime.rawValue, "com.onebox.pro.lifetime")
+        XCTAssertEqual(PaymentsManager.ProductID.monthly.rawValue, "com.spuud.vaultpdf.pro.monthly")
+        XCTAssertEqual(PaymentsManager.ProductID.yearly.rawValue, "com.spuud.vaultpdf.pro.yearly")
+        XCTAssertEqual(PaymentsManager.ProductID.lifetime.rawValue, "com.spuud.vaultpdf.pro.lifetime")
     }
 
     func testProductDisplayNames() {

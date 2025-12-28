@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2024-12-22
+**Last Updated:** 2025-12-28
 
 ## What This Is
 **Vault PDF** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -115,33 +115,37 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2024-12-22 (Premium UI Redesign - Home Screen)
+**Date:** 2025-12-28 (Pricing & Payment Completion)
 
 **What Was Done:**
-- **Home screen hero section completely redesigned:**
-  - Removed cluttered elements (100% SECURE dial, 3 green privacy badges)
-  - Added premium branded logo with embedded tagline (vaultpdf_sub_transparent2.png)
-  - Single gold "100% Offline" badge - elegant, on-brand
-  - Minimal luxury aesthetic with optimized spacing
-- **Tool cards refined:**
-  - Replaced green "SECURE" text badges with subtle gold shield icons
-  - Cleaner, on-brand appearance matching gold/black palette
-- **Usage section redesigned:**
-  - Changed from "X of 3 used" to "X free exports left" (positive framing)
-  - Added elegant gold dot indicators
-  - Premium gold gradient "Unlock Unlimited" CTA button
-- **Multiple logo iterations:**
-  - Started with separate logo + text, evolved to logo with embedded tagline
-  - Fine-tuned sizing (280pt) and positioning (-50pt top padding)
-  - Fixed overlap issues between logo tagline and badge
+- **Completed pricing configuration:**
+  - Pricing: $4.99/mo, $29.99/yr, $69.99 lifetime
+  - Updated SUBMISSION_BUILD_GUIDE.md with correct lifetime price ($69.99)
+  - Created Products.storekit configuration file for local testing
+- **Fixed Payments module:**
+  - Added missing `resetDailyExports()` method required by integration tests
+  - Verified PaywallView correctly uses StoreKit for real-time pricing
+- **Cleaned up deprecated code:**
+  - Marked UpgradeFlowView.swift as deprecated (unused, has wrong pricing)
+  - PaywallView.swift is the active paywall - uses StoreKit correctly
+
+**Payment System Status:**
+- ✅ PaymentsManager fully implemented with StoreKit 2
+- ✅ Free tier: 3 exports/day with midnight reset
+- ✅ Monthly, Yearly, Lifetime products configured
+- ✅ PaywallView displays correct pricing from App Store
+- ✅ Restore purchases implemented
+- ✅ Transaction verification working
 
 **What's Unfinished:**
-- None - UI polish complete
+- Device testing with sandbox account to verify purchases
+- App Store screenshot automation (fastlane) had compilation errors in unit tests
 
 **Files Modified This Session:**
-- `OneBox/OneBox/Views/NewHomeView.swift` - Complete hero and usage section redesign
-- `OneBox/OneBox/Assets.xcassets/VaultLogoWithText.imageset/Contents.json` - Updated to vaultpdf_sub_transparent2.png
-- Multiple logo files added to VaultLogoWithText.imageset
+- `OneBox/SUBMISSION_BUILD_GUIDE.md` - Fixed lifetime price to $69.99
+- `OneBox/Modules/Payments/Payments.swift` - Added resetDailyExports()
+- `OneBox/OneBox/Views/Upgrade/UpgradeFlowView.swift` - Marked as deprecated
+- `OneBox/OneBox/Products.storekit` - NEW: StoreKit test configuration
 
 ---
 

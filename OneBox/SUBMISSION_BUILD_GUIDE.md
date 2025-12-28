@@ -44,15 +44,15 @@ xcodebuild build -scheme OneBox SWIFT_VERSION=6
 ### 2. Version Configuration ✅
 - **MARKETING_VERSION**: `1.0.0`
 - **CURRENT_PROJECT_VERSION**: `1` (increment for each build)
-- **Bundle ID**: `com.yourcompany.onebox`
+- **Bundle ID**: `com.spuud.vaultpdf`
 - **Deployment Target**: `16.0`
 
 ### 3. App Store Connect Configuration ✅
 - App listing created with all metadata
 - In-app purchase products configured:
-  - `com.onebox.pro.monthly` - $4.99/month
-  - `com.onebox.pro.yearly` - $29.99/year  
-  - `com.onebox.pro.lifetime` - $49.99
+  - `com.vaultpdf.pro.monthly` - $4.99/month
+  - `com.vaultpdf.pro.yearly` - $29.99/year
+  - `com.vaultpdf.pro.lifetime` - $69.99
 - Privacy information set to "Data Not Collected"
 
 ## Build Process

@@ -4,6 +4,48 @@
 
 ---
 
+## 2024-12-28: Redaction Gesture & Flickering Fixes
+
+**Focus:**
+Fix multiple issues with redaction box interaction - delete button behavior, gesture recognition, and flickering during move/resize.
+
+**Issues Addressed:**
+1. Delete button was deleting ALL boxes instead of just the focused one
+2. Boxes weren't receiving tap/drag gestures properly
+3. Boxes flickered and jumped when moving or resizing
+
+**Changes Made:**
+
+**Delete Button Fix:**
+- Added `focusedBoxId` state separate from `isSelected` (which determines redaction)
+- Delete button now only appears when a box is focused
+- Delete action only removes the specific focused box
+
+**Gesture Recognition Fix:**
+- Added explicit `.zIndex(0)` to background tap layer and `.zIndex(1)` to boxes
+- Changed from `.offset()` to `.position()` for proper hit testing
+- Removed full-page frame wrapper from each box that was interfering
+- Added `.contentShape(Rectangle())` before gestures
+
+**Flickering Fix:**
+- Root cause: Temporary offset state (`dragOffset`) reset to zero before new position applied
+- Solution: Replace temporary offsets with delta-based direct updates
+- Now track `lastDragLocation`/`lastResizeLocation` to calculate movement delta
+- Update `normalizedRect` directly during drag - no temporary state to reset
+- Added `moveBoxDirectly()` and `resizeBoxDirectly()` functions
+
+**Files Modified:**
+- `OneBox/OneBox/Views/RedactionView.swift` - Major gesture and positioning overhaul
+
+**Commits:**
+- Fix redaction delete button and coordinate system
+- Fix redaction box selection and resize gestures
+- Fix redaction box flickering during move and resize
+
+**Status:** Fixes applied, device testing recommended to verify
+
+---
+
 ## 2024-12-22: Premium UI Redesign - Home Screen Hero & Usage Sections
 
 **Focus:**

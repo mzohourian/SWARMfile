@@ -21,6 +21,11 @@ struct RedactionView: View {
     @EnvironmentObject var jobManager: JobManager
     @EnvironmentObject var paymentsManager: PaymentsManager
 
+    // Resize corner enum
+    enum ResizeCorner {
+        case topLeft, topRight, bottomLeft, bottomRight
+    }
+
     // PDF state
     @State private var pdfDocument: PDFDocument?
     @State private var currentPageIndex = 0
@@ -39,6 +44,18 @@ struct RedactionView: View {
     @State private var isDrawing = false
     @State private var drawStartPoint: CGPoint?
     @State private var currentDrawRect: CGRect?
+
+    // Dragging state for moving boxes - store last position for delta calculation
+    @State private var draggingBoxId: UUID?
+    @State private var lastDragLocation: CGPoint?
+
+    // Resizing state - store last position for delta calculation
+    @State private var resizingBoxId: UUID?
+    @State private var resizingCorner: ResizeCorner?
+    @State private var lastResizeLocation: CGPoint?
+
+    // Focused box for editing (separate from isSelected which means "will be redacted")
+    @State private var focusedBoxId: UUID?
 
     // Zoom state
     @State private var zoomScale: CGFloat = 1.0
@@ -158,58 +175,47 @@ struct RedactionView: View {
                     let finalHeight = baseHeight * zoomScale
 
                     ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                        ZStack(alignment: .topLeading) {
-                            // PDF page rendering
-                            RedactionPDFPageView(page: page)
+                        // PDF page with boxes as overlay (ensures same coordinate system)
+                        RedactionPDFPageView(page: page)
+                            .frame(width: finalWidth, height: finalHeight)
+                            .background(Color.white)
+                            .cornerRadius(8)
+                            .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                            .overlay(alignment: .topLeading) {
+                                // Redaction boxes overlay - shares PDF coordinate system
+                                ZStack(alignment: .topLeading) {
+                                    // Background tap layer - lowest z-index, only captures taps on empty areas
+                                    Color.clear
+                                        .contentShape(Rectangle())
+                                        .onTapGesture(count: 2) { location in
+                                            createBoxAtLocation(location, in: CGSize(width: finalWidth, height: finalHeight))
+                                        }
+                                        .onTapGesture(count: 1) {
+                                            // Single tap on empty area unfocuses
+                                            focusedBoxId = nil
+                                        }
+                                        .zIndex(0)
+
+                                    ForEach(boxesForCurrentPage()) { box in
+                                        redactionBoxView(box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
+                                            .zIndex(1) // Ensure boxes are above the background tap layer
+                                    }
+                                }
                                 .frame(width: finalWidth, height: finalHeight)
-                                .background(Color.white)
-                                .cornerRadius(8)
-                                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
-
-                            // Redaction boxes overlay
-                            ForEach(boxesForCurrentPage()) { box in
-                                redactionBoxView(box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
                             }
-
-                            // Current drawing rectangle (while user is dragging)
-                            if let drawRect = currentDrawRect {
-                                Rectangle()
-                                    .fill(Color.black.opacity(0.5))
-                                    .frame(width: drawRect.width, height: drawRect.height)
-                                    .position(x: drawRect.midX, y: drawRect.midY)
-                                    .overlay(
-                                        Rectangle()
-                                            .stroke(OneBoxColors.primaryGold, lineWidth: 2)
-                                            .frame(width: drawRect.width, height: drawRect.height)
-                                            .position(x: drawRect.midX, y: drawRect.midY)
-                                    )
-                            }
-                        }
-                        .frame(width: finalWidth, height: finalHeight)
-                        .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 10)
-                                .onChanged { value in
-                                    handleDrawStart(value.startLocation, in: CGSize(width: finalWidth, height: finalHeight))
-                                    handleDrawUpdate(value.location, in: CGSize(width: finalWidth, height: finalHeight))
-                                }
-                                .onEnded { value in
-                                    handleDrawEnd(in: CGSize(width: finalWidth, height: finalHeight))
-                                }
-                        )
-                        .simultaneousGesture(
-                            MagnificationGesture()
-                                .onChanged { value in
-                                    let newScale = lastZoomScale * value
-                                    zoomScale = min(max(newScale, minZoom), maxZoom)
-                                }
-                                .onEnded { value in
-                                    lastZoomScale = zoomScale
-                                    HapticManager.shared.selection()
-                                }
-                        )
+                            .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
                     }
+                    .simultaneousGesture(
+                        MagnificationGesture()
+                            .onChanged { value in
+                                let newScale = lastZoomScale * value
+                                zoomScale = min(max(newScale, minZoom), maxZoom)
+                            }
+                            .onEnded { value in
+                                lastZoomScale = zoomScale
+                                HapticManager.shared.selection()
+                            }
+                    )
                 }
             }
 
@@ -225,13 +231,14 @@ struct RedactionView: View {
 
     // MARK: - Instructions Header
     private var instructionsHeader: some View {
-        VStack(spacing: OneBoxSpacing.tiny) {
+        VStack(spacing: OneBoxSpacing.small) {
+            // Gesture hints
             HStack(spacing: OneBoxSpacing.medium) {
-                // Tap hint
+                // Double-tap hint
                 HStack(spacing: 4) {
                     Image(systemName: "hand.tap.fill")
                         .font(.system(size: 12))
-                    Text("Double-tap to remove")
+                    Text("Double-tap to add")
                         .font(OneBoxTypography.micro)
                 }
                 .foregroundColor(OneBoxColors.secondaryText)
@@ -239,11 +246,11 @@ struct RedactionView: View {
                 Divider()
                     .frame(height: 12)
 
-                // Draw hint
+                // Tap hint
                 HStack(spacing: 4) {
-                    Image(systemName: "rectangle.badge.plus")
+                    Image(systemName: "hand.point.up.left.fill")
                         .font(.system(size: 12))
-                    Text("Draw to add")
+                    Text("Tap to select")
                         .font(OneBoxTypography.micro)
                 }
                 .foregroundColor(OneBoxColors.secondaryText)
@@ -251,20 +258,29 @@ struct RedactionView: View {
                 Divider()
                     .frame(height: 12)
 
-                // Pinch hint
+                // Drag hint
                 HStack(spacing: 4) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
                         .font(.system(size: 12))
-                    Text("Pinch to zoom")
+                    Text("Drag to move")
                         .font(OneBoxTypography.micro)
                 }
                 .foregroundColor(OneBoxColors.secondaryText)
+
+                Spacer()
+
+                // Stats
+                let selectedCount = redactionBoxes.filter { $0.isSelected }.count
+                let totalCount = redactionBoxes.count
+                if totalCount > 0 {
+                    Text("\(selectedCount)/\(totalCount)")
+                        .font(OneBoxTypography.caption)
+                        .foregroundColor(OneBoxColors.primaryGold)
+                }
             }
-            .padding(.vertical, OneBoxSpacing.small)
 
-            // Zoom controls, full-screen button, and stats
+            // Zoom controls, full-screen button, and delete
             HStack {
-                // Zoom controls
                 HStack(spacing: OneBoxSpacing.small) {
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -297,10 +313,9 @@ struct RedactionView: View {
                     }
                     .disabled(zoomScale >= maxZoom)
 
-                    // Full-screen button
                     Button(action: {
                         isFullScreen = true
-                        HapticManager.shared.selection()
+                        HapticManager.shared.impact(.light)
                     }) {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
                             .font(.system(size: 16))
@@ -310,17 +325,19 @@ struct RedactionView: View {
 
                 Spacer()
 
-                // Stats
-                let selectedCount = redactionBoxes.filter { $0.isSelected }.count
-                let totalCount = redactionBoxes.count
-                if totalCount > 0 {
-                    Text("\(selectedCount) of \(totalCount) items")
-                        .font(OneBoxTypography.caption)
-                        .foregroundColor(OneBoxColors.primaryGold)
-                } else {
-                    Text("No sensitive data found")
-                        .font(OneBoxTypography.caption)
-                        .foregroundColor(OneBoxColors.tertiaryText)
+                // Delete button (only shown when a box is focused for editing)
+                if let focusedId = focusedBoxId {
+                    Button(action: {
+                        deleteFocusedBox()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 14))
+                            Text("Delete")
+                                .font(OneBoxTypography.micro)
+                        }
+                        .foregroundColor(.red)
+                    }
                 }
             }
         }
@@ -336,31 +353,166 @@ struct RedactionView: View {
         let width = box.normalizedRect.width * pageSize.width
         let height = box.normalizedRect.height * pageSize.height
 
+        // Check states
+        let isDragging = draggingBoxId == box.id
+        let isResizing = resizingBoxId == box.id
+        let isFocused = focusedBoxId == box.id
+
+        // Display dimensions (no temporary offsets - position is always in normalizedRect)
+        let displayWidth = max(width, 20)
+        let displayHeight = max(height, 8)
+        let displayX = x
+        let displayY = y
+
+        // Use position to place box center, which properly handles hit testing
+        let centerX = displayX + displayWidth / 2
+        let centerY = displayY + displayHeight / 2
+
         return Group {
-            if box.isSelected {
-                // Selected = will be redacted (solid black)
-                Rectangle()
-                    .fill(Color.black)
-                    .frame(width: max(width, 20), height: max(height, 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 2)
-                            .stroke(OneBoxColors.primaryGold, lineWidth: 2)
-                    )
-            } else {
-                // Deselected = won't be redacted (gray outline)
-                Rectangle()
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(width: max(width, 20), height: max(height, 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 2)
-                            .stroke(Color.gray, style: StrokeStyle(lineWidth: 1, dash: [4, 2]))
-                    )
+            // Main box
+            Group {
+                if box.isSelected {
+                    // Selected = will be redacted (black fill)
+                    Rectangle()
+                        .fill(Color.black)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 2)
+                                .stroke(isFocused ? OneBoxColors.primaryGold : Color.black, lineWidth: isFocused ? 3 : 1)
+                        )
+                        .shadow(color: (isDragging || isResizing) ? OneBoxColors.primaryGold.opacity(0.5) : .clear, radius: 4)
+                } else {
+                    // Not selected = won't be redacted (gray dashed)
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.2))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 2)
+                                .stroke(isFocused ? OneBoxColors.primaryGold : Color.gray,
+                                       style: isFocused ? StrokeStyle(lineWidth: 3) : StrokeStyle(lineWidth: 1, dash: [4, 2]))
+                        )
+                }
+            }
+            .frame(width: displayWidth, height: displayHeight)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 5)
+                    .onChanged { value in
+                        if draggingBoxId == nil && resizingBoxId == nil {
+                            // Start dragging
+                            draggingBoxId = box.id
+                            focusedBoxId = box.id
+                            lastDragLocation = value.location
+                            HapticManager.shared.impact(.medium)
+                        } else if draggingBoxId == box.id, let lastLocation = lastDragLocation {
+                            // Continue dragging - calculate delta and move directly
+                            let delta = CGSize(
+                                width: value.location.x - lastLocation.x,
+                                height: value.location.y - lastLocation.y
+                            )
+                            moveBoxDirectly(box, by: delta, in: pageSize)
+                            lastDragLocation = value.location
+                        }
+                    }
+                    .onEnded { _ in
+                        if draggingBoxId == box.id {
+                            draggingBoxId = nil
+                            lastDragLocation = nil
+                            HapticManager.shared.impact(.light)
+                        }
+                    }
+            )
+            .onTapGesture {
+                // Single tap to focus the box and toggle redaction state
+                if focusedBoxId == box.id {
+                    // Already focused - toggle selection (redaction state)
+                    toggleBox(box)
+                } else {
+                    // Focus this box
+                    focusedBoxId = box.id
+                    HapticManager.shared.selection()
+                }
+            }
+            .onLongPressGesture(minimumDuration: 0.5) {
+                deleteBox(box)
+                HapticManager.shared.notification(.warning)
+            }
+            .position(x: centerX, y: centerY)
+
+            // Resize handles (only shown when focused)
+            if isFocused {
+                // Top-left handle
+                resizeHandle(for: box, corner: .topLeft, pageSize: pageSize)
+                    .position(x: displayX, y: displayY)
+
+                // Top-right handle
+                resizeHandle(for: box, corner: .topRight, pageSize: pageSize)
+                    .position(x: displayX + displayWidth, y: displayY)
+
+                // Bottom-left handle
+                resizeHandle(for: box, corner: .bottomLeft, pageSize: pageSize)
+                    .position(x: displayX, y: displayY + displayHeight)
+
+                // Bottom-right handle
+                resizeHandle(for: box, corner: .bottomRight, pageSize: pageSize)
+                    .position(x: displayX + displayWidth, y: displayY + displayHeight)
             }
         }
-        .position(x: x + width/2, y: y + height/2)
-        .onTapGesture(count: 2) {
-            // Double-tap to toggle - prevents accidental toggles while scrolling/zooming
-            toggleBox(box)
+    }
+
+    private func resizeHandle(for box: RedactionBox, corner: ResizeCorner, pageSize: CGSize) -> some View {
+        let handleSize: CGFloat = 20
+
+        return Circle()
+            .fill(OneBoxColors.primaryGold)
+            .frame(width: handleSize, height: handleSize)
+            .overlay(
+                Circle()
+                    .stroke(Color.white, lineWidth: 2)
+            )
+            .shadow(color: .black.opacity(0.3), radius: 2)
+            .contentShape(Circle())
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { value in
+                        if resizingBoxId == nil && draggingBoxId == nil {
+                            // Start resizing
+                            resizingBoxId = box.id
+                            resizingCorner = corner
+                            lastResizeLocation = value.location
+                            HapticManager.shared.impact(.light)
+                        } else if resizingBoxId == box.id, let lastLocation = lastResizeLocation {
+                            // Continue resizing - calculate delta and resize directly
+                            let delta = CGSize(
+                                width: value.location.x - lastLocation.x,
+                                height: value.location.y - lastLocation.y
+                            )
+                            resizeBoxDirectly(box, corner: corner, by: delta, in: pageSize)
+                            lastResizeLocation = value.location
+                        }
+                    }
+                    .onEnded { _ in
+                        if resizingBoxId == box.id {
+                            resizingBoxId = nil
+                            resizingCorner = nil
+                            lastResizeLocation = nil
+                            HapticManager.shared.impact(.light)
+                        }
+                    }
+            )
+    }
+
+    // No longer needed - was used for temporary offset display
+    private func calculateResizeAdjustment(for corner: ResizeCorner?, offset: CGSize) -> (dx: CGFloat, dy: CGFloat, dw: CGFloat, dh: CGFloat) {
+        guard let corner = corner else { return (0, 0, 0, 0) }
+
+        switch corner {
+        case .topLeft:
+            return (dx: offset.width, dy: offset.height, dw: -offset.width, dh: -offset.height)
+        case .topRight:
+            return (dx: 0, dy: offset.height, dw: offset.width, dh: -offset.height)
+        case .bottomLeft:
+            return (dx: offset.width, dy: 0, dw: -offset.width, dh: offset.height)
+        case .bottomRight:
+            return (dx: 0, dy: 0, dw: offset.width, dh: offset.height)
         }
     }
 
@@ -491,7 +643,7 @@ struct RedactionView: View {
             Color.black.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Top bar with close button and page info
+                // Top bar with close button, delete, and page info
                 HStack {
                     Button(action: {
                         isFullScreen = false
@@ -502,8 +654,28 @@ struct RedactionView: View {
                             .foregroundColor(.white.opacity(0.8))
                     }
 
+                    // Delete button (only when box is focused)
+                    if focusedBoxId != nil {
+                        Button(action: {
+                            deleteFocusedBox()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 16))
+                                Text("Delete")
+                                    .font(OneBoxTypography.caption)
+                            }
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.white.opacity(0.15))
+                            .cornerRadius(8)
+                        }
+                    }
+
                     Spacer()
 
+                    // Page info
                     if let document = pdfDocument {
                         Text("Page \(currentPageIndex + 1) of \(document.pageCount)")
                             .font(OneBoxTypography.body)
@@ -538,56 +710,44 @@ struct RedactionView: View {
                         let finalHeight = baseHeight * fullScreenZoom
 
                         ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                            ZStack(alignment: .topLeading) {
-                                // PDF page rendering
-                                RedactionPDFPageView(page: page)
+                            // PDF page with boxes as overlay (same structure as main editor)
+                            RedactionPDFPageView(page: page)
+                                .frame(width: finalWidth, height: finalHeight)
+                                .background(Color.white)
+                                .overlay(alignment: .topLeading) {
+                                    // Redaction boxes overlay - shares PDF coordinate system
+                                    ZStack(alignment: .topLeading) {
+                                        // Background tap layer - lowest z-index
+                                        Color.clear
+                                            .contentShape(Rectangle())
+                                            .onTapGesture(count: 2) { location in
+                                                createBoxAtLocation(location, in: CGSize(width: finalWidth, height: finalHeight))
+                                            }
+                                            .onTapGesture(count: 1) {
+                                                focusedBoxId = nil
+                                            }
+                                            .zIndex(0)
+
+                                        ForEach(boxesForCurrentPage()) { box in
+                                            redactionBoxView(box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
+                                                .zIndex(1)
+                                        }
+                                    }
                                     .frame(width: finalWidth, height: finalHeight)
-                                    .background(Color.white)
-
-                                // Redaction boxes overlay
-                                ForEach(boxesForCurrentPage()) { box in
-                                    redactionBoxView(box: box, pageSize: CGSize(width: finalWidth, height: finalHeight))
                                 }
-
-                                // Current drawing rectangle
-                                if let drawRect = currentDrawRect {
-                                    Rectangle()
-                                        .fill(Color.black.opacity(0.5))
-                                        .frame(width: drawRect.width, height: drawRect.height)
-                                        .position(x: drawRect.midX, y: drawRect.midY)
-                                        .overlay(
-                                            Rectangle()
-                                                .stroke(OneBoxColors.primaryGold, lineWidth: 2)
-                                                .frame(width: drawRect.width, height: drawRect.height)
-                                                .position(x: drawRect.midX, y: drawRect.midY)
-                                        )
-                                }
-                            }
-                            .frame(width: finalWidth, height: finalHeight)
-                            .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
-                            .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture(minimumDistance: 10)
-                                    .onChanged { value in
-                                        handleDrawStart(value.startLocation, in: CGSize(width: finalWidth, height: finalHeight))
-                                        handleDrawUpdate(value.location, in: CGSize(width: finalWidth, height: finalHeight))
-                                    }
-                                    .onEnded { value in
-                                        handleDrawEnd(in: CGSize(width: finalWidth, height: finalHeight))
-                                    }
-                            )
-                            .simultaneousGesture(
-                                MagnificationGesture()
-                                    .onChanged { value in
-                                        let newScale = fullScreenLastZoom * value
-                                        fullScreenZoom = min(max(newScale, 1.0), 5.0)
-                                    }
-                                    .onEnded { value in
-                                        fullScreenLastZoom = fullScreenZoom
-                                        HapticManager.shared.selection()
-                                    }
-                            )
+                                .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
                         }
+                        .simultaneousGesture(
+                            MagnificationGesture()
+                                .onChanged { value in
+                                    let newScale = fullScreenLastZoom * value
+                                    fullScreenZoom = min(max(newScale, 1.0), 5.0)
+                                }
+                                .onEnded { value in
+                                    fullScreenLastZoom = fullScreenZoom
+                                    HapticManager.shared.selection()
+                                }
+                        )
                     }
                 }
 
@@ -610,13 +770,13 @@ struct RedactionView: View {
 
                     Spacer()
 
-                    // Stats
+                    // Stats and hints
                     let selectedCount = redactionBoxes.filter { $0.isSelected }.count
                     VStack(spacing: 2) {
-                        Text("\(selectedCount) redactions")
+                        Text("\(selectedCount) selected")
                             .font(OneBoxTypography.body)
                             .foregroundColor(OneBoxColors.primaryGold)
-                        Text("Double-tap boxes to toggle")
+                        Text("Double-tap to add • Tap to select • Drag to move")
                             .font(OneBoxTypography.micro)
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -685,6 +845,208 @@ struct RedactionView: View {
             redactionBoxes[index].isSelected.toggle()
             HapticManager.shared.selection()
         }
+    }
+
+    private func deleteBox(_ box: RedactionBox) {
+        redactionBoxes.removeAll { $0.id == box.id }
+    }
+
+    private func deleteSelectedBoxes() {
+        let countToDelete = redactionBoxes.filter { $0.isSelected }.count
+        redactionBoxes.removeAll { $0.isSelected }
+        if countToDelete > 0 {
+            HapticManager.shared.notification(.warning)
+        }
+    }
+
+    private func deleteFocusedBox() {
+        guard let focusedId = focusedBoxId else { return }
+        redactionBoxes.removeAll { $0.id == focusedId }
+        focusedBoxId = nil
+        HapticManager.shared.notification(.warning)
+    }
+
+    /// Creates a new redaction box at the double-tap location
+    private func createBoxAtLocation(_ location: CGPoint, in pageSize: CGSize) {
+        // Create a default-sized box centered at the tap location
+        let defaultWidth: CGFloat = 100
+        let defaultHeight: CGFloat = 24
+
+        // Calculate the box position (centered on tap)
+        let boxX = max(0, min(location.x - defaultWidth/2, pageSize.width - defaultWidth))
+        let boxY = max(0, min(location.y - defaultHeight/2, pageSize.height - defaultHeight))
+
+        // Convert view coordinates to normalized coordinates
+        let normalizedX = boxX / pageSize.width
+        let normalizedY = 1.0 - ((boxY + defaultHeight) / pageSize.height)
+        let normalizedWidth = defaultWidth / pageSize.width
+        let normalizedHeight = defaultHeight / pageSize.height
+
+        let normalizedRect = CGRect(
+            x: normalizedX,
+            y: normalizedY,
+            width: normalizedWidth,
+            height: normalizedHeight
+        )
+
+        let newBox = RedactionBox(
+            pageIndex: currentPageIndex,
+            normalizedRect: normalizedRect,
+            source: .manual,
+            detectedText: nil,
+            isSelected: true
+        )
+
+        redactionBoxes.append(newBox)
+        HapticManager.shared.impact(.heavy)
+    }
+
+    /// Moves a box by the given translation
+    private func moveBox(_ box: RedactionBox, by translation: CGSize, in pageSize: CGSize) {
+        guard let index = redactionBoxes.firstIndex(where: { $0.id == box.id }) else { return }
+
+        // Convert translation to normalized coordinates
+        let normalizedDX = translation.width / pageSize.width
+        let normalizedDY = -translation.height / pageSize.height // Inverted because of coordinate system
+
+        // Calculate new position
+        var newRect = redactionBoxes[index].normalizedRect
+        newRect.origin.x += normalizedDX
+        newRect.origin.y += normalizedDY
+
+        // Clamp to page bounds
+        newRect.origin.x = max(0, min(newRect.origin.x, 1.0 - newRect.width))
+        newRect.origin.y = max(0, min(newRect.origin.y, 1.0 - newRect.height))
+
+        // Update the box in place (preserves ID)
+        redactionBoxes[index].normalizedRect = newRect
+    }
+
+    /// Moves a box directly by a delta (called during drag for real-time updates)
+    private func moveBoxDirectly(_ box: RedactionBox, by delta: CGSize, in pageSize: CGSize) {
+        guard let index = redactionBoxes.firstIndex(where: { $0.id == box.id }) else { return }
+
+        // Convert delta to normalized coordinates
+        let normalizedDX = delta.width / pageSize.width
+        let normalizedDY = -delta.height / pageSize.height // Inverted because of coordinate system
+
+        // Calculate new position
+        var newRect = redactionBoxes[index].normalizedRect
+        newRect.origin.x += normalizedDX
+        newRect.origin.y += normalizedDY
+
+        // Clamp to page bounds
+        newRect.origin.x = max(0, min(newRect.origin.x, 1.0 - newRect.width))
+        newRect.origin.y = max(0, min(newRect.origin.y, 1.0 - newRect.height))
+
+        // Update the box in place (preserves ID)
+        redactionBoxes[index].normalizedRect = newRect
+    }
+
+    /// Resizes a box directly by a delta (called during drag for real-time updates)
+    private func resizeBoxDirectly(_ box: RedactionBox, corner: ResizeCorner, by delta: CGSize, in pageSize: CGSize) {
+        guard let index = redactionBoxes.firstIndex(where: { $0.id == box.id }) else { return }
+
+        // Convert delta to normalized coordinates
+        let normalizedDX = delta.width / pageSize.width
+        let normalizedDY = -delta.height / pageSize.height // Inverted
+
+        var rect = redactionBoxes[index].normalizedRect
+        let minSize: CGFloat = 0.02 // Minimum 2% of page
+
+        switch corner {
+        case .topLeft:
+            let newX = rect.origin.x + normalizedDX
+            let newWidth = rect.width - normalizedDX
+            let newHeight = rect.height + normalizedDY
+            let newY = rect.origin.y - normalizedDY
+            if newWidth >= minSize && newHeight >= minSize {
+                rect.origin.x = max(0, newX)
+                rect.size.width = max(minSize, newWidth)
+                rect.origin.y = max(0, newY)
+                rect.size.height = max(minSize, newHeight)
+            }
+        case .topRight:
+            let newWidth = rect.width + normalizedDX
+            let newHeight = rect.height + normalizedDY
+            let newY = rect.origin.y - normalizedDY
+            if newWidth >= minSize && newHeight >= minSize {
+                rect.size.width = min(1.0 - rect.origin.x, max(minSize, newWidth))
+                rect.origin.y = max(0, newY)
+                rect.size.height = max(minSize, newHeight)
+            }
+        case .bottomLeft:
+            let newX = rect.origin.x + normalizedDX
+            let newWidth = rect.width - normalizedDX
+            let newHeight = rect.height - normalizedDY
+            if newWidth >= minSize && newHeight >= minSize {
+                rect.origin.x = max(0, newX)
+                rect.size.width = max(minSize, newWidth)
+                rect.size.height = max(minSize, newHeight)
+            }
+        case .bottomRight:
+            let newWidth = rect.width + normalizedDX
+            let newHeight = rect.height - normalizedDY
+            if newWidth >= minSize && newHeight >= minSize {
+                rect.size.width = min(1.0 - rect.origin.x, max(minSize, newWidth))
+                rect.size.height = min(1.0 - rect.origin.y, max(minSize, newHeight))
+            }
+        }
+
+        redactionBoxes[index].normalizedRect = rect
+    }
+
+    /// Resizes a box by adjusting from a corner (legacy - used for cumulative translation)
+    private func resizeBox(_ box: RedactionBox, corner: ResizeCorner, by translation: CGSize, in pageSize: CGSize) {
+        guard let index = redactionBoxes.firstIndex(where: { $0.id == box.id }) else { return }
+
+        // Convert translation to normalized coordinates
+        let normalizedDX = translation.width / pageSize.width
+        let normalizedDY = -translation.height / pageSize.height // Inverted
+
+        var rect = redactionBoxes[index].normalizedRect
+        let minSize: CGFloat = 0.02 // Minimum 2% of page
+
+        switch corner {
+        case .topLeft:
+            let newX = rect.origin.x + normalizedDX
+            let newWidth = rect.width - normalizedDX
+            let newHeight = rect.height + normalizedDY
+            let newY = rect.origin.y - normalizedDY
+            if newWidth >= minSize && newHeight >= minSize {
+                rect.origin.x = max(0, newX)
+                rect.size.width = max(minSize, newWidth)
+                rect.origin.y = max(0, newY)
+                rect.size.height = max(minSize, newHeight)
+            }
+        case .topRight:
+            let newWidth = rect.width + normalizedDX
+            let newHeight = rect.height + normalizedDY
+            let newY = rect.origin.y - normalizedDY
+            if newWidth >= minSize && newHeight >= minSize {
+                rect.size.width = min(1.0 - rect.origin.x, max(minSize, newWidth))
+                rect.origin.y = max(0, newY)
+                rect.size.height = max(minSize, newHeight)
+            }
+        case .bottomLeft:
+            let newX = rect.origin.x + normalizedDX
+            let newWidth = rect.width - normalizedDX
+            let newHeight = rect.height - normalizedDY
+            if newWidth >= minSize && newHeight >= minSize {
+                rect.origin.x = max(0, newX)
+                rect.size.width = max(minSize, newWidth)
+                rect.size.height = max(minSize, newHeight)
+            }
+        case .bottomRight:
+            let newWidth = rect.width + normalizedDX
+            let newHeight = rect.height - normalizedDY
+            if newWidth >= minSize && newHeight >= minSize {
+                rect.size.width = min(1.0 - rect.origin.x, max(minSize, newWidth))
+                rect.size.height = min(1.0 - rect.origin.y, max(minSize, newHeight))
+            }
+        }
+
+        redactionBoxes[index].normalizedRect = rect
     }
 
     // MARK: - Drawing Handlers
@@ -1173,12 +1535,21 @@ struct RedactionView: View {
 // MARK: - Data Models
 
 struct RedactionBox: Identifiable {
-    let id = UUID()
+    let id: UUID
     let pageIndex: Int
-    let normalizedRect: CGRect // Vision-style normalized coords (0-1, origin bottom-left)
+    var normalizedRect: CGRect // Vision-style normalized coords (0-1, origin bottom-left)
     let source: RedactionSource
     let detectedText: String?
     var isSelected: Bool
+
+    init(id: UUID = UUID(), pageIndex: Int, normalizedRect: CGRect, source: RedactionSource, detectedText: String?, isSelected: Bool) {
+        self.id = id
+        self.pageIndex = pageIndex
+        self.normalizedRect = normalizedRect
+        self.source = source
+        self.detectedText = detectedText
+        self.isSelected = isSelected
+    }
 
     enum RedactionSource {
         case automatic

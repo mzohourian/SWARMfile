@@ -17,9 +17,9 @@ public class PaymentsManager: ObservableObject {
 
     // Product IDs
     public enum ProductID: String, CaseIterable {
-        case monthly = "com.onebox.pro.monthly"
-        case yearly = "com.onebox.pro.yearly"
-        case lifetime = "com.onebox.pro.lifetime"
+        case monthly = "com.vaultpdf.pro.monthly"
+        case yearly = "com.vaultpdf.pro.yearly"
+        case lifetime = "com.vaultpdf.pro.lifetime"
 
         var displayName: String {
             switch self {
@@ -223,6 +223,14 @@ public class PaymentsManager: ObservableObject {
     private func saveDailyExports() {
         let defaults = UserDefaults.standard
         defaults.set(dailyExportsUsed, forKey: "daily_exports_used")
+    }
+
+    /// Resets the daily export counter (for testing or manual reset)
+    public func resetDailyExports() {
+        dailyExportsUsed = 0
+        let defaults = UserDefaults.standard
+        defaults.set(Date(), forKey: "last_export_reset")
+        defaults.set(0, forKey: "daily_exports_used")
     }
 
     // MARK: - Product Helpers

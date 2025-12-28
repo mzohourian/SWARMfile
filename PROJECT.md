@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2024-12-28
+**Last Updated:** 2025-12-28
 
 ## What This Is
 **Vault PDF** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -115,7 +115,7 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2024-12-28 (Pricing & Payment Completion)
+**Date:** 2025-12-28 (Pricing & Payment Completion)
 
 **What Was Done:**
 - **Completed pricing configuration:**

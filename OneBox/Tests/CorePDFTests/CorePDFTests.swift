@@ -4,6 +4,7 @@
 //
 
 import XCTest
+import PDFKit
 @testable import CorePDF
 
 final class CorePDFTests: XCTestCase {

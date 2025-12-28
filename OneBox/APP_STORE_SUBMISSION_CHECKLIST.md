@@ -28,7 +28,7 @@
 - [x] **Products configured in App Store Connect**:
   - `com.spuud.vaultpdf.pro.monthly` - $4.99/month
   - `com.spuud.vaultpdf.pro.yearly` - $29.99/year
-  - `com.spuud.vaultpdf.pro.lifetime` - $49.99 one-time
+  - `com.spuud.vaultpdf.pro.lifetime` - $69.99 one-time
 - [x] **StoreKit 2 integration**: Real purchase validation
 - [x] **Restore purchases**: Functional
 - [x] **Free tier**: 3 exports/day limit implemented

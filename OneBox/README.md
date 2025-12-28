@@ -452,7 +452,7 @@ Unlocks:
 
 - `com.spuud.vaultpdf.pro.monthly` – $4.99/month
 - `com.spuud.vaultpdf.pro.yearly` – $29.99/year (save 50%)
-- `com.spuud.vaultpdf.pro.lifetime` – $49.99 (one-time)
+- `com.spuud.vaultpdf.pro.lifetime` – $69.99 (one-time)
 
 *(Prices are placeholders; set in App Store Connect)*
 

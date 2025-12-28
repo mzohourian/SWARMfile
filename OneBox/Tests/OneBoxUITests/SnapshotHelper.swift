@@ -95,15 +95,16 @@ open class Snapshot: NSObject {
     }
 
     class func setLaunchArguments(_ app: XCUIApplication) {
-        guard let path = try? getCacheDirectory()?.appendingPathComponent("snapshot-launch_arguments.txt") else {
-            return
-        }
-
-        if let path = path, let launchArguments = try? String(contentsOf: path, encoding: .utf8) {
-            let trimCharacterSet = CharacterSet.whitespacesAndNewlines
-            let splitArguments = launchArguments.components(separatedBy: "\n")
-            let arguments = splitArguments.map { $0.trimmingCharacters(in: trimCharacterSet) }
-            app.launchArguments += arguments
+        do {
+            if let path = try getCacheDirectory()?.appendingPathComponent("snapshot-launch_arguments.txt"),
+               let launchArguments = try? String(contentsOf: path, encoding: .utf8) {
+                let trimCharacterSet = CharacterSet.whitespacesAndNewlines
+                let splitArguments = launchArguments.components(separatedBy: "\n")
+                let arguments = splitArguments.map { $0.trimmingCharacters(in: trimCharacterSet) }
+                app.launchArguments += arguments
+            }
+        } catch {
+            // Silently ignore - launch arguments file may not exist
         }
     }
 

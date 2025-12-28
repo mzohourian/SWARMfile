@@ -22,7 +22,6 @@ final class PrivacyTests: XCTestCase {
         privacyManager.enableZeroTrace(false)
         privacyManager.enableBiometricLock(false)
         privacyManager.enableStealthMode(false)
-        privacyManager.setComplianceMode(.none)
     }
 
     // MARK: - Privacy Settings Tests
@@ -69,55 +68,6 @@ final class PrivacyTests: XCTestCase {
 
         // Then
         XCTAssertTrue(privacyManager.isStealthModeEnabled)
-    }
-
-    // MARK: - Compliance Mode Tests
-
-    func testComplianceModeNone() async {
-        // Given
-        XCTAssertEqual(privacyManager.selectedComplianceMode, .none)
-
-        // When
-        privacyManager.setComplianceMode(.none)
-
-        // Then
-        XCTAssertEqual(privacyManager.selectedComplianceMode, .none)
-        XCTAssertFalse(privacyManager.isSecureVaultEnabled)
-        XCTAssertFalse(privacyManager.isZeroTraceEnabled)
-        XCTAssertFalse(privacyManager.isBiometricLockEnabled)
-    }
-
-    func testComplianceModeHealthcare() async {
-        // When
-        privacyManager.setComplianceMode(.healthcare)
-
-        // Then
-        XCTAssertEqual(privacyManager.selectedComplianceMode, .healthcare)
-        XCTAssertTrue(privacyManager.isSecureVaultEnabled)
-        XCTAssertTrue(privacyManager.isZeroTraceEnabled)
-        XCTAssertTrue(privacyManager.isBiometricLockEnabled)
-    }
-
-    func testComplianceModeFinance() async {
-        // When
-        privacyManager.setComplianceMode(.finance)
-
-        // Then
-        XCTAssertEqual(privacyManager.selectedComplianceMode, .finance)
-        XCTAssertTrue(privacyManager.isSecureVaultEnabled)
-        XCTAssertTrue(privacyManager.isZeroTraceEnabled)
-        XCTAssertTrue(privacyManager.isBiometricLockEnabled)
-        XCTAssertTrue(privacyManager.isStealthModeEnabled)
-    }
-
-    func testComplianceModeLegal() async {
-        // When
-        privacyManager.setComplianceMode(.legal)
-
-        // Then
-        XCTAssertEqual(privacyManager.selectedComplianceMode, .legal)
-        XCTAssertTrue(privacyManager.isSecureVaultEnabled)
-        XCTAssertTrue(privacyManager.isBiometricLockEnabled)
     }
 
     // MARK: - Secure File Management Tests
@@ -263,15 +213,6 @@ final class PrivacyTests: XCTestCase {
         } else {
             XCTFail("Expected audit trail cleared event")
         }
-    }
-
-    // MARK: - Compliance Mode Display Names Tests
-
-    func testComplianceModeDisplayNames() {
-        XCTAssertEqual(ComplianceMode.none.displayName, "Standard")
-        XCTAssertEqual(ComplianceMode.healthcare.displayName, "Healthcare (HIPAA)")
-        XCTAssertEqual(ComplianceMode.legal.displayName, "Legal")
-        XCTAssertEqual(ComplianceMode.finance.displayName, "Finance (SOX)")
     }
 
     // MARK: - Error Handling Tests

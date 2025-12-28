@@ -27,10 +27,7 @@ struct PrivacyDashboardView: View {
                     
                     // Privacy Controls
                     privacyControls
-                    
-                    // Compliance Mode
-                    complianceModeSection
-                    
+
                     // Monitoring Section
                     monitoringSection
                     
@@ -192,40 +189,7 @@ struct PrivacyDashboardView: View {
         .background(Color(.systemGroupedBackground))
         .cornerRadius(16)
     }
-    
-    // MARK: - Compliance Mode Section
-    
-    private var complianceModeSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Compliance Mode")
-                .font(.headline)
-            
-            Picker("Compliance Mode", selection: $privacyManager.selectedComplianceMode) {
-                ForEach(ComplianceMode.allCases, id: \.self) { mode in
-                    VStack(alignment: .leading) {
-                        Text(mode.displayName)
-                            .font(.subheadline.bold())
-                        Text(mode.description)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .tag(mode)
-                }
-            }
-            .pickerStyle(.menu)
-            .onChange(of: privacyManager.selectedComplianceMode) { newValue in
-                privacyManager.setComplianceMode(newValue)
-            }
-            
-            if privacyManager.selectedComplianceMode != .none {
-                ComplianceBadge(mode: privacyManager.selectedComplianceMode)
-            }
-        }
-        .padding()
-        .background(Color(.systemGroupedBackground))
-        .cornerRadius(16)
-    }
-    
+
     // MARK: - Monitoring Section
     
     private var monitoringSection: some View {
@@ -411,33 +375,6 @@ struct PrivacyToggleRow: View {
         .padding()
         .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(12)
-    }
-}
-
-struct ComplianceBadge: View {
-    let mode: Privacy.ComplianceMode
-    
-    var body: some View {
-        HStack {
-            Image(systemName: "checkmark.seal.fill")
-                .foregroundColor(.blue)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Compliance Active")
-                    .font(.caption.bold())
-                    .foregroundColor(.blue)
-                
-                Text(mode.displayName)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color.blue.opacity(0.1))
-        .cornerRadius(8)
     }
 }
 

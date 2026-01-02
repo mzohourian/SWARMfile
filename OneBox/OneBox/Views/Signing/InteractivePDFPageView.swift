@@ -362,14 +362,14 @@ class PDFPageView: UIView {
     
     override func draw(_ rect: CGRect) {
         guard let page = page else {
-            // Clear the view if no page
-            UIColor.clear.setFill()
+            // Fill with white if no page
+            UIColor.white.setFill()
             UIRectFill(rect)
             return
         }
-        
-        // Clear the background first to prevent previous page showing through
-        backgroundColor?.setFill()
+
+        // Fill with white background for PDF rendering
+        UIColor.white.setFill()
         UIRectFill(rect)
 
         guard let context = UIGraphicsGetCurrentContext() else { return }
@@ -400,14 +400,14 @@ class PDFPageView: UIView {
     
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = .clear
-        isOpaque = false
+        backgroundColor = .white  // PDF pages need white background
+        isOpaque = true
     }
-    
+
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        backgroundColor = .clear
-        isOpaque = false
+        backgroundColor = .white  // PDF pages need white background
+        isOpaque = true
     }
 }
 

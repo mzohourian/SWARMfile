@@ -114,11 +114,13 @@ struct HomeView: View {
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 280)
                     .padding(.top, -50)
+                    .accessibilityLabel("Vault PDF - Your Privacy-First Document Tool")
 
                 // Single elegant badge - gold, on-brand
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark.seal.fill")
                         .font(.system(size: 13, weight: .medium))
+                        .accessibilityHidden(true)
                     Text("100% Offline")
                         .font(.system(size: 13, weight: .semibold))
                         .tracking(0.5)
@@ -128,6 +130,8 @@ struct HomeView: View {
                 .padding(.vertical, 6)
                 .background(OneBoxColors.primaryGold.opacity(0.1))
                 .cornerRadius(16)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("100% Offline - All processing happens on your device")
             }
             .frame(maxWidth: .infinity)
         }
@@ -149,9 +153,12 @@ struct HomeView: View {
                             Circle()
                                 .fill(index < remainingExports ? OneBoxColors.primaryGold : OneBoxColors.primaryGold.opacity(0.2))
                                 .frame(width: 8, height: 8)
+                                .accessibilityHidden(true)
                         }
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(remainingExports) of \(paymentsManager.freeExportLimit) free exports remaining today")
 
                 Spacer()
 
@@ -162,6 +169,7 @@ struct HomeView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "crown.fill")
                             .font(.system(size: 12, weight: .semibold))
+                            .accessibilityHidden(true)
                         Text("Go Pro")
                             .font(.system(size: 13, weight: .semibold))
                     }
@@ -177,6 +185,8 @@ struct HomeView: View {
                     )
                     .cornerRadius(16)
                 }
+                .accessibilityLabel("Go Pro")
+                .accessibilityHint("Upgrade to Pro for unlimited exports")
             }
             .padding(.vertical, OneBoxSpacing.tiny)
         }
@@ -192,6 +202,7 @@ struct HomeView: View {
             Text("Tools")
                 .font(OneBoxTypography.sectionTitle)
                 .foregroundColor(OneBoxColors.primaryText)
+                .accessibilityAddTraits(.isHeader)
 
             // All tools in 2-column grid
             LazyVGrid(columns: [
@@ -202,6 +213,8 @@ struct HomeView: View {
                     toolCard(tool)
                 }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Available tools")
         }
     }
 
@@ -228,6 +241,7 @@ struct HomeView: View {
                     )
                 )
                 .frame(height: 3)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: OneBoxSpacing.small) {
                 // Icon row with security badge
@@ -248,6 +262,7 @@ struct HomeView: View {
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundColor(tool.color)
                     }
+                    .accessibilityHidden(true)
 
                     Spacer()
 
@@ -255,6 +270,7 @@ struct HomeView: View {
                     Image(systemName: "shield.fill")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(OneBoxColors.primaryGold.opacity(0.6))
+                        .accessibilityHidden(true)
                 }
 
                 // Tool name - prominent
@@ -278,6 +294,7 @@ struct HomeView: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(OneBoxColors.primaryGold.opacity(0.6))
+                        .accessibilityHidden(true)
                 }
             }
             .padding(OneBoxSpacing.medium)
@@ -302,6 +319,10 @@ struct HomeView: View {
             showingToolFlow = true
             HapticManager.shared.impact(.light)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(tool.displayName). \(tool.description). Secure on-device processing.")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Double tap to open \(tool.displayName)")
     }
 
     // MARK: - Quick Actions Section
@@ -312,6 +333,7 @@ struct HomeView: View {
                     Text("Quick Actions")
                         .font(OneBoxTypography.cardTitle)
                         .foregroundColor(OneBoxColors.primaryText)
+                        .accessibilityAddTraits(.isHeader)
 
                     Spacer()
 
@@ -326,8 +348,11 @@ struct HomeView: View {
                             Image(systemName: "arrow.right")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(OneBoxColors.goldText)
+                                .accessibilityHidden(true)
                         }
                     }
+                    .accessibilityLabel("Workflow Concierge")
+                    .accessibilityHint("Open workflow automation assistant")
                 }
 
                 HStack(spacing: OneBoxSpacing.small) {
@@ -353,6 +378,7 @@ struct HomeView: View {
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .medium))
                     .foregroundColor(OneBoxColors.primaryGold)
+                    .accessibilityHidden(true)
 
                 Text(title)
                     .font(OneBoxTypography.micro)
@@ -365,6 +391,8 @@ struct HomeView: View {
             .cornerRadius(OneBoxRadius.small)
         }
         .buttonStyle(PlainButtonStyle())
+        .accessibilityLabel(title)
+        .accessibilityHint("Double tap to open \(title)")
     }
 
     // MARK: - Integrity Dashboard Summary
@@ -376,6 +404,7 @@ struct HomeView: View {
                         Text("Vault Health")
                             .font(OneBoxTypography.cardTitle)
                             .foregroundColor(OneBoxColors.primaryText)
+                            .accessibilityAddTraits(.isHeader)
 
                         Text("All systems secure")
                             .font(OneBoxTypography.caption)
@@ -395,8 +424,11 @@ struct HomeView: View {
                             Image(systemName: "arrow.right")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(OneBoxColors.goldText)
+                                .accessibilityHidden(true)
                         }
                     }
+                    .accessibilityLabel("View Dashboard")
+                    .accessibilityHint("Open the full privacy dashboard")
                 }
 
                 // Quick stats
@@ -407,6 +439,8 @@ struct HomeView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Vault Health: All systems secure")
     }
 
     private func dashboardStat(_ title: String, _ value: String) -> some View {
@@ -419,6 +453,8 @@ struct HomeView: View {
                 .font(OneBoxTypography.micro)
                 .foregroundColor(OneBoxColors.secondaryText)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value)")
     }
 
     // MARK: - Search Results View
@@ -430,6 +466,7 @@ struct HomeView: View {
                 HStack {
                     Image(systemName: result.type.icon)
                         .foregroundColor(OneBoxColors.primaryGold)
+                        .accessibilityHidden(true)
 
                     VStack(alignment: .leading) {
                         Text(result.title)
@@ -445,6 +482,8 @@ struct HomeView: View {
                     }
                 }
             }
+            .accessibilityLabel(result.title)
+            .accessibilityHint("Double tap to open")
         }
     }
 
@@ -564,6 +603,7 @@ struct ToolPrivacyInfoView: View {
                         Image(systemName: "checkmark.shield.fill")
                             .font(.system(size: 40))
                             .foregroundColor(OneBoxColors.secureGreen)
+                            .accessibilityHidden(true)
 
                         VStack(alignment: .leading, spacing: OneBoxSpacing.tiny) {
                             Text("100% On-Device")
@@ -579,12 +619,15 @@ struct ToolPrivacyInfoView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(OneBoxColors.secureGreen.opacity(0.1))
                     .cornerRadius(OneBoxRadius.medium)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("100% On-Device. No data leaves your device.")
 
                     // Tool-specific privacy info
                     VStack(alignment: .leading, spacing: OneBoxSpacing.medium) {
                         Text("How \(tool.displayName) Protects Your Privacy")
                             .font(OneBoxTypography.sectionTitle)
                             .foregroundColor(OneBoxColors.primaryText)
+                            .accessibilityAddTraits(.isHeader)
 
                         ForEach(privacyPoints, id: \.self) { point in
                             HStack(alignment: .top, spacing: OneBoxSpacing.small) {
@@ -592,11 +635,14 @@ struct ToolPrivacyInfoView: View {
                                     .font(.system(size: 14))
                                     .foregroundColor(OneBoxColors.primaryGold)
                                     .frame(width: 20)
+                                    .accessibilityHidden(true)
 
                                 Text(point)
                                     .font(OneBoxTypography.body)
                                     .foregroundColor(OneBoxColors.secondaryText)
                             }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel(point)
                         }
                     }
 
@@ -605,6 +651,7 @@ struct ToolPrivacyInfoView: View {
                         Text("Data Handling")
                             .font(OneBoxTypography.sectionTitle)
                             .foregroundColor(OneBoxColors.primaryText)
+                            .accessibilityAddTraits(.isHeader)
 
                         dataHandlingRow("Processing", "On your device only", "cpu")
                         dataHandlingRow("Storage", "Local app sandbox", "internaldrive")
@@ -623,6 +670,8 @@ struct ToolPrivacyInfoView: View {
                         dismiss()
                     }
                     .foregroundColor(OneBoxColors.primaryGold)
+                    .accessibilityLabel("Done")
+                    .accessibilityHint("Close privacy information")
                 }
             }
         }
@@ -634,6 +683,7 @@ struct ToolPrivacyInfoView: View {
                 .font(.system(size: 16))
                 .foregroundColor(OneBoxColors.primaryGold)
                 .frame(width: 30)
+                .accessibilityHidden(true)
 
             Text(title)
                 .font(OneBoxTypography.body)
@@ -648,6 +698,8 @@ struct ToolPrivacyInfoView: View {
         .padding(OneBoxSpacing.small)
         .background(OneBoxColors.surfaceGraphite.opacity(0.5))
         .cornerRadius(OneBoxRadius.small)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value)")
     }
 
     private var privacyPoints: [String] {

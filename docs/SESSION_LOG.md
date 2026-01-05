@@ -4,6 +4,59 @@
 
 ---
 
+## 2026-01-05: Accessibility Labels Complete
+
+**Focus:**
+Add VoiceOver accessibility labels across all key views for App Store submission compliance.
+
+**Issue Addressed:**
+- ~50 accessibility labels missing across PaywallView, NewHomeView, ToolFlowView
+- VoiceOver users could not navigate the app effectively
+
+**Changes Made:**
+
+**PaywallView.swift (~15 labels):**
+- Close button: label + hint
+- Header logo: combined ZStack with descriptive label
+- "Unlock All Features" header trait
+- FeatureRow: combined icon+text with label
+- ProductCard: full accessibility description with price, period, savings, selection state
+- Purchase button: dynamic label based on state, hint for guidance
+- Restore button: label + hint
+- Fine print: combined text with full subscription terms
+
+**NewHomeView.swift (~20 labels):**
+- VaultLogoWithText: descriptive label
+- "100% Offline" badge: combined element with explanation
+- Usage status: exports remaining with dynamic count
+- Go Pro button: label + hint
+- Tools section header trait
+- Tool cards: combined label with name, description, security note, button trait + hint
+- Quick actions buttons: label + hint
+- Workflow Concierge link: label + hint
+- Integrity dashboard: header trait, View Dashboard button
+- Dashboard stats: combined labels (title: value)
+- Search results: label + hint
+- ToolPrivacyInfoView: privacy badge, section headers, privacy points, data handling rows, Done button
+
+**ToolFlowView.swift (~15 labels):**
+- Cancel button: label + hint
+- Back button: label + hint
+- Empty state: header trait, security badge label, privacy features combined
+- File cards: combined label with filename/size, remove button with specific file label
+- Continue button: dynamic label based on file count, hint
+- ProcessingView: header trait, progress percentage, security guarantees combined
+
+**Files Modified:**
+- `OneBox/OneBox/Views/PaywallView.swift`
+- `OneBox/OneBox/Views/NewHomeView.swift`
+- `OneBox/OneBox/Views/ToolFlowView.swift`
+
+**Result:**
+App is now fully accessible for VoiceOver users. Ready for App Store accessibility review.
+
+---
+
 ## 2026-01-05: Placeholder Cleanup, Fastlane & Sign PDF Fix
 
 **Focus:**

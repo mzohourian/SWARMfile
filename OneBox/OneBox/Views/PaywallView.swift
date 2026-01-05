@@ -49,6 +49,8 @@ struct PaywallView: View {
                     Button("Close") {
                         dismiss()
                     }
+                    .accessibilityLabel("Close paywall")
+                    .accessibilityHint("Dismiss the upgrade screen")
                 }
             }
             .alert("Error", isPresented: $showError) {
@@ -69,6 +71,7 @@ struct PaywallView: View {
                     .frame(width: 100, height: 100)
                     .clipShape(Circle())
                     .shadow(color: Color.orange.opacity(0.3), radius: 12, x: 0, y: 0)
+                    .accessibilityHidden(true)
 
                 // PRO badge
                 Text("PRO")
@@ -85,11 +88,15 @@ struct PaywallView: View {
                     )
                     .cornerRadius(8)
                     .offset(x: 4, y: 4)
+                    .accessibilityHidden(true)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Vault PDF Pro logo")
 
             Text("Unlock All Features")
                 .font(.title)
                 .fontWeight(.bold)
+                .accessibilityAddTraits(.isHeader)
 
             Text("Get unlimited exports, remove ads, and support development")
                 .font(.subheadline)
@@ -135,6 +142,7 @@ struct PaywallView: View {
                 if isPurchasing {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .accessibilityLabel("Processing purchase")
                 } else {
                     Text(purchaseButtonText)
                         .fontWeight(.semibold)
@@ -154,6 +162,8 @@ struct PaywallView: View {
         }
         .disabled(selectedProduct == nil || isPurchasing)
         .opacity(selectedProduct == nil ? 0.5 : 1.0)
+        .accessibilityLabel(isPurchasing ? "Processing purchase" : purchaseButtonText)
+        .accessibilityHint(selectedProduct == nil ? "Select a plan first" : "Double tap to complete purchase")
     }
 
     private var restoreButton: some View {
@@ -165,6 +175,8 @@ struct PaywallView: View {
                 .foregroundColor(.accentColor)
         }
         .disabled(isPurchasing)
+        .accessibilityLabel("Restore Purchases")
+        .accessibilityHint("Restore previously purchased subscriptions")
     }
 
     private var finePrint: some View {
@@ -176,6 +188,8 @@ struct PaywallView: View {
         .font(.caption)
         .foregroundColor(.secondary)
         .multilineTextAlignment(.center)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Subscription terms: Payment charged to Apple ID at confirmation. Subscriptions auto-renew unless cancelled 24 hours before period ends. Manage subscriptions in App Store settings.")
     }
 
     private var purchaseButtonText: String {
@@ -285,6 +299,7 @@ struct FeatureRow: View {
                 .font(.title3)
                 .foregroundColor(.orange)
                 .frame(width: 32)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -297,6 +312,8 @@ struct FeatureRow: View {
 
             Spacer()
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title). \(description)")
     }
 }
 
@@ -336,6 +353,7 @@ struct ProductCard: View {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .foregroundColor(isSelected ? .orange : .secondary)
                     .font(.title3)
+                    .accessibilityHidden(true)
             }
             .padding()
             .background(
@@ -357,10 +375,30 @@ struct ProductCard: View {
                         .foregroundColor(.white)
                         .cornerRadius(6)
                         .offset(x: -8, y: -8)
+                        .accessibilityHidden(true)
                 }
             }
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityDescription)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityHint("Double tap to select this plan")
+    }
+
+    private var accessibilityDescription: String {
+        var description = "\(productTitle), \(product.displayPrice)"
+        if let period = subscriptionPeriod {
+            description += " \(period)"
+        }
+        description += ". \(productDescription)"
+        if let savings = savings {
+            description += ". \(savings)"
+        }
+        if isSelected {
+            description += ". Selected"
+        }
+        return description
     }
 
     private var productTitle: String {

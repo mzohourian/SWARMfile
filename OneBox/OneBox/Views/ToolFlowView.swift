@@ -348,6 +348,8 @@ struct ToolFlowView: View {
                 generator.impactOccurred()
             }
             .foregroundColor(OneBoxColors.primaryText)
+            .accessibilityLabel("Cancel")
+            .accessibilityHint("Close this tool without saving")
         } else if step == .configure {
             Button(action: {
                 step = .selectInput
@@ -357,11 +359,14 @@ struct ToolFlowView: View {
                 HStack(spacing: OneBoxSpacing.tiny) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .medium))
+                        .accessibilityHidden(true)
                     Text("Back")
                         .font(OneBoxTypography.caption)
                 }
                 .foregroundColor(OneBoxColors.primaryText)
             }
+            .accessibilityLabel("Back")
+            .accessibilityHint("Return to file selection")
         } else if step == .exportPreview {
             EmptyView()
         }
@@ -749,22 +754,24 @@ struct InputSelectionView: View {
                         Circle()
                             .fill(OneBoxColors.primaryGold.opacity(0.1))
                             .frame(width: 120, height: 120)
-                        
+
                         Circle()
                             .stroke(OneBoxColors.primaryGold.opacity(0.3), lineWidth: 2)
                             .frame(width: 120, height: 120)
-                        
+
                         Image(systemName: tool.icon)
                             .font(.system(size: 48, weight: .medium))
                             .foregroundColor(OneBoxColors.primaryGold)
                     }
-                    
+                    .accessibilityHidden(true)
+
                     // Security Badge Integration
                     HStack(spacing: OneBoxSpacing.tiny) {
                         Image(systemName: "shield.checkered")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(OneBoxColors.secureGreen)
-                        
+                            .accessibilityHidden(true)
+
                         Text("On-Device Processing")
                             .font(OneBoxTypography.micro)
                             .foregroundColor(OneBoxColors.secureGreen)
@@ -773,6 +780,7 @@ struct InputSelectionView: View {
                     .padding(.vertical, OneBoxSpacing.tiny)
                     .background(OneBoxColors.secureGreen.opacity(0.1))
                     .cornerRadius(OneBoxRadius.small)
+                    .accessibilityLabel("Secure on-device processing")
                 }
 
                 // Luxury Title Section
@@ -782,6 +790,7 @@ struct InputSelectionView: View {
                         .fontWeight(.bold)
                         .foregroundColor(OneBoxColors.primaryText)
                         .tracking(1.0)
+                        .accessibilityAddTraits(.isHeader)
 
                     Text(emptyStateMessage)
                         .font(OneBoxTypography.body)
@@ -790,7 +799,7 @@ struct InputSelectionView: View {
                         .lineLimit(3)
                         .padding(.horizontal, OneBoxSpacing.medium)
                 }
-                
+
                 // Privacy Assurance
                 VStack(spacing: OneBoxSpacing.small) {
                     HStack(spacing: OneBoxSpacing.medium) {
@@ -798,7 +807,9 @@ struct InputSelectionView: View {
                         privacyFeature("lock.fill", "Secure")
                         privacyFeature("eye.slash.fill", "No Tracking")
                     }
-                    
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Private, Secure, No Tracking")
+
                     Text("Your files never leave your device")
                         .font(OneBoxTypography.caption)
                         .foregroundColor(OneBoxColors.tertiaryText)
@@ -818,11 +829,14 @@ struct InputSelectionView: View {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(OneBoxColors.primaryGold)
-            
+                .accessibilityHidden(true)
+
             Text(title)
                 .font(OneBoxTypography.micro)
                 .foregroundColor(OneBoxColors.secondaryText)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
     }
 
     private var filesList: some View {
@@ -974,18 +988,21 @@ struct InputSelectionView: View {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(OneBoxColors.secureGreen)
-                    
+                        .accessibilityHidden(true)
+
                     Text("\(selectedURLs.count) file\(selectedURLs.count == 1 ? "" : "s") ready for secure processing")
                         .font(OneBoxTypography.caption)
                         .foregroundColor(OneBoxColors.secondaryText)
-                    
+
                     Spacer()
                 }
                 .padding(OneBoxSpacing.small)
                 .background(OneBoxColors.secureGreen.opacity(0.1))
                 .cornerRadius(OneBoxRadius.small)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(selectedURLs.count) file\(selectedURLs.count == 1 ? "" : "s") ready for secure processing")
             }
-            
+
             OneBoxButton(
                 "Continue Securely",
                 icon: "arrow.right.circle.fill",
@@ -996,6 +1013,8 @@ struct InputSelectionView: View {
                 let generator = UINotificationFeedbackGenerator()
                 generator.notificationOccurred(.success)
             }
+            .accessibilityLabel(selectedURLs.isEmpty ? "Continue Securely - Select files first" : "Continue Securely")
+            .accessibilityHint(selectedURLs.isEmpty ? "Select files to continue" : "Double tap to proceed to configuration")
         }
     }
     
@@ -1007,14 +1026,14 @@ struct InputSelectionView: View {
                     Circle()
                         .fill(OneBoxColors.primaryGold.opacity(0.15))
                         .frame(width: 48, height: 48)
-                    
+
                     if tool == .imagesToPDF {
                         // Show page number prominently for Image to PDF
                         ZStack {
                             Circle()
                                 .fill(OneBoxColors.primaryGold)
                                 .frame(width: 44, height: 44)
-                            
+
                             Text("\(index + 1)")
                                 .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(.white)
@@ -1025,7 +1044,8 @@ struct InputSelectionView: View {
                             .foregroundColor(OneBoxColors.primaryGold)
                     }
                 }
-                
+                .accessibilityHidden(true)
+
                 // File details
                 VStack(alignment: .leading, spacing: OneBoxSpacing.tiny) {
                     HStack {
@@ -1033,9 +1053,9 @@ struct InputSelectionView: View {
                             .font(OneBoxTypography.cardTitle)
                             .foregroundColor(OneBoxColors.primaryText)
                             .lineLimit(1)
-                        
+
                         Spacer()
-                        
+
                         if tool != .imagesToPDF {
                             Text("#\(index + 1)")
                                 .font(OneBoxTypography.micro)
@@ -1044,17 +1064,18 @@ struct InputSelectionView: View {
                                 .padding(.vertical, 2)
                                 .background(OneBoxColors.surfaceGraphite)
                                 .cornerRadius(OneBoxRadius.small)
+                                .accessibilityHidden(true)
                         }
                     }
-                    
+
                     HStack(spacing: OneBoxSpacing.small) {
                         Text(fileSizeString(url))
                             .font(OneBoxTypography.caption)
                             .foregroundColor(OneBoxColors.secondaryText)
                             .lineLimit(1)
-                        
+
                         Spacer()
-                        
+
                         // Security status - simplified to just shield icon for space
                         HStack(spacing: OneBoxSpacing.tiny) {
                             Image(systemName: "shield.checkered")
@@ -1065,9 +1086,10 @@ struct InputSelectionView: View {
                         .padding(.vertical, 2)
                         .background(OneBoxColors.secureGreen.opacity(0.1))
                         .cornerRadius(OneBoxRadius.small)
+                        .accessibilityHidden(true)
                     }
                 }
-                
+
                 // Remove button only
                 Button(action: onRemove) {
                     Image(systemName: "xmark.circle.fill")
@@ -1075,10 +1097,14 @@ struct InputSelectionView: View {
                         .foregroundColor(OneBoxColors.tertiaryText)
                         .background(Circle().fill(OneBoxColors.primaryGraphite))
                 }
+                .accessibilityLabel("Remove \(url.lastPathComponent)")
+                .accessibilityHint("Remove this file from selection")
             }
             .padding(OneBoxSpacing.medium)
         }
         .padding(.horizontal, OneBoxSpacing.medium)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("File \(index + 1): \(url.lastPathComponent), \(fileSizeString(url))")
     }
 
     // Helpers
@@ -2006,10 +2032,10 @@ struct ProcessingView: View {
     var body: some View {
         ZStack {
             OneBoxColors.primaryGraphite.ignoresSafeArea()
-            
+
             VStack(spacing: OneBoxSpacing.xxl) {
                 Spacer()
-                
+
                 // Ceremony of Security Processing
                 VStack(spacing: OneBoxSpacing.large) {
                     // Security Shield Animation
@@ -2028,13 +2054,13 @@ struct ProcessingView: View {
                                     value: securityPulse
                                 )
                         }
-                        
+
                         // Central shield
                         ZStack {
                             Circle()
                                 .fill(OneBoxColors.primaryGold.opacity(0.2))
                                 .frame(width: 120, height: 120)
-                            
+
                             Image(systemName: "shield.checkered")
                                 .font(.system(size: 48, weight: .medium))
                                 .foregroundColor(OneBoxColors.primaryGold)
@@ -2042,7 +2068,8 @@ struct ProcessingView: View {
                                 .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: securityPulse)
                         }
                     }
-                    
+                    .accessibilityHidden(true)
+
                     // Processing Status
                     VStack(spacing: OneBoxSpacing.medium) {
                         Text("Secure Processing")
@@ -2050,14 +2077,15 @@ struct ProcessingView: View {
                             .fontWeight(.bold)
                             .foregroundColor(OneBoxColors.primaryText)
                             .tracking(1.0)
-                        
+                            .accessibilityAddTraits(.isHeader)
+
                         Text("Your files are being processed entirely\non your device - never uploaded")
                             .font(OneBoxTypography.body)
                             .foregroundColor(OneBoxColors.secondaryText)
                             .multilineTextAlignment(.center)
                             .lineSpacing(4)
                     }
-                    
+
                     // Progress Section
                     VStack(spacing: OneBoxSpacing.medium) {
                         // Custom progress bar
@@ -2066,7 +2094,7 @@ struct ProcessingView: View {
                                 .fill(OneBoxColors.surfaceGraphite)
                                 .frame(height: 8)
                                 .cornerRadius(4)
-                            
+
                             Rectangle()
                                 .fill(
                                     LinearGradient(
@@ -2080,7 +2108,8 @@ struct ProcessingView: View {
                                 .animation(.easeInOut(duration: 0.3), value: job?.progress)
                         }
                         .frame(width: 280)
-                        
+                        .accessibilityHidden(true)
+
                         if let job = job {
                             // Guard against NaN/infinity that crashes Int conversion
                             let progressPercent = job.progress.isNaN || job.progress.isInfinite ? 0 : Int(job.progress * 100)
@@ -2088,9 +2117,12 @@ struct ProcessingView: View {
                                 .font(OneBoxTypography.cardTitle)
                                 .foregroundColor(OneBoxColors.primaryGold)
                                 .fontWeight(.semibold)
+                                .accessibilityLabel("Processing \(progressPercent) percent complete")
                         }
                     }
-                    
+                    .accessibilityElement(children: .combine)
+                    .accessibilityValue("\(job?.progress.isNaN == true || job?.progress.isInfinite == true ? 0 : Int((job?.progress ?? 0) * 100)) percent")
+
                     // Security Guarantees
                     HStack(spacing: OneBoxSpacing.large) {
                         securityFeature("lock.fill", "Encrypted")
@@ -2098,8 +2130,10 @@ struct ProcessingView: View {
                         securityFeature("shield.fill", "Secure")
                     }
                     .padding(.top, OneBoxSpacing.medium)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Processing is encrypted, private, and secure")
                 }
-                
+
                 Spacer()
             }
             .padding(OneBoxSpacing.large)
@@ -2107,6 +2141,8 @@ struct ProcessingView: View {
                 securityPulse = true
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Secure processing in progress")
     }
     
     private func securityFeature(_ icon: String, _ title: String) -> some View {
@@ -2114,12 +2150,15 @@ struct ProcessingView: View {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(OneBoxColors.secureGreen)
-            
+                .accessibilityHidden(true)
+
             Text(title)
                 .font(OneBoxTypography.micro)
                 .foregroundColor(OneBoxColors.secondaryText)
         }
         .opacity(0.8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
     }
 }
 

@@ -1,6 +1,6 @@
 # Documentation Index
 
-**Last Updated:** 2025-12-04
+**Last Updated:** 2026-01-05
 
 ## Required Reading (Every Session)
 

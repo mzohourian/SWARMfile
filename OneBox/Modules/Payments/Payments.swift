@@ -44,6 +44,10 @@ public class PaymentsManager: ObservableObject {
     @Published public private(set) var isLoading = false
     @Published public private(set) var error: PaymentError?
 
+    // MARK: - Beta Testing Mode
+    // TODO: Set to false before App Store release
+    private let isBetaTesting = true  // Unlocks all Pro features for TestFlight beta
+
     // Free tier tracking
     @Published public private(set) var dailyExportsUsed: Int = 0
     private let maxFreeExports = 3  // Production limit for free tier
@@ -168,7 +172,7 @@ public class PaymentsManager: ObservableObject {
 
     // MARK: - Pro Status
     public var hasPro: Bool {
-        !purchasedProductIDs.isEmpty
+        isBetaTesting || !purchasedProductIDs.isEmpty
     }
 
     public var hasActiveSubscription: Bool {

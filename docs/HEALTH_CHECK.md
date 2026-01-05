@@ -1,6 +1,6 @@
 # Health Check
 
-**Last Updated:** 2025-12-04
+**Last Updated:** 2026-01-05
 
 Run this checklist at session start AND end.
 

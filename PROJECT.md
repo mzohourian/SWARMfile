@@ -58,8 +58,9 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 | # | Severity | Issue | Location | Status |
 |---|----------|-------|----------|--------|
-| 1 | Low | Swift 6 concurrency warnings (3) | MultipeerDocumentService, OnDeviceSearchService | Non-blocking |
-| 2 | Info | "Update to recommended settings" | Xcode project | Informational |
+| 1 | **Critical** | Beta testing mode ON | Payments.swift line 49 | **Set `isBetaTesting = false` before App Store release** |
+| 2 | Low | Swift 6 concurrency warnings (3) | MultipeerDocumentService, OnDeviceSearchService | Non-blocking |
+| 3 | Info | "Update to recommended settings" | Xcode project | Informational |
 
 **Resolved This Session:**
 - **RESOLVED: Accessibility labels complete** - Added ~50 VoiceOver labels across key views:
@@ -118,30 +119,36 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2026-01-05 (Accessibility Labels)
+**Date:** 2026-01-05 (Accessibility + Beta Testing Mode)
 
 **What Was Done:**
 - **Accessibility Labels Complete** - Added ~50 VoiceOver accessibility labels across all key views:
   - **PaywallView.swift**: Close button, header logo, feature rows (combine icon+text), product cards (full descriptions with savings), purchase button, restore button, fine print
   - **NewHomeView.swift**: Privacy hero section, usage status (exports + Go Pro button), tool cards (with tool description and hint), quick actions buttons, integrity dashboard stats, search results, ToolPrivacyInfoView (all sections)
   - **ToolFlowView.swift**: Cancel/Back toolbar buttons, empty state (title, privacy features), file cards (filename, size, remove button), continue button, processing view (progress, security guarantees)
-- App now fully accessible for VoiceOver users - ready for App Store accessibility review
+- **Beta Testing Mode Enabled** - All Pro features unlocked for TestFlight testers:
+  - Added `isBetaTesting = true` flag in Payments.swift
+  - Bypasses 3/day export limit
+  - All tools fully accessible without purchase
+  - **MUST set to `false` before App Store release**
 
 **What's Unfinished:**
-- Screenshot automation may need further debugging (only iPad screenshots captured in test run)
-- Device testing with sandbox account to verify purchases
+- Beta testing with Reddit testers
+- Set `isBetaTesting = false` before App Store submission
 
 **Files Modified This Session:**
 - `OneBox/OneBox/Views/PaywallView.swift` - Added accessibility labels (~15 labels)
 - `OneBox/OneBox/Views/NewHomeView.swift` - Added accessibility labels (~20 labels)
 - `OneBox/OneBox/Views/ToolFlowView.swift` - Added accessibility labels (~15 labels)
+- `OneBox/Modules/Payments/Payments.swift` - Added beta testing flag
 
 ---
 
 ## Next Steps (Priority Order)
 
-1. **Final device testing** - Test all features on physical device before submission
-2. **App Store submission** - All blockers resolved, ready for review
+1. **Beta testing** - Collect feedback from Reddit TestFlight testers
+2. **Disable beta mode** - Set `isBetaTesting = false` in Payments.swift line 49
+3. **App Store submission** - All blockers resolved, ready for review
 
 ---
 

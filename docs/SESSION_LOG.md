@@ -4,16 +4,19 @@
 
 ---
 
-## 2026-01-05: Accessibility Labels Complete
+## 2026-01-05: Accessibility Labels + Beta Testing Mode
 
 **Focus:**
-Add VoiceOver accessibility labels across all key views for App Store submission compliance.
+1. Add VoiceOver accessibility labels across all key views
+2. Enable beta testing mode for TestFlight distribution
 
-**Issue Addressed:**
+**Issues Addressed:**
 - ~50 accessibility labels missing across PaywallView, NewHomeView, ToolFlowView
-- VoiceOver users could not navigate the app effectively
+- Beta testers need full access to all Pro features
 
 **Changes Made:**
+
+**Accessibility Labels:**
 
 **PaywallView.swift (~15 labels):**
 - Close button: label + hint
@@ -47,13 +50,22 @@ Add VoiceOver accessibility labels across all key views for App Store submission
 - Continue button: dynamic label based on file count, hint
 - ProcessingView: header trait, progress percentage, security guarantees combined
 
+**Beta Testing Mode (Payments.swift):**
+- Added `isBetaTesting = true` flag at line 49
+- Modified `hasPro` computed property: returns `true` when beta mode enabled
+- Bypasses 3/day export limit for all TestFlight users
+- **⚠️ CRITICAL: Set `isBetaTesting = false` before App Store release**
+
 **Files Modified:**
 - `OneBox/OneBox/Views/PaywallView.swift`
 - `OneBox/OneBox/Views/NewHomeView.swift`
 - `OneBox/OneBox/Views/ToolFlowView.swift`
+- `OneBox/Modules/Payments/Payments.swift`
 
 **Result:**
-App is now fully accessible for VoiceOver users. Ready for App Store accessibility review.
+- App fully accessible for VoiceOver users
+- All Pro features unlocked for Reddit beta testers
+- Ready for TestFlight distribution
 
 ---
 

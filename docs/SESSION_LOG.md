@@ -4,6 +4,72 @@
 
 ---
 
+## 2026-01-05: Placeholder Cleanup, Fastlane & Sign PDF Fix
+
+**Focus:**
+Remove all remaining placeholder identifiers (com.onebox), configure Fastlane for screenshots, and fix Sign PDF black background bug.
+
+**Issues Addressed:**
+1. Multiple `com.onebox` placeholders still in codebase (queue labels, background task IDs, product IDs)
+2. Fastlane using wrong app identifier and project reference
+3. Snapfile using old simulator device names (iPhone 15 vs iPhone 17)
+4. Sign PDF showing black background instead of white PDF pages
+5. Documentation with incorrect pricing ($49.99 → $69.99)
+
+**Changes Made:**
+
+**Placeholder Cleanup:**
+- `project.yml`, `Info.plist`: BGTaskScheduler ID `com.onebox.process` → `com.spuud.vaultpdf.process`
+- `JobEngine.swift`: Queue label `com.onebox.jobengine` → `com.spuud.vaultpdf.jobengine`
+- `MultipeerDocumentService.swift`: Queue labels updated
+- `OnDeviceSearchService.swift`: Index queue and domain IDs updated
+- `Payments.swift`: Product IDs `com.vaultpdf.pro.*` → `com.spuud.vaultpdf.pro.*`
+- `PaymentsTests.swift`: Test assertions updated for new product IDs
+- `CorePDF.swift`: PDF metadata creator and error messages ("OneBox" → "Vault PDF")
+
+**Fastlane Configuration:**
+- `Fastfile`: Changed APP_IDENTIFIER from placeholder to `com.spuud.vaultpdf`, changed WORKSPACE to PROJECT
+- `Snapfile`: Updated devices for Xcode 17 simulators:
+  - iPhone 17 Pro Max (6.7" - required)
+  - iPhone 17 Pro (6.1" - required)
+  - iPad Pro 13-inch (M5)
+
+**Sign PDF Black Background Fix:**
+- Root cause: `InteractivePDFPageView` had `backgroundColor = .clear` and `isOpaque = false`
+- The clear background showed the dark parent view through the PDF page
+- Fix: Changed to `backgroundColor = .white` and `isOpaque = true`
+- Added white fill in `draw()` method before rendering PDF content
+
+**Documentation Updates:**
+- README.md, CONTRIBUTING.md, APP_STORE_SUBMISSION_CHECKLIST.md, SUBMISSION_BUILD_GUIDE.md, ScreenSpecifications.md
+- Fixed all `com.yourcompany.onebox` → `com.spuud.vaultpdf`
+- Fixed all `yourcompany/onebox` → `mzohourian/vault-pdf`
+- Corrected lifetime price $49.99 → $69.99
+
+**Files Modified:**
+- `OneBox/fastlane/Fastfile`
+- `OneBox/fastlane/Snapfile`
+- `OneBox/project.yml`
+- `OneBox/OneBox/Info.plist`
+- `OneBox/Modules/JobEngine/JobEngine.swift`
+- `OneBox/Modules/Networking/MultipeerDocumentService.swift`
+- `OneBox/OneBox/Services/OnDeviceSearchService.swift`
+- `OneBox/Modules/Payments/Payments.swift`
+- `OneBox/Tests/PaymentsTests/PaymentsTests.swift`
+- `OneBox/Modules/CorePDF/CorePDF.swift`
+- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift`
+- Multiple documentation files
+
+**Commits:**
+- Fix Sign PDF black background - use white background for PDF rendering
+- Update Snapfile devices for Xcode 17 simulators
+- Update lifetime price to $69.99 in all documents
+- Update documentation with correct identifiers and URLs
+
+**Status:** TestFlight build 1.0.0 (7) uploaded. Sign PDF fix needs device testing. Screenshot automation captured iPad only (iPhone screenshots may need debugging).
+
+---
+
 ## 2025-12-28: Pricing, Payments & TestFlight Setup
 
 **Focus:**

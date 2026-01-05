@@ -1,6 +1,6 @@
 # PROJECT.md - Current State Dashboard
 
-**Last Updated:** 2025-12-28
+**Last Updated:** 2026-01-05
 
 ## What This Is
 **Vault PDF** is a privacy-first iOS/iPadOS app for processing PDFs and images entirely on-device. Think of it as a Swiss Army knife for documents that respects your privacy.
@@ -115,48 +115,43 @@ The app uses only the device's local storage, RAM, and CPU. Large files should b
 
 ## Last Session Summary
 
-**Date:** 2025-12-28 (Pricing, Payments & TestFlight Setup)
+**Date:** 2026-01-05 (Placeholder Cleanup, Fastlane & Sign PDF Fix)
 
 **What Was Done:**
-- **Completed pricing configuration:**
-  - Pricing: $4.99/mo, $29.99/yr, $69.99 lifetime
-  - Product IDs: `com.vaultpdf.pro.monthly`, `com.vaultpdf.pro.yearly`, `com.vaultpdf.pro.lifetime`
-  - Created Products.storekit configuration file for local testing
-- **Fixed Payments module:**
-  - Added missing `resetDailyExports()` method
-  - Updated product IDs from `com.onebox.*` to `com.vaultpdf.*`
-- **Fixed PaywallView issues:**
-  - "Go Pro" button on home screen now opens paywall (was broken)
-  - Fixed savings calculation showing 0% instead of ~50%
-  - Changed button text from "Unlock Unlimited" to "Go Pro"
-- **Fixed bundle IDs in project.yml:**
-  - Main app: `com.spuud.vaultpdf`
-  - All modules: `com.spuud.vaultpdf.*`
-  - Prevents Xcode from reverting to generic IDs
-- **App Store Connect setup:**
-  - Created 3 in-app purchases with localizations (8 languages)
-  - Uploaded first TestFlight build
-  - Set up internal/external testing groups
-
-**Payment System Status:**
-- ✅ PaymentsManager fully implemented with StoreKit 2
-- ✅ Free tier: 3 exports/day with midnight reset
-- ✅ Monthly, Yearly, Lifetime products configured
-- ✅ PaywallView displays correct pricing from App Store
-- ✅ Restore purchases implemented
-- ✅ Transaction verification working
+- **Placeholder Cleanup** - Removed all remaining `com.onebox` references across codebase:
+  - `project.yml`, `Info.plist`: Background task ID → `com.spuud.vaultpdf.process`
+  - `JobEngine.swift`: Queue labels and background task ID
+  - `MultipeerDocumentService.swift`, `OnDeviceSearchService.swift`: Queue labels and domain IDs
+  - `Payments.swift`, `PaymentsTests.swift`: Product IDs → `com.spuud.vaultpdf.pro.*`
+  - `CorePDF.swift`: PDF metadata and error messages ("OneBox" → "Vault PDF")
+- **Documentation Updates:**
+  - Fixed all placeholder URLs and identifiers in README.md, CONTRIBUTING.md, APP_STORE_SUBMISSION_CHECKLIST.md, SUBMISSION_BUILD_GUIDE.md, ScreenSpecifications.md
+  - Corrected lifetime price from $49.99 to $69.99 in all documents
+- **Fastlane Configuration:**
+  - Fixed `Fastfile`: APP_IDENTIFIER → `com.spuud.vaultpdf`, changed WORKSPACE to PROJECT
+  - Fixed `Snapfile`: Updated device names for Xcode 17 (iPhone 17 Pro Max, iPhone 17 Pro, iPad Pro 13-inch M5)
+- **Sign PDF Black Background Fix:**
+  - Fixed `InteractivePDFPageView.swift`: Changed `backgroundColor` from `.clear` to `.white` and `isOpaque` from `false` to `true`
+  - Added white fill in `draw()` method before rendering PDF content
+- **TestFlight Build 1.0.0 (7) uploaded successfully**
 
 **What's Unfinished:**
-- Upload new TestFlight build with corrected product IDs
+- Screenshot automation may need further debugging (only iPad screenshots captured in test run)
 - Device testing with sandbox account to verify purchases
 
 **Files Modified This Session:**
-- `OneBox/project.yml` - Fixed all bundle IDs to com.spuud.vaultpdf.*
-- `OneBox/Modules/Payments/Payments.swift` - Updated product IDs, added resetDailyExports()
-- `OneBox/OneBox/Views/NewHomeView.swift` - Fixed "Go Pro" button action
-- `OneBox/OneBox/Views/PaywallView.swift` - Fixed savings percentage calculation
-- `OneBox/OneBox/Products.storekit` - Updated product IDs
-- `OneBox/SUBMISSION_BUILD_GUIDE.md` - Updated bundle ID and pricing
+- `OneBox/fastlane/Fastfile` - Fixed app identifier and project reference
+- `OneBox/fastlane/Snapfile` - Updated device names for Xcode 17
+- `OneBox/project.yml` - Fixed background task identifier
+- `OneBox/OneBox/Info.plist` - Fixed background task identifier
+- `OneBox/Modules/JobEngine/JobEngine.swift` - Fixed queue labels and background task ID
+- `OneBox/Modules/Networking/MultipeerDocumentService.swift` - Fixed queue labels
+- `OneBox/OneBox/Services/OnDeviceSearchService.swift` - Fixed queue labels and domain IDs
+- `OneBox/Modules/Payments/Payments.swift` - Fixed product IDs
+- `OneBox/Tests/PaymentsTests/PaymentsTests.swift` - Fixed test assertions
+- `OneBox/Modules/CorePDF/CorePDF.swift` - Fixed PDF metadata and error messages
+- `OneBox/OneBox/Views/Signing/InteractivePDFPageView.swift` - Fixed black background bug
+- Documentation files (README.md, CONTRIBUTING.md, etc.) - Fixed placeholders and pricing
 
 ---
 

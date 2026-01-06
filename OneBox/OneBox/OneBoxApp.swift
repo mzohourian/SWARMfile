@@ -33,6 +33,10 @@ struct OneBoxApp: App {
     }
 
     init() {
+        // CRITICAL: Initialize JobManager early for BGTaskScheduler registration
+        // Must happen before app finishes launching, not lazily via @StateObject
+        _ = JobManager.shared
+
         // Initialize app-level configuration
         configureAppearance()
 
